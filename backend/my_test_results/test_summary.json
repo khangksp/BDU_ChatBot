@@ -1,0 +1,23 @@
+{
+  "test_summary": {
+    "total_tests": 483,
+    "passed": 448,
+    "failed": 0,
+    "errors": 0,
+    "warnings": 35,
+    "pass_rate": "92.8%"
+  },
+  "response_analysis": {
+    "response_types": {
+      "answered": 482,
+      "rejected": 1
+    },
+    "average_confidence": "1.000",
+    "total_rejected_education_queries": 0,
+    "total_failed_education_queries": 0
+  },
+  "keyword_gaps": [],
+  "recommendations": [
+    "🟡 15 queries took longer than 2 seconds. Consider performance optimization."
+  ]
+}

@@ -283,17 +283,40 @@ Cảm ơn {personal_address} đã kiên nhẫn! 😊"""
         text = text.replace('â€', '"')
         text = text.replace('â€"', '-')
         
-        # Remove any garbled Vietnamese characters patterns
-        text = re.sub(r'[ẤẬẦẨẪĂẮẶẰẲẴÂẤẬẦẨẪÉẾỆỀỂỄÊẾỆỀỂỄÍỊÌỈĨÓỘÒỎÕÔỐỘỒỔỖƠỚỢỜỞỠÚỤÙỦŨƯỨỰỪỬỮÝỴỲỶỸĐ]+(?=[^aăâeêiouôơưy\s])', '', text)
+        # # Remove any garbled Vietnamese characters patterns
+        # text = re.sub(r'[ẤẬẦẨẪĂẮẶẰẲẴÂẤẬẦẨẪÉẾỆỀỂỄÊẾỆỀỂỄÍỊÌỈĨÓỘÒỎÕÔỐỘỒỔỖƠỚỢỜỞỠÚỤÙỦŨƯỨỰỪỬỮÝỴỲỶỸĐ]+(?=[^aăâeêiouôơưy\s])', '', text)
         
-        # Clean up multiple spaces and newlines
+        encoding_fixes = {
+            'â€™': "'",
+            'â€œ': '"', 
+            'â€': '"',
+            'â€"': '-',
+            'â€¦': '...',
+            'Ã¡': 'á',
+            'Ã ': 'à',
+            'Ã¢': 'â',
+            'Ã£': 'ã',
+            'Ã¨': 'è',
+            'Ã©': 'é',
+            'Ãª': 'ê',
+            'Ã¬': 'ì',
+            'Ã­': 'í',
+            'Ã²': 'ò',
+            'Ã³': 'ó',
+            'Ã´': 'ô',
+            'Ã¹': 'ù',
+            'Ãº': 'ú',
+            'Ã½': 'ý',
+            'Ä': 'đ',
+            'Ä': 'Đ'
+        }
+        
+        for wrong, correct in encoding_fixes.items():
+            text = text.replace(wrong, correct)
+        
+        # Clean up spaces and newlines only
         text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'\n+', '\n', text)
-        
-        # Remove incomplete sentences at the end
-        sentences = text.split('.')
-        if len(sentences) > 1 and len(sentences[-1].strip()) < 5:
-            text = '.'.join(sentences[:-1]) + '.'
+        text = re.sub(r'\n{3,}', '\n\n', text)
         
         return text.strip()
     
