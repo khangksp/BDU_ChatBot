@@ -2,6 +2,7 @@ import os
 import sys 
 from pathlib import Path
 from dotenv import load_dotenv
+from .settings import *
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,11 +22,14 @@ DEBUG = os.getenv('DEBUG', 'True').lower() in ['true', '1', 'yes']
 
 # 🔥 KHI DEPLOY: Thêm IP server thật vào đây
 ALLOWED_HOSTS = [
+    '*',
     'localhost',           # Cho development trên máy local
     '127.0.0.1',          # IP local
     '0.0.0.0',            # Cho phép tất cả IP (chỉ dùng khi test)
     # '192.168.1.100',    # 🔥 DEPLOY: Bỏ # và thay bằng IP server thật
     # 'your-domain.com',  # 🔥 DEPLOY: Nếu có tên miền thì bỏ # và sửa
+    '*.ngrok.io',  # Allow all ngrok subdomains
+    '*.ngrok-free.app',
 ]
 
 # =============================================================================
@@ -211,6 +215,7 @@ CORS_ALLOWED_ORIGINS = [
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
+    "https://o3bb-14-191-196-101.ngrok-free.app"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -240,7 +245,9 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     SECURE_HSTS_SECONDS = 31536000  # 1 năm
     SECURE_REDIRECT_EXEMPT = []
-    SECURE_SSL_REDIRECT = True
+    
+    SECURE_SSL_REDIRECT = False # Chỉ bật khi có HTTPS
+    
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     X_FRAME_OPTIONS = 'DENY'
@@ -251,6 +258,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",     # Development
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
+    "https://*.ngrok.io",
+    "https://*.ngrok-free.app",
+    "https://o3bb-14-191-196-101.ngrok-free.app",
 ]
 
 # =============================================================================
@@ -459,6 +469,11 @@ LOGGING['loggers'].update({
     'ai_models.gemini_service': {
         'handlers': ['console'],
         'level': 'INFO',
+        'propagate': True,
+    },
+    'django.security': {
+        'handlers': ['console'],
+        'level': 'DEBUG',
         'propagate': True,
     },
 })
