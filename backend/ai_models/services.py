@@ -9,7 +9,7 @@ from django.conf import settings
 from knowledge.models import KnowledgeBase
 import logging
 from .phobert_service import PhoBERTIntentClassifier
-from .gemini_service import GeminiResponseGenerator
+from .gemini_service import GeminiResponseGenerator, SimpleVietnameseRestorer
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -535,6 +535,7 @@ class ChatbotAI:
         self.model = None
         self.index = None
         self.knowledge_data = []
+        self.vietnamese_restorer = None  # ✅ THÊM
         self.load_models()
     
     def load_models(self):
@@ -542,6 +543,15 @@ class ChatbotAI:
         try:
             self.model = SentenceTransformer('keepitreal/vietnamese-sbert')
             logger.info("✅ Vietnamese SBERT loaded for lecturers")
+            
+            # ✅ THÊM: Load Vietnamese restorer
+            try:
+                self.vietnamese_restorer = SimpleVietnameseRestorer(settings.GEMINI_API_KEY)
+                logger.info("✅ Vietnamese Restorer loaded for search")
+            except Exception as e:
+                logger.warning(f"⚠️ Vietnamese Restorer failed to load: {e}")
+                self.vietnamese_restorer = None
+            
             self.load_knowledge_base()
         except Exception as e:
             logger.error(f"Error loading models: {str(e)}")
@@ -689,6 +699,14 @@ class ChatbotAI:
                     'method': 'empty_query',
                     'sources': []
                 }
+            
+            # ✅ THÊM: Restore Vietnamese trước khi search
+            original_query = query
+            if self.vietnamese_restorer and not self.vietnamese_restorer.has_vietnamese_accents(query):
+                restored_query = self.vietnamese_restorer.restore_vietnamese_tone(query)
+                if restored_query != query:
+                    logger.info(f"🎯 Using restored query for search: '{query}' -> '{restored_query}'")
+                    query = restored_query  # SỬ DỤNG CÂU ĐÃ RESTORE CHO SEARCH
             
             # Search for match
             if self.model and self.index:

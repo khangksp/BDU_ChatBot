@@ -4,6 +4,9 @@ import requests
 import json
 import re
 from typing import Dict, Any, Optional, List
+from unidecode import unidecode
+import difflib
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +124,143 @@ class ConversationMemory:
         else:
             conv['context_summary'] = 'Hỏi đáp chung về BDU'
 
+class SimpleVietnameseRestorer:
+    """
+    Simple Vietnamese accent restorer using Gemini API
+    - Based on your original code sample
+    - Minimal complexity, maximum effectiveness
+    """
+    
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.model_name = "gemini-1.5-flash"
+        self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
+        
+        # Simple cache to avoid repeated API calls
+        self.cache = {}
+        self.max_cache_size = 500
+        
+        # Rate limiting - simple approach
+        self.last_call_time = 0
+        self.min_interval = 4  # 4 seconds between calls (15 calls/min = 4s interval)
+        
+        logger.info("✅ SimpleVietnameseRestorer initialized")
+    
+    def has_vietnamese_accents(self, text: str) -> bool:
+        """Check if text has Vietnamese accents"""
+        vietnamese_chars = 'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ'
+        vietnamese_chars += vietnamese_chars.upper()
+        return any(char in vietnamese_chars for char in text)
+    
+    def restore_vietnamese_tone(self, input_text: str) -> str:
+        """Restore Vietnamese accents using Gemini API - exactly like your sample"""
+        if not input_text or not input_text.strip():
+            return input_text
+        
+        input_text = input_text.strip()
+        
+        # Check cache first
+        cache_key = input_text.lower()
+        if cache_key in self.cache:
+            logger.debug(f"🎯 Cache hit for: '{input_text}'")
+            return self.cache[cache_key]
+        
+        # If already has accents, return as is
+        if self.has_vietnamese_accents(input_text):
+            self.cache[cache_key] = input_text
+            return input_text
+        
+        # Rate limiting check
+        current_time = time.time()
+        if current_time - self.last_call_time < self.min_interval:
+            logger.warning(f"⚠️ Rate limiting: skipping API call for '{input_text}'")
+            self.cache[cache_key] = input_text
+            return input_text
+        
+        # Call Gemini API
+        prompt = f'Hãy viết lại câu sau thành tiếng Việt có dấu đầy đủ, không thay đổi ý nghĩa: "{input_text}"'
+        
+        try:
+            self.last_call_time = current_time
+            
+            headers = {'Content-Type': 'application/json'}
+            data = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "maxOutputTokens": 100,
+                    "topP": 0.8
+                },
+                "safetySettings": [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                ]
+            }
+            
+            url = f"{self.base_url}?key={self.api_key}"
+            response = requests.post(url, headers=headers, json=data, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'candidates' in result and result['candidates']:
+                    candidate = result['candidates'][0]
+                    if 'content' in candidate and 'parts' in candidate['content']:
+                        restored_text = candidate['content']['parts'][0]['text'].strip()
+                        
+                        # Clean up response
+                        restored_text = re.sub(r'^["\'](.*)["\']$', r'\1', restored_text)
+                        restored_text = re.sub(r'^(Câu đã có dấu:|Kết quả:|Trả lời:)\s*', '', restored_text, flags=re.IGNORECASE)
+                        
+                        # Simple validation
+                        if self._is_valid_restoration(input_text, restored_text):
+                            logger.info(f"✅ Restored: '{input_text}' -> '{restored_text}'")
+                            self._cache_result(cache_key, restored_text)
+                            return restored_text
+                        else:
+                            logger.warning(f"⚠️ Invalid restoration: '{restored_text}'")
+            elif response.status_code == 429:
+                logger.warning(f"⚠️ Rate limit hit, increasing interval")
+                self.min_interval = min(10, self.min_interval + 1)
+            else:
+                logger.error(f"❌ Gemini API Error {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error restoring tone: {e}")
+        
+        # Fallback: return original
+        self._cache_result(cache_key, input_text)
+        return input_text
+    
+    def _is_valid_restoration(self, original: str, restored: str) -> bool:
+        """Simple validation"""
+        if not restored or len(restored.strip()) == 0:
+            return False
+        
+        # Check length difference
+        if abs(len(restored) - len(original)) > len(original) * 0.5:
+            return False
+        
+        # Check similarity without accents
+        original_no_accent = unidecode(original).lower()
+        restored_no_accent = unidecode(restored).lower()
+        
+        similarity = difflib.SequenceMatcher(None, original_no_accent, restored_no_accent).ratio()
+        return similarity >= 0.8
+    
+    def _cache_result(self, key: str, result: str):
+        """Cache result with size management"""
+        self.cache[key] = result
+        
+        # Simple cache management
+        if len(self.cache) > self.max_cache_size:
+            # Remove oldest 20% of entries
+            items_to_remove = len(self.cache) // 5
+            keys_to_remove = list(self.cache.keys())[:items_to_remove]
+            for k in keys_to_remove:
+                del self.cache[k]
+
 class GeminiResponseGenerator:
     """Gemini API Response Generator cho Giảng viên BDU"""
     
@@ -131,6 +271,9 @@ class GeminiResponseGenerator:
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         
         self.memory = ConversationMemory(max_history=10)
+        
+        # ✅ THÊM: Vietnamese accent restoration
+        self.vietnamese_restorer = SimpleVietnameseRestorer(self.api_key)
         
         # ✅ UPDATED: Role consistency for lecturers
         self.role_consistency_rules = {
@@ -143,8 +286,8 @@ class GeminiResponseGenerator:
             ]
         }
         
-        logger.info("✅ Gemini Response Generator for LECTURERS initialized")
-    
+        logger.info("✅ Gemini Response Generator for LECTURERS initialized with Vietnamese restoration")
+
     def generate_response(self, query: str, context: Optional[Dict] = None, 
                           intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
                           session_id: str = None) -> Dict[str, Any]:
@@ -155,6 +298,14 @@ class GeminiResponseGenerator:
         print(f"🧠 MEMORY DEBUG: Total active sessions = {len(self.memory.conversations)}")
 
         try:
+            original_query = query
+            if not self.vietnamese_restorer.has_vietnamese_accents(query):
+                restored_query = self.vietnamese_restorer.restore_vietnamese_tone(query)
+                if restored_query != query:
+                    logger.info(f"🎯 Query restored: '{query}' -> '{restored_query}'")
+                    query = restored_query  # Use restored version for processing
+
+            
             # 1. Lấy ngữ cảnh hội thoại
             conversation_context = {}
             if session_id:
@@ -180,7 +331,7 @@ class GeminiResponseGenerator:
             elif instruction == 'dont_know_lecturer':
                 response = self._generate_dont_know_response(query, context)
             else:
-                # 3. Kiểm tra ngoài phạm vi (cho giảng viên)
+                # 3. Kiểm tra ngoài phạm vi 
                 if context and context.get('emergency_education', False):
                     print(f"🚨 GEMINI: Emergency education mode activated")
                     pass 
@@ -188,13 +339,15 @@ class GeminiResponseGenerator:
                     response = self._get_contextual_out_of_scope_response_lecturer(conversation_context)
                     
                     if session_id:
-                        self.memory.add_interaction(session_id, query, response, intent_info, entities)
+                        self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
                     
                     return {
                         'response': response,
                         'method': 'out_of_scope_lecturer',
                         'confidence': 0.9,
-                        'generation_time': time.time() - start_time
+                        'generation_time': time.time() - start_time,
+                        'original_query': original_query,
+                        'restored_query': query
                     }
                 
                 # 4. Xây dựng prompt cho giảng viên
@@ -216,7 +369,7 @@ class GeminiResponseGenerator:
             # 7. Lưu vào bộ nhớ
             if session_id:
                 print(f"🧠 MEMORY DEBUG: Saving interaction to memory...")
-                self.memory.add_interaction(session_id, query, final_response, intent_info, entities)
+                self.memory.add_interaction(session_id, original_query, final_response, intent_info, entities)
                 print(f"🧠 MEMORY DEBUG: Memory saved. New history length = {len(self.memory.conversations.get(session_id, {}).get('history', []))}")
 
             return {
@@ -224,7 +377,10 @@ class GeminiResponseGenerator:
                 'method': f'lecturer_aware_gemini_{response_strategy}',
                 'strategy': response_strategy,
                 'conversation_context': conversation_context,
-                'generation_time': time.time() - start_time
+                'generation_time': time.time() - start_time,
+                'original_query': original_query,
+                'restored_query': query,
+                'vietnamese_restoration_used': query != original_query
             }
             
         except Exception as e:
@@ -232,13 +388,15 @@ class GeminiResponseGenerator:
             fallback_response = self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context)
             
             if session_id:
-                self.memory.add_interaction(session_id, query, fallback_response, intent_info, entities)
+                self.memory.add_interaction(session_id, original_query, fallback_response, intent_info, entities)
             
             return {
                 'response': fallback_response,
                 'method': 'lecturer_context_aware_fallback',
                 'error': str(e),
-                'generation_time': time.time() - start_time
+                'generation_time': time.time() - start_time,
+                'original_query': original_query,
+                'restored_query': query
             }
 
     def _generate_direct_lecturer_answer(self, query, context):
