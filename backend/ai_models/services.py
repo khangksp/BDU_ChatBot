@@ -11,21 +11,38 @@ import logging
 from .phobert_service import PhoBERTIntentClassifier
 from .gemini_service import GeminiResponseGenerator, SimpleVietnameseRestorer
 import pandas as pd
+import random
 
 logger = logging.getLogger(__name__)
 
 class LecturerDecisionEngine:
     """
     Enhanced Decision Engine specifically for BDU Lecturers
+    MODIFIED: Increased generation by lowering direct answer threshold and boosting enhancement
     """
     
     def __init__(self):
-        # ✅ ENHANCED: Confidence thresholds for lecturers
+        # ✅ MODIFIED: Adjusted confidence thresholds to favor more generation
         self.confidence_thresholds = {
-            'high_trust': 0.7,      # Very specific lecturer info - use direct
-            'medium_trust': 0.5,    # Related info - enhance with context
-            'low_trust': 0.25,      # Uncertain - ask for clarification
-            'no_trust': 0.1         # No match - say don't know
+            'high_trust': 0.85,     # ✅ INCREASED from 0.7 to 0.85 - harder to get direct answer
+            'medium_trust': 0.45,   # ✅ LOWERED from 0.5 to 0.45 - easier to get enhancement
+            'low_trust': 0.25,      # Keep same
+            'no_trust': 0.1         # Keep same
+        }
+        
+        # ✅ NEW: Generation boost factors
+        self.generation_boost_settings = {
+            'enable_boost': True,
+            'boost_probability': 0.15,  # 15% chance to force enhancement even with high confidence
+            'boost_keywords': [
+                # Keywords that benefit from additional context
+                'ngân hàng đề thi', 'kê khai nhiệm vụ', 'tạp chí', 'nghiên cứu',
+                'thi đua', 'khen thưởng', 'báo cáo', 'lịch giảng dạy',
+                'chất lượng', 'đánh giá', 'tiêu chuẩn', 'quy trình',
+                'ngan hang de thi', 'ke khai nhiem vu', 'tap chi', 'nghien cuu',
+                'thi dua', 'khen thuong', 'bao cao', 'lich giang day',
+                'chat luong', 'danh gia', 'tieu chuan', 'quy trinh'
+            ]
         }
         
         # ✅ EXPANDED: Education keywords CHO GIẢNG VIÊN BDU
@@ -108,7 +125,7 @@ class LecturerDecisionEngine:
             'thong tin', 'chi tiet', 'huong dan', 'giup do', 'ho tro'
         ]
         
-        logger.info("✅ LecturerDecisionEngine initialized for LECTURERS with expanded keywords")
+        logger.info("✅ Enhanced LecturerDecisionEngine initialized - GENERATION OPTIMIZED")
     
     def is_education_related(self, query):
         """Enhanced education detection for lecturers with memory context"""
@@ -183,8 +200,31 @@ class LecturerDecisionEngine:
         else:
             return 'no_trust'
     
+    def _should_boost_generation(self, query, confidence_level):
+        """✅ NEW: Determine if we should boost generation for this query"""
+        if not self.generation_boost_settings['enable_boost']:
+            return False
+        
+        query_lower = query.lower()
+        
+        # Check if query contains boost keywords
+        has_boost_keywords = any(keyword in query_lower for keyword in self.generation_boost_settings['boost_keywords'])
+        
+        # Random boost based on probability
+        random_boost = random.random() < self.generation_boost_settings['boost_probability']
+        
+        # Boost conditions:
+        # 1. Query has boost keywords AND confidence is high_trust -> force to medium_trust
+        # 2. Random boost probability
+        should_boost = (has_boost_keywords and confidence_level == 'high_trust') or random_boost
+        
+        if should_boost:
+            logger.info(f"🚀 GENERATION BOOST ACTIVATED: keywords={has_boost_keywords}, random={random_boost}")
+        
+        return should_boost
+    
     def make_decision(self, query, retrieval_result, intent_result, session_memory=None):
-        """Enhanced decision making for lecturers with memory context"""
+        """Enhanced decision making for lecturers with GENERATION BOOST"""
         
         # Step 1: Check conversation context first
         context_override = False
@@ -208,10 +248,16 @@ class LecturerDecisionEngine:
         similarity = retrieval_result.get('confidence', 0)
         confidence_level = self.categorize_confidence(similarity)
         
+        # ✅ NEW: Check for generation boost
+        should_boost = self._should_boost_generation(query, confidence_level)
+        if should_boost and confidence_level == 'high_trust':
+            confidence_level = 'medium_trust'  # Force enhancement instead of direct
+            logger.info(f"🚀 GENERATION BOOST: Downgraded high_trust to medium_trust for enhancement")
+        
         # Step 4: Check if needs clarification
         needs_clarification = self.needs_clarification(query, similarity)
         
-        logger.info(f"🤖 Decision inputs: education={is_education}, context_override={context_override}, similarity={similarity:.3f}, level={confidence_level}, clarify={needs_clarification}")
+        logger.info(f"🤖 Decision inputs: education={is_education}, context_override={context_override}, similarity={similarity:.3f}, level={confidence_level}, clarify={needs_clarification}, boost={should_boost}")
         
         # Step 5: Make decision
         if needs_clarification:
@@ -237,7 +283,8 @@ class LecturerDecisionEngine:
                 'instruction': 'enhance_answer_lecturer',
                 'db_answer': retrieval_result.get('response', ''),
                 'confidence': similarity,
-                'message': 'Medium confidence - enhance database answer'
+                'message': 'Medium confidence - enhance database answer',
+                'generation_boosted': should_boost  # ✅ NEW: Mark if this was boosted
             }
             
         elif confidence_level == 'low_trust':
@@ -300,15 +347,19 @@ class HybridChatbotAI:
             'phobert_available': not self.intent_classifier.fallback_mode,
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'lecturer_focused_hybrid_with_clarification',
+            'mode': 'lecturer_focused_hybrid_with_enhanced_generation',
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'confidence_thresholds': self.decision_engine.confidence_thresholds,
+            'generation_boost_enabled': self.decision_engine.generation_boost_settings['enable_boost'],
+            'boost_probability': self.decision_engine.generation_boost_settings['boost_probability'],
             'lecturer_features': [
                 'lecturer_keyword_detection',
                 'clarification_requests', 
                 'department_suggestions',
                 'formal_addressing',
-                'concise_responses',
+                'enhanced_generation_boost',
+                'random_generation_enhancement',
+                'keyword_based_generation_boost',
                 'no_fabrication_policy'
             ],
             'gemini_status': gemini_status
@@ -369,6 +420,7 @@ class HybridChatbotAI:
                 'entities': entities,
                 'processing_time': processing_time,
                 'is_education': gemini_context is not None,
+                'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
                 'lecturer_optimized': True
             }
             
@@ -383,7 +435,7 @@ class HybridChatbotAI:
             }
     
     def _execute_lecturer_decision(self, decision_type, query, gemini_context, intent_result, entities, session_id):
-        """Execute lecturer-specific decisions"""
+        """✅ ENHANCED: Execute lecturer-specific decisions with generation support"""
         
         logger.info(f"🎯 Executing lecturer decision: {decision_type}")
         
@@ -399,10 +451,22 @@ class HybridChatbotAI:
             return response.get('response', f"Dạ thầy/cô, {gemini_context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?")
             
         elif decision_type == 'enhance_db_answer':
-            # Medium confidence -> Enhance database answer
+            # ✅ ENHANCED: Medium confidence -> Enhanced generation with boost support
+            
+            # Check if this should get enhanced generation
+            is_boosted = gemini_context.get('generation_boosted', False)
+            
+            if is_boosted:
+                logger.info(f"🚀 GENERATION BOOST: Using enhanced generation for query")
+                # Force enhanced generation by modifying context
+                enhanced_context = gemini_context.copy()
+                enhanced_context['instruction'] = 'enhance_answer_lecturer_boosted'
+            else:
+                enhanced_context = gemini_context
+            
             response = self.response_generator.generate_response(
                 query=query,
-                context=gemini_context,
+                context=enhanced_context,
                 intent_info=intent_result,
                 entities=entities,
                 session_id=session_id

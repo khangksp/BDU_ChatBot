@@ -10,8 +10,8 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# ✅ SYSTEM PROMPT CỤ THỂ CHO GIẢNG VIÊN
-LECTURER_SYSTEM_PROMPT = """Bạn là AI assistant của Đại học Bình Dương (BDU), chuyên hỗ trợ giảng viên.
+# ✅ FALLBACK SYSTEM PROMPT cho trường hợp không có personalization
+FALLBACK_LECTURER_SYSTEM_PROMPT = """Bạn là AI assistant của Đại học Bình Dương (BDU), chuyên hỗ trợ giảng viên.
 
 🎯 QUY TẮC QUAN TRỌNG:
 - LUÔN xưng hô: "thầy/cô" (TUYỆT ĐỐI KHÔNG dùng "bạn", "mình", "anh/chị")
@@ -262,7 +262,7 @@ class SimpleVietnameseRestorer:
                 del self.cache[k]
 
 class GeminiResponseGenerator:
-    """Gemini API Response Generator cho Giảng viên BDU"""
+    """Gemini API Response Generator cho Giảng viên BDU với Personalization"""
     
     def __init__(self, api_key: str = None):
         from django.conf import settings
@@ -271,9 +271,10 @@ class GeminiResponseGenerator:
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         
         self.memory = ConversationMemory(max_history=10)
-        
-        # ✅ THÊM: Vietnamese accent restoration
         self.vietnamese_restorer = SimpleVietnameseRestorer(self.api_key)
+        
+        # ✅ NEW: User context cache for personalization
+        self._user_context_cache = {}
         
         # ✅ UPDATED: Role consistency for lecturers
         self.role_consistency_rules = {
@@ -286,12 +287,35 @@ class GeminiResponseGenerator:
             ]
         }
         
-        logger.info("✅ Gemini Response Generator for LECTURERS initialized with Vietnamese restoration")
+        logger.info("✅ Gemini Response Generator initialized with Personalization support")
+
+    # ✅ NEW: Personalization methods
+    def set_user_context(self, session_id: str, user_context: dict):
+        """Set user context cho session (được gọi từ chat API)"""
+        self._user_context_cache[session_id] = user_context
+        logger.info(f"✅ Set user context for session {session_id}: {user_context.get('faculty_code', 'Unknown')}")
+
+    def _get_personalized_system_prompt(self, session_id: str = None):
+        """Lấy personalized system prompt từ user context"""
+        try:
+            if not session_id or session_id not in self._user_context_cache:
+                return FALLBACK_LECTURER_SYSTEM_PROMPT
+            
+            user_context = self._user_context_cache[session_id]
+            if 'personalized_prompt' in user_context:
+                logger.info(f"✅ Using personalized prompt for {user_context.get('faculty_code', 'Unknown')}")
+                return user_context['personalized_prompt']
+            
+            return FALLBACK_LECTURER_SYSTEM_PROMPT
+            
+        except Exception as e:
+            logger.error(f"Error getting personalized prompt: {e}")
+            return FALLBACK_LECTURER_SYSTEM_PROMPT
 
     def generate_response(self, query: str, context: Optional[Dict] = None, 
-                          intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
-                          session_id: str = None) -> Dict[str, Any]:
-        """Tạo phản hồi cho giảng viên với bộ nhớ hội thoại"""
+                      intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
+                      session_id: str = None) -> Dict[str, Any]:
+        """✅ ENHANCED: Generate response with enhanced generation support"""
         start_time = time.time()
         
         print(f"\n--- LECTURER REQUEST (Session: {session_id}) ---")
@@ -305,16 +329,14 @@ class GeminiResponseGenerator:
                     logger.info(f"🎯 Query restored: '{query}' -> '{restored_query}'")
                     query = restored_query  # Use restored version for processing
 
-            
-            # 1. Lấy ngữ cảnh hội thoại
+            # 1. Get conversation context
             conversation_context = {}
             if session_id:
                 conversation_context = self.memory.get_conversation_context(session_id)
                 print(f"🧠 MEMORY DEBUG: History length = {len(conversation_context.get('history', []))}")
                 print(f"🧠 MEMORY DEBUG: Context summary = {conversation_context.get('context_summary', 'None')}")
 
-            
-            # 2. Xác định chiến lược phản hồi cho giảng viên
+            # 2. Determine response strategy for lecturers
             response_strategy = self._determine_lecturer_response_strategy(
                 query, context, intent_info, conversation_context
             )
@@ -323,20 +345,20 @@ class GeminiResponseGenerator:
             instruction = context.get('instruction', '') if context else ''
             
             if instruction == 'direct_answer_lecturer':
-                response = self._generate_direct_lecturer_answer(query, context)
-            elif instruction == 'enhance_answer_lecturer':
+                response = self._generate_direct_lecturer_answer(query, context, session_id)
+            elif instruction in ['enhance_answer_lecturer', 'enhance_answer_lecturer_boosted']:
                 response = self._generate_enhanced_lecturer_answer(query, context, intent_info, entities, session_id)
             elif instruction == 'clarification_needed':
-                response = self._generate_clarification_request(query, context)
+                response = self._generate_clarification_request(query, context, session_id)
             elif instruction == 'dont_know_lecturer':
-                response = self._generate_dont_know_response(query, context)
+                response = self._generate_dont_know_response(query, context, session_id)
             else:
-                # 3. Kiểm tra ngoài phạm vi 
+                # 3. Check out of scope 
                 if context and context.get('emergency_education', False):
                     print(f"🚨 GEMINI: Emergency education mode activated")
                     pass 
                 elif not self._is_lecturer_education_related(query) and not context.get('force_education_response', False):
-                    response = self._get_contextual_out_of_scope_response_lecturer(conversation_context)
+                    response = self._get_contextual_out_of_scope_response_lecturer(conversation_context, session_id)
                     
                     if session_id:
                         self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
@@ -347,26 +369,27 @@ class GeminiResponseGenerator:
                         'confidence': 0.9,
                         'generation_time': time.time() - start_time,
                         'original_query': original_query,
-                        'restored_query': query
+                        'restored_query': query,
+                        'personalized': session_id in self._user_context_cache
                     }
                 
-                # 4. Xây dựng prompt cho giảng viên
+                # 4. Build prompt for lecturers with personalization
                 enhanced_prompt = self._build_lecturer_context_aware_prompt(
-                    query, context, intent_info, entities, response_strategy, conversation_context
+                    query, context, intent_info, entities, response_strategy, conversation_context, session_id
                 )
                 
-                # 5. Gọi Gemini API
+                # 5. Call Gemini API
                 response = self._call_gemini_api_optimized(enhanced_prompt, response_strategy)
                 
-                # 6. Hậu xử lý để đảm bảo nhất quán cho giảng viên
+                # 6. Post-process to ensure lecturer consistency
                 if response:
                     response = self._post_process_with_lecturer_consistency(
-                        response, query, context, response_strategy, conversation_context
+                        response, query, context, response_strategy, conversation_context, session_id
                     )
             
-            final_response = response or self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context)
+            final_response = response or self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id)
             
-            # 7. Lưu vào bộ nhớ
+            # 7. Save to memory
             if session_id:
                 print(f"🧠 MEMORY DEBUG: Saving interaction to memory...")
                 self.memory.add_interaction(session_id, original_query, final_response, intent_info, entities)
@@ -380,12 +403,14 @@ class GeminiResponseGenerator:
                 'generation_time': time.time() - start_time,
                 'original_query': original_query,
                 'restored_query': query,
-                'vietnamese_restoration_used': query != original_query
+                'vietnamese_restoration_used': query != original_query,
+                'personalized': session_id in self._user_context_cache,
+                'enhanced_generation': response_strategy == 'enhanced_generation'
             }
             
         except Exception as e:
             logger.error(f"Gemini API error: {str(e)}")
-            fallback_response = self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context)
+            fallback_response = self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id)
             
             if session_id:
                 self.memory.add_interaction(session_id, original_query, fallback_response, intent_info, entities)
@@ -396,14 +421,18 @@ class GeminiResponseGenerator:
                 'error': str(e),
                 'generation_time': time.time() - start_time,
                 'original_query': original_query,
-                'restored_query': query
+                'restored_query': query,
+                'personalized': session_id in self._user_context_cache
             }
 
-    def _generate_direct_lecturer_answer(self, query, context):
+    def _generate_direct_lecturer_answer(self, query, context, session_id=None):
         """Generate direct answer for lecturers with high confidence"""
         
+        # ✅ UPDATED: Sử dụng personalized prompt
+        system_prompt = self._get_personalized_system_prompt(session_id)
+        
         prompt = f"""
-        {LECTURER_SYSTEM_PROMPT}
+        {system_prompt}
         
         NHIỆM VỤ: Trả lời TRỰC TIẾP cho giảng viên BDU
         
@@ -426,33 +455,77 @@ class GeminiResponseGenerator:
         return response or f"Dạ thầy/cô, {context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
     
     def _generate_enhanced_lecturer_answer(self, query, context, intent_info, entities, session_id):
-        """Generate enhanced answer for lecturers"""
+        """✅ ENHANCED: Generate enhanced answer with MORE GENERATION for lecturers"""
         
-        prompt = f"""
-        {LECTURER_SYSTEM_PROMPT}
+        # Get personalized system prompt
+        system_prompt = self._get_personalized_system_prompt(session_id)
         
-        NHIỆM VỤ: Trả lời có bổ sung cho giảng viên BDU
+        # Check if this is a boosted generation request
+        is_generation_boosted = (
+            context.get('generation_boosted', False) or 
+            context.get('instruction') == 'enhance_answer_lecturer_boosted'
+        )
         
-        CÂU HỎI GIẢNG VIÊN: {query}
+        # Enhanced prompts based on boost status
+        if is_generation_boosted:
+            prompt = f"""
+            {system_prompt}
+            
+            NHIỆM VỤ ĐẶC BIỆT: Trả lời có BỔ SUNG PHONG PHÚ cho giảng viên BDU
+            
+            CÂU HỎI GIẢNG VIÊN: {query}
+            
+            THÔNG TIN CƠ BẢN TỪ CSDL:
+            {context['db_answer']}
+            
+            YÊU CẦU TĂNG CƯỜNG:
+            - SỬ DỤNG thông tin CSDL làm nền tảng
+            - BỔ SUNG thêm ngữ cảnh, lý do, hoặc hướng dẫn chi tiết
+            - GIẢI THÍCH tại sao điều này quan trọng cho giảng viên
+            - THÊM tips hoặc lưu ý thực tế nếu phù hợp
+            - Bắt đầu: "Dạ thầy/cô,"
+            - Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+            - Độ dài: 3-4 câu (nhiều hơn bình thường)
+            
+            VÍ DỤ TĂNG CƯỜNG:
+            - Nếu về ngân hàng đề thi → thêm về tầm quan trọng của việc này
+            - Nếu về kê khai nhiệm vụ → thêm về thời gian và quy trình
+            - Nếu về tạp chí → thêm về tiêu chí và lợi ích
+            
+            Trả lời:
+            """
+        else:
+            # Standard enhancement prompt
+            prompt = f"""
+            {system_prompt}
+            
+            NHIỆM VỤ: Trả lời có bổ sung cho giảng viên BDU
+            
+            CÂU HỎI GIẢNG VIÊN: {query}
+            
+            THÔNG TIN LIÊN QUAN TỪ CSDL:
+            {context['db_answer']}
+            
+            YÊU CẦU:
+            - Sử dụng thông tin CSDL làm gốc
+            - Bổ sung ngữ cảnh phù hợp nếu cần
+            - Bắt đầu: "Dạ thầy/cô,"
+            - Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+            - NGẮN GỌN, 2-3 câu tối đa
+            
+            Trả lời:
+            """
         
-        THÔNG TIN LIÊN QUAN TỪ CSDL:
-        {context['db_answer']}
-        
-        YÊU CẦU:
-        - Sử dụng thông tin CSDL làm gốc
-        - Bổ sung ngữ cảnh phù hợp nếu cần
-        - Bắt đầu: "Dạ thầy/cô,"
-        - Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-        - NGẮN GỌN, 2-3 câu tối đa
-        
-        Trả lời:
-        """
-        
-        response = self._call_gemini_api_optimized(prompt, 'balanced')
+        response = self._call_gemini_api_optimized(prompt, 'enhanced_generation' if is_generation_boosted else 'balanced')
         return response or f"Dạ thầy/cô, {context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-    
-    def _generate_clarification_request(self, query, context):
+
+        
+    def _generate_clarification_request(self, query, context, session_id=None):
         """Generate clarification request for lecturers"""
+        
+        # ✅ NEW: Lấy thông tin user để personalize clarification
+        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
+        department_name = user_context.get('department_name', '')
         
         # Extract key topic from query for targeted clarification
         query_words = query.lower().split()
@@ -475,11 +548,14 @@ class GeminiResponseGenerator:
         
         if key_topics:
             topic_text = key_topics[0]
-            return f"Dạ thầy/cô, để em hỗ trợ chính xác về {topic_text}, thầy/cô có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
+            if department_name:
+                return f"Dạ thầy/cô, để em hỗ trợ chính xác về {topic_text} cho ngành {department_name}, thầy/cô có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
+            else:
+                return f"Dạ thầy/cô, để em hỗ trợ chính xác về {topic_text}, thầy/cô có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
         else:
             return f"Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
     
-    def _generate_dont_know_response(self, query, context):
+    def _generate_dont_know_response(self, query, context, session_id=None):
         """Generate don't know response for lecturers"""
         
         # Suggest relevant departments based on query content
@@ -504,34 +580,26 @@ class GeminiResponseGenerator:
         return f"Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ {dept} qua email {contact} để được hỗ trợ chi tiết ạ. 🎓"
 
     def _determine_lecturer_response_strategy(self, query, context, intent_info, conversation_context):
-        """Xác định chiến lược phản hồi cho giảng viên"""
+        """✅ ENHANCED: Response strategy with generation bias"""
         
         has_real_history = bool(conversation_context.get('history') and len(conversation_context['history']) > 0)
         
         print(f"🔍 LECTURER STRATEGY DEBUG: has_real_history = {has_real_history}")
-        if not has_real_history:
-             print("🔍 LECTURER STRATEGY DEBUG: No history, using standard strategy...")
-        else:
-            # ✅ ENHANCED: Lecturer-specific follow-up detection
+        
+        if has_real_history:
+            # Enhanced follow-up detection for lecturers
             last_interaction = conversation_context['history'][-1]
             last_query = last_interaction['user_query'].lower()
             current_query = query.lower()
             
-            print(f"🔍 LECTURER STRATEGY DEBUG: last_query = '{last_query[:50]}...'")
-            print(f"🔍 LECTURER STRATEGY DEBUG: current_query = '{current_query[:50]}...'")
-            
-            # ✅ LECTURER-SPECIFIC topics
+            # Lecturer-specific topics
             lecturer_topics = {
                 'ngân hàng đề thi': ['ngân hàng', 'đề thi', 'đề', 'khảo thí'],
                 'kê khai nhiệm vụ': ['kê khai', 'nhiệm vụ', 'giờ chuẩn'],
                 'tạp chí khoa học': ['tạp chí', 'bài viết', 'nghiên cứu'],
                 'thi đua khen thưởng': ['thi đua', 'khen thưởng', 'danh hiệu'],
                 'báo cáo': ['báo cáo', 'nộp', 'hạn cuối'],
-                'lịch giảng dạy': ['lịch', 'giảng dạy', 'thời khóa biểu'],
-                'cơ sở vật chất': ['cơ sở', 'phòng', 'trang thiết bị'],
-                'học phí': ['học phí', 'phí', 'tiền học', 'chi phí'],
-                'tuyển sinh': ['tuyển sinh', 'nhập học', 'đăng ký', 'điểm'],
-                'ngành học': ['ngành', 'chuyên ngành', 'khoa', 'đào tạo']
+                'lịch giảng dạy': ['lịch', 'giảng dạy', 'thời khóa biểu']
             }
             
             last_main_topic = None
@@ -546,8 +614,6 @@ class GeminiResponseGenerator:
                     current_main_topic = topic
                     break
 
-            print(f"🔍 LECTURER STRATEGY DEBUG: last_main_topic = {last_main_topic}, current_main_topic = {current_main_topic}")
-
             has_exact_same_topic = last_main_topic is not None and last_main_topic == current_main_topic
             
             strong_continuation_words = ['còn', 'thêm', 'nữa', 'khác', 'và', 'tiếp theo']
@@ -559,50 +625,43 @@ class GeminiResponseGenerator:
             memory_test_words = ['nhớ không', 'hỏi gì', 'nói gì trước', 'vừa nói', 'tổng hợp']
             is_memory_test = any(word in current_query for word in memory_test_words)
 
-            print(f"🔍 LECTURER STRATEGY DEBUG: has_exact_same_topic = {has_exact_same_topic}")
-            print(f"🔍 LECTURER STRATEGY DEBUG: has_strong_continuation = {has_strong_continuation}")
-            print(f"🔍 LECTURER STRATEGY DEBUG: has_strong_clarification = {has_strong_clarification}")
-
-            # ĐIỀU KIỆN NGHIÊM NGẶT CHO CÁC CHIẾN LƯỢC NGỮ CẢNH
+            # Context-based strategies
             if has_strong_continuation and has_exact_same_topic:
-                print(f"💡 LECTURER STRATEGY SELECTED: → follow_up_continuation")
                 return 'follow_up_continuation'
             
             if has_strong_clarification and has_exact_same_topic:
-                print(f"💡 LECTURER STRATEGY SELECTED: → follow_up_clarification")
                 return 'follow_up_clarification'
 
             if is_memory_test:
-                 print(f"💡 LECTURER STRATEGY SELECTED: → memory_reference")
-                 return 'memory_reference'
-                 
+                return 'memory_reference'
+                
             if current_main_topic is not None and last_main_topic is not None and current_main_topic != last_main_topic:
-                print(f"💡 LECTURER STRATEGY SELECTED: → topic_shift")
                 return 'topic_shift'
         
-        # MẶC ĐỊNH: Sử dụng logic chiến lược cơ bản cho giảng viên
-        print(f"🔍 LECTURER STRATEGY DEBUG: No clear follow-up detected, using standard strategy logic...")
-        
-        if isinstance(context, dict) and context.get('confidence', 0) > 0.7:
-            print(f"💡 LECTURER STRATEGY SELECTED: → direct_enhance")
+        # ✅ MODIFIED: Default strategy logic with generation bias
+        if isinstance(context, dict) and context.get('confidence', 0) > 0.85:  # Raised from 0.7
             return 'direct_enhance'
         
+        # ✅ NEW: Favor enhancement over brief responses
+        if isinstance(context, dict) and context.get('confidence', 0) > 0.45:  # New range for enhancement
+            return 'enhanced_generation'  # New strategy for more generation
+        
         if intent_info and intent_info.get('intent') in ['greeting', 'general'] and len(query.split()) <= 5:
-            print(f"💡 LECTURER STRATEGY SELECTED: → quick_clarify")
             return 'quick_clarify'
         
         if any(word in query.lower() for word in ['khó khăn', 'cần gấp', 'hạn cuối', 'urgent']):
-            print(f"💡 LECTURER STRATEGY SELECTED: → supportive_brief")
             return 'supportive_brief'
         
-        print(f"💡 LECTURER STRATEGY SELECTED: → balanced (default)")
         return 'balanced'
 
-    def _build_lecturer_context_aware_prompt(self, query, context, intent_info, entities, strategy, conversation_context):
-        """Xây dựng prompt cho giảng viên với LECTURER_SYSTEM_PROMPT"""
+    def _build_lecturer_context_aware_prompt(self, query, context, intent_info, entities, strategy, conversation_context, session_id=None):
+        """Xây dựng prompt cho giảng viên với personalized system prompt"""
+        
+        # ✅ UPDATED: Sử dụng personalized system prompt
+        personalized_prompt = self._get_personalized_system_prompt(session_id)
         
         base_personality = f"""
-        {LECTURER_SYSTEM_PROMPT}
+        {personalized_prompt}
 
         🤖 QUY TẮC VAI TRÒ NGHIÊM NGẶT:
         - LUÔN giữ vai trò: "{self.role_consistency_rules['identity']}"
@@ -640,6 +699,35 @@ class GeminiResponseGenerator:
             """
         
         strategy_prompts = {
+            'enhanced_generation': f"""
+            {base_personality}
+            {memory_context}
+            
+            NHIỆM VỤ ĐẶC BIỆT: Tạo sinh BỔ SUNG có ý nghĩa cho giảng viên
+            
+            CÂU HỎI GIẢNG VIÊN: {query}
+            
+            THÔNG TIN CƠ BẢN TỪ CSDL:
+            {context_info}
+            
+            YÊU CẦU TĂNG CƯỜNG TẠO SINH:
+            - SỬ DỤNG thông tin CSDL làm nền tảng chính
+            - BỔ SUNG ngữ cảnh, lý do, hoặc hướng dẫn thực tế
+            - GIẢI THÍCH tại sao điều này quan trọng cho công việc giảng viên
+            - THÊM lời khuyên hoặc tips hữu ích nếu phù hợp
+            - Độ dài: 3-4 câu (dài hơn bình thường)
+            - Vẫn giữ phong cách lịch sự, tôn trọng
+            
+            HƯỚNG DẪN TẠO SINH:
+            - Về ngân hàng đề thi → thêm về quy trình, tầm quan trọng
+            - Về kê khai nhiệm vụ → thêm về deadline, các bước thực hiện
+            - Về tạp chí khoa học → thêm về tiêu chí, lợi ích nghề nghiệp
+            - Về thi đua khen thưởng → thêm về ý nghĩa, động lực
+            - Về báo cáo → thêm về cách chuẩn bị, lưu ý
+            
+            Trả lời:
+            """,
+            
             'follow_up_continuation': f"""
             {base_personality}
             {memory_context}
@@ -690,15 +778,29 @@ class GeminiResponseGenerator:
             """
         }
 
-        # Dùng 'balanced' làm prompt mặc định cho các strategy khác chưa được định nghĩa riêng
+        # Use 'balanced' as default prompt for other strategies not specifically defined
         final_prompt = strategy_prompts.get(strategy, strategy_prompts['balanced'])
-        print(f"📝 LECTURER PROMPT DEBUG (Strategy: {strategy}):\n{final_prompt[:400]}...") # In ra một phần prompt để debug
+        print(f"📝 LECTURER PROMPT DEBUG (Strategy: {strategy}):\n{final_prompt[:400]}...") # Print part of prompt for debugging
         return final_prompt
 
-    def _post_process_with_lecturer_consistency(self, response, query, context, strategy, conversation_context):
-        """Post-process để đảm bảo nhất quán cho giảng viên"""
+    def _post_process_with_lecturer_consistency(self, response, query, context, strategy, conversation_context, session_id=None):
+        """Post-process để đảm bảo nhất quán cho giảng viên với personalization"""
         if not response:
             return response
+        
+        # ✅ NEW: Lấy thông tin user để personalize addressing
+        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
+        full_name = user_context.get('full_name', '')
+        faculty_code = user_context.get('faculty_code', '')
+        
+        # Tạo xưng hô cá nhân hóa nếu có thông tin
+        if full_name:
+            name_suffix = full_name.split()[-1]  # Lấy tên
+            personal_address = f"thầy/cô {name_suffix}"
+        elif faculty_code:
+            personal_address = f"thầy/cô {faculty_code}"
+        else:
+            personal_address = "thầy/cô"
         
         # 1. Sửa các vi phạm vai trò cho giảng viên
         prohibited_phrases = [
@@ -709,24 +811,29 @@ class GeminiResponseGenerator:
             if phrase.lower() in response.lower():
                 response = response.replace(phrase, 'em là AI assistant của BDU')
         
-        # 2. ✅ CRITICAL: Sửa xưng hô không đúng
-        response = re.sub(r'\bbạn\b', 'thầy/cô', response, flags=re.IGNORECASE)
+        # 2. ✅ CRITICAL: Sửa xưng hô không đúng với personalization
+        response = re.sub(r'\bbạn\b', personal_address, response, flags=re.IGNORECASE)
         response = re.sub(r'\bmình\b', 'em', response, flags=re.IGNORECASE)
         response = re.sub(r'\btôi\b', 'em', response, flags=re.IGNORECASE)
         
-        # 3. ✅ CRITICAL: Đảm bảo bắt đầu bằng "Dạ thầy/cô"
+        # 3. ✅ CRITICAL: Đảm bảo bắt đầu bằng personalized greeting
         response_stripped = response.strip()
-        if not response_stripped.lower().startswith('dạ thầy/cô'):
-            if response_stripped.lower().startswith('dạ'):
-                response = 'Dạ thầy/cô, ' + response_stripped[3:].strip()
-            else:
-                response = 'Dạ thầy/cô, ' + response_stripped
+        personalized_start = f"Dạ {personal_address},"
         
-        # 4. ✅ CRITICAL: Đảm bảo kết thúc đúng cách
-        if not response.strip().endswith('Thầy/cô có cần hỗ trợ thêm gì không ạ?'):
+        if not response_stripped.lower().startswith('dạ thầy/cô') and not response_stripped.lower().startswith(f'dạ {personal_address.lower()}'):
+            if response_stripped.lower().startswith('dạ'):
+                response = personalized_start + ' ' + response_stripped[3:].strip()
+            else:
+                response = personalized_start + ' ' + response_stripped
+        
+        # 4. ✅ CRITICAL: Đảm bảo kết thúc đúng cách với personalization
+        personalized_end = f"{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+        
+        if not response.strip().endswith('có cần hỗ trợ thêm gì không ạ?'):
             # Remove existing endings first
             response = re.sub(r'\s*(Thầy/cô có.*?không ạ\?|Cần.*?không\?|Có.*?không\?)?\s*$', '', response.strip())
             response += ' Thầy/cô có cần hỗ trợ thêm gì không ạ?'
+            
         
         # 5. ✅ REMOVE: Loại bỏ format phức tạp
         response = re.sub(r'\*\*\d+\.\s*', '', response)  # Remove **1. **2. etc
@@ -736,32 +843,65 @@ class GeminiResponseGenerator:
         
         return response.strip()
     
-    def _get_contextual_out_of_scope_response_lecturer(self, conversation_context):
-        """Out of scope response cho giảng viên"""
-        if conversation_context.get('context_summary'):
-            return f"Dạ thầy/cô, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 Thầy/cô còn muốn hỏi gì về {conversation_context['context_summary'].lower()} không ạ?"
+    def _get_contextual_out_of_scope_response_lecturer(self, conversation_context, session_id=None):
+        """Out of scope response cho giảng viên với personalization"""
         
-        return "Dạ thầy/cô, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 Thầy/cô có câu hỏi nào khác về trường không ạ?"
+        # ✅ NEW: Personalized out of scope response
+        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
+        full_name = user_context.get('full_name', '')
+        department_name = user_context.get('department_name', '')
+        
+        if full_name:
+            name_suffix = full_name.split()[-1]
+            personal_address = f"thầy/cô {name_suffix}"
+        else:
+            personal_address = "thầy/cô"
+        
+        if conversation_context.get('context_summary'):
+            if department_name:
+                return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} còn muốn hỏi gì về {conversation_context['context_summary'].lower()} cho ngành {department_name} không ạ?"
+            else:
+                return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} còn muốn hỏi gì về {conversation_context['context_summary'].lower()} không ạ?"
+        
+        if department_name:
+            return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về ngành {department_name} không ạ?"
+        else:
+            return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về trường không ạ?"
     
-    def _get_smart_fallback_with_context_lecturer(self, query, intent_info, conversation_context):
-        """Smart fallback với conversation context cho giảng viên"""
+    def _get_smart_fallback_with_context_lecturer(self, query, intent_info, conversation_context, session_id=None):
+        """Smart fallback với conversation context cho giảng viên và personalization"""
+        
+        # ✅ NEW: Personalized fallback
+        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
+        full_name = user_context.get('full_name', '')
+        department_name = user_context.get('department_name', '')
+        
+        if full_name:
+            name_suffix = full_name.split()[-1]
+            personal_address = f"thầy/cô {name_suffix}"
+        else:
+            personal_address = "thầy/cô"
+        
         intent_name = intent_info.get('intent', 'general') if intent_info else 'general'
         
         if conversation_context.get('context_summary'):
             summary = conversation_context['context_summary']
             context_fallbacks = {
-                'Đang hỏi về ngân hàng đề thi': "Dạ thầy/cô, về ngân hàng đề thi, em có thể hỗ trợ thêm! 📋 Thầy/cô có cần hỗ trợ thêm gì không ạ?",
-                'Đang hỏi về kê khai nhiệm vụ năm học': "Dạ thầy/cô, về kê khai nhiệm vụ năm học, em có thể hỗ trợ thêm! 📊 Thầy/cô có cần hỗ trợ thêm gì không ạ?",
-                'Đang hỏi về tạp chí khoa học': "Dạ thầy/cô, về tạp chí khoa học, em có thể hỗ trợ thêm! 📚 Thầy/cô có cần hỗ trợ thêm gì không ạ?",
-                'Đang hỏi về thi đua khen thưởng': "Dạ thầy/cô, về thi đua khen thưởng, em có thể hỗ trợ thêm! 🏆 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+                'Đang hỏi về ngân hàng đề thi': f"Dạ {personal_address}, về ngân hàng đề thi, em có thể hỗ trợ thêm! 📋 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?",
+                'Đang hỏi về kê khai nhiệm vụ năm học': f"Dạ {personal_address}, về kê khai nhiệm vụ năm học, em có thể hỗ trợ thêm! 📊 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?",
+                'Đang hỏi về tạp chí khoa học': f"Dạ {personal_address}, về tạp chí khoa học, em có thể hỗ trợ thêm! 📚 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?",
+                'Đang hỏi về thi đua khen thưởng': f"Dạ {personal_address}, về thi đua khen thưởng, em có thể hỗ trợ thêm! 🏆 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
             }
             if summary in context_fallbacks:
                 return context_fallbacks[summary]
         
         smart_fallbacks = {
-            'greeting': "Dạ chào thầy/cô! 👋 Em có thể hỗ trợ gì cho thầy/cô về BDU ạ?",
-            'general': "Dạ thầy/cô, em sẵn sàng hỗ trợ các vấn đề liên quan đến BDU! 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+            'greeting': f"Dạ chào {personal_address}! 👋 Em có thể hỗ trợ gì cho {personal_address} về BDU ạ?",
+            'general': f"Dạ {personal_address}, em sẵn sàng hỗ trợ các vấn đề liên quan đến BDU! 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
         }
+        
+        if department_name and intent_name == 'general':
+            smart_fallbacks['general'] = f"Dạ {personal_address}, em sẵn sàng hỗ trợ các vấn đề liên quan đến BDU và ngành {department_name}! 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
         
         return smart_fallbacks.get(intent_name, smart_fallbacks['general'])
     
@@ -803,7 +943,7 @@ class GeminiResponseGenerator:
 
     # Keep existing methods but ensure they're adapted for lecturers
     def _call_gemini_api_optimized(self, prompt: str, strategy: str) -> Optional[str]:
-        """Call Gemini API - same as before"""
+        """✅ ENHANCED: Call Gemini API with generation-optimized configs"""
         try:
             headers = {'Content-Type': 'application/json'}
             generation_configs = {
@@ -816,7 +956,9 @@ class GeminiResponseGenerator:
                 'follow_up_clarification': {"temperature": 0.3, "maxOutputTokens": 180},
                 'topic_shift': {"temperature": 0.5, "maxOutputTokens": 120},
                 'memory_reference': {"temperature": 0.2, "maxOutputTokens": 100},
-                'balanced': {"temperature": 0.5, "maxOutputTokens": 150}
+                'balanced': {"temperature": 0.5, "maxOutputTokens": 150},
+                # ✅ NEW: Enhanced generation config
+                'enhanced_generation': {"temperature": 0.7, "maxOutputTokens": 200}  # Higher temp & tokens for creativity
             }
             
             config = generation_configs.get(strategy, generation_configs['balanced'])
@@ -843,8 +985,8 @@ class GeminiResponseGenerator:
                         return candidate['content']['parts'][0]['text']
             else:
                 logger.error(f"Gemini API Error {response.status_code}: {response.text}")
-
             return None
+        
         except Exception as e:
             logger.error(f"Gemini API call failed: {str(e)}")
             return None
@@ -860,7 +1002,7 @@ class GeminiResponseGenerator:
             self.memory.conversations.clear()
     
     def get_system_status(self) -> Dict[str, Any]:
-        """Get system status for lecturers"""
+        """Get system status for lecturers with personalization info"""
         try:
             test_prompt = "Test ngắn cho giảng viên"
             response = self._call_gemini_api_optimized(test_prompt, 'quick_clarify')
@@ -869,8 +1011,9 @@ class GeminiResponseGenerator:
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.api_key),
                 'service_status': 'active' if response else 'error',
-                'mode': 'lecturer_focused_with_memory',
+                'mode': 'lecturer_focused_with_memory_and_personalization',
                 'memory_sessions': len(self.memory.conversations),
+                'personalization_sessions': len(self._user_context_cache),
                 'features': [
                     'lecturer_conversation_memory',
                     'lecturer_role_consistency',
@@ -878,7 +1021,10 @@ class GeminiResponseGenerator:
                     'lecturer_follow_up_detection',
                     'lecturer_topic_shift_handling',
                     'lecturer_clarification_requests',
-                    'lecturer_department_suggestions'
+                    'lecturer_department_suggestions',
+                    'personalized_system_prompts',
+                    'personalized_addressing',
+                    'department_specific_responses'
                 ]
             }
         except Exception as e:
@@ -887,3 +1033,4 @@ class GeminiResponseGenerator:
                 'service_status': 'error',
                 'error': str(e)
             }
+            

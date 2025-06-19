@@ -7,25 +7,12 @@ const PersonalizationSettings = ({ user, onClose, onUpdateSuccess }) => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [activeTab, setActiveTab] = useState('preferences');
     
-    // Form data
+    // Simplified form data
     const [formData, setFormData] = useState({
+        user_memory_prompt: '', // NEW: User's personal prompt
         response_style: 'professional',
-        department_priority: true,
-        focus_areas: [],
-        notification_preferences: {
-            email_updates: true,
-            system_notifications: true
-        }
-    });
-    
-    // Available options
-    const [availableOptions, setAvailableOptions] = useState({
-        response_styles: ['professional', 'friendly', 'technical', 'brief', 'detailed'],
-        focus_areas: [],
-        suggested_topics: [],
-        quick_actions: []
+        department_priority: true
     });
     
     // User context info
@@ -47,26 +34,11 @@ const PersonalizationSettings = ({ user, onClose, onUpdateSuccess }) => {
             if (preferencesResponse.data.success) {
                 const currentPrefs = preferencesResponse.data.data.preferences || {};
                 setFormData({
+                    user_memory_prompt: currentPrefs.user_memory_prompt || '',
                     response_style: currentPrefs.response_style || 'professional',
-                    department_priority: currentPrefs.department_priority !== false,
-                    focus_areas: currentPrefs.focus_areas || [],
-                    notification_preferences: {
-                        email_updates: currentPrefs.notification_preferences?.email_updates !== false,
-                        system_notifications: currentPrefs.notification_preferences?.system_notifications !== false
-                    }
+                    department_priority: currentPrefs.department_priority !== false
                 });
                 setUserContext(preferencesResponse.data.data.user_context);
-            }
-            
-            // Load available options
-            const suggestionsResponse = await axios.get('/api/auth/chatbot/suggestions/');
-            if (suggestionsResponse.data.success) {
-                setAvailableOptions({
-                    response_styles: ['professional', 'friendly', 'technical', 'brief', 'detailed'],
-                    focus_areas: suggestionsResponse.data.data.valid_focus_areas || [],
-                    suggested_topics: suggestionsResponse.data.data.suggested_topics || [],
-                    quick_actions: suggestionsResponse.data.data.quick_actions || []
-                });
             }
             
         } catch (error) {
@@ -80,36 +52,12 @@ const PersonalizationSettings = ({ user, onClose, onUpdateSuccess }) => {
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
         
-        if (name.includes('.')) {
-            // Handle nested properties (e.g., notification_preferences.email_updates)
-            const [parent, child] = name.split('.');
-            setFormData(prev => ({
-                ...prev,
-                [parent]: {
-                    ...prev[parent],
-                    [child]: type === 'checkbox' ? checked : value
-                }
-            }));
-        } else {
-            setFormData(prev => ({
-                ...prev,
-                [name]: type === 'checkbox' ? checked : value
-            }));
-        }
-        
-        // Clear messages when user makes changes
-        if (error) setError('');
-        if (success) setSuccess('');
-    };
-
-    const handleFocusAreaToggle = (area) => {
         setFormData(prev => ({
             ...prev,
-            focus_areas: prev.focus_areas.includes(area)
-                ? prev.focus_areas.filter(a => a !== area)
-                : [...prev.focus_areas, area]
+            [name]: type === 'checkbox' ? checked : value
         }));
         
+        // Clear messages when user makes changes
         if (error) setError('');
         if (success) setSuccess('');
     };
@@ -214,35 +162,38 @@ const PersonalizationSettings = ({ user, onClose, onUpdateSuccess }) => {
                     </div>
                 )}
 
-                {/* Tabs */}
-                <div className="tabs">
-                    <button 
-                        className={`tab ${activeTab === 'preferences' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('preferences')}
-                    >
-                        🎛️ Tùy chọn
-                    </button>
-                    <button 
-                        className={`tab ${activeTab === 'focus' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('focus')}
-                    >
-                        🎯 Chuyên môn
-                    </button>
-                    <button 
-                        className={`tab ${activeTab === 'info' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('info')}
-                    >
-                        ℹ️ Thông tin
-                    </button>
-                </div>
-
+                {/* Single Tab Content */}
                 <div className="modal-content">
-                    {activeTab === 'preferences' && (
-                        <div className="tab-content">
+                    <div className="settings-section">
+                        {/* 1. User Memory Prompt */}
+                        <div className="setting-group">
+                            <h3>🧠 Bạn muốn ChatBDU ghi nhớ điều gì?</h3>
+                            <p className="setting-description">
+                                Viết những thông tin bạn muốn ChatBDU luôn nhớ về bạn khi trò chuyện
+                            </p>
+                            <textarea
+                                name="user_memory_prompt"
+                                value={formData.user_memory_prompt}
+                                onChange={handleInputChange}
+                                placeholder="Ví dụ: Tôi là giảng viên khoa CNTT, quan tâm đến AI và machine learning. Tôi thích câu trả lời chi tiết với ví dụ cụ thể..."
+                                rows={6}
+                                className="memory-prompt-textarea"
+                                maxLength={1000}
+                            />
+                            <div className="char-count">
+                                {formData.user_memory_prompt.length}/1000 ký tự
+                            </div>
+                        </div>
+
+                        {/* 2. Response Style */}
+                        <div className="setting-group">
                             <h3>🎨 Phong cách trả lời</h3>
+                            <p className="setting-description">
+                                Chọn cách ChatBDU trả lời phù hợp với sở thích của bạn
+                            </p>
                             <div className="response-styles">
-                                {availableOptions.response_styles.map(style => (
-                                    <label key={style} className="style-option">
+                                {['professional', 'friendly', 'technical', 'brief', 'detailed'].map(style => (
+                                    <label key={style} className={`style-option ${formData.response_style === style ? 'selected' : ''}`}>
                                         <input
                                             type="radio"
                                             name="response_style"
@@ -250,110 +201,36 @@ const PersonalizationSettings = ({ user, onClose, onUpdateSuccess }) => {
                                             checked={formData.response_style === style}
                                             onChange={handleInputChange}
                                         />
-                                        <span className="style-label">
-                                            {getResponseStyleDescription(style)}
-                                        </span>
+                                        <div className="style-content">
+                                            <span className="style-label">
+                                                {getResponseStyleDescription(style)}
+                                            </span>
+                                        </div>
                                     </label>
                                 ))}
                             </div>
+                        </div>
 
-                            <h3>🔧 Tùy chọn khác</h3>
-                            <div className="other-options">
-                                <label className="checkbox-option">
+                        {/* 3. Department Priority */}
+                        <div className="setting-group">
+                            <h3>🎯 Tùy chọn chuyên ngành</h3>
+                            <div className="department-priority-section">
+                                <label className="toggle-option">
                                     <input
                                         type="checkbox"
                                         name="department_priority"
                                         checked={formData.department_priority}
                                         onChange={handleInputChange}
                                     />
-                                    <span>Ưu tiên thông tin chuyên ngành</span>
-                                </label>
-                            </div>
-
-                            <h3>📢 Thông báo</h3>
-                            <div className="notification-options">
-                                <label className="checkbox-option">
-                                    <input
-                                        type="checkbox"
-                                        name="notification_preferences.email_updates"
-                                        checked={formData.notification_preferences.email_updates}
-                                        onChange={handleInputChange}
-                                    />
-                                    <span>Nhận thông báo qua email</span>
-                                </label>
-                                <label className="checkbox-option">
-                                    <input
-                                        type="checkbox"
-                                        name="notification_preferences.system_notifications"
-                                        checked={formData.notification_preferences.system_notifications}
-                                        onChange={handleInputChange}
-                                    />
-                                    <span>Thông báo hệ thống</span>
+                                    <span className="toggle-slider"></span>
+                                    <div className="toggle-content">
+                                        <strong>Ưu tiên thông tin chuyên ngành</strong>
+                                        <p>ChatBDU sẽ tập trung vào thông tin liên quan đến ngành {userContext?.department_name}</p>
+                                    </div>
                                 </label>
                             </div>
                         </div>
-                    )}
-
-                    {activeTab === 'focus' && (
-                        <div className="tab-content">
-                            <h3>🎯 Lĩnh vực quan tâm</h3>
-                            <p>Chọn các lĩnh vực bạn muốn chatbot tập trung hỗ trợ:</p>
-                            
-                            <div className="focus-areas">
-                                {availableOptions.focus_areas.map(area => (
-                                    <button
-                                        key={area}
-                                        className={`focus-area-btn ${formData.focus_areas.includes(area) ? 'selected' : ''}`}
-                                        onClick={() => handleFocusAreaToggle(area)}
-                                    >
-                                        {area}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="selected-count">
-                                Đã chọn: {formData.focus_areas.length} lĩnh vực
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'info' && (
-                        <div className="tab-content">
-                            <h3>📊 Thống kê cá nhân hóa</h3>
-                            
-                            {availableOptions.suggested_topics.length > 0 && (
-                                <div className="info-section">
-                                    <h4>💡 Chủ đề gợi ý cho bạn:</h4>
-                                    <ul className="suggested-list">
-                                        {availableOptions.suggested_topics.map((topic, index) => (
-                                            <li key={index}>{topic}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                            {availableOptions.quick_actions.length > 0 && (
-                                <div className="info-section">
-                                    <h4>⚡ Thao tác nhanh:</h4>
-                                    <ul className="suggested-list">
-                                        {availableOptions.quick_actions.map((action, index) => (
-                                            <li key={index}>{action}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                            <div className="info-section">
-                                <h4>🤖 Về tính năng cá nhân hóa:</h4>
-                                <ul className="info-list">
-                                    <li>Chatbot sẽ xưng hô phù hợp với chức vụ của bạn</li>
-                                    <li>Ưu tiên thông tin liên quan đến chuyên ngành</li>
-                                    <li>Sử dụng phong cách trả lời phù hợp</li>
-                                    <li>Tăng độ chính xác cho câu hỏi chuyên môn</li>
-                                </ul>
-                            </div>
-                        </div>
-                    )}
+                    </div>
                 </div>
 
                 <div className="modal-footer">

@@ -74,7 +74,7 @@ class Faculty(AbstractUser):
         verbose_name="Phòng làm việc"
     )
     
-    # ✅ THÊM: Tùy chọn chatbot cá nhân hóa
+    # ✅ UPDATED: Tùy chọn chatbot cá nhân hóa với structure mới
     chatbot_preferences = models.JSONField(
         default=dict,
         blank=True,
@@ -103,9 +103,61 @@ class Faculty(AbstractUser):
         return f"{self.faculty_code} - {self.full_name} ({self.get_department_display()})"
     
     def save(self, *args, **kwargs):
-        # Auto set username = faculty_code (giữ nguyên)
+        # Auto set username = faculty_code
         self.username = self.faculty_code
+        
+        # ✅ NEW: Auto-setup chatbot preferences khi tạo hoặc update
+        if not self.chatbot_preferences:
+            self.chatbot_preferences = self.get_default_chatbot_preferences()
+        
         super().save(*args, **kwargs)
+    
+    # ✅ NEW: Method để lấy default preferences theo ngành
+    def get_default_chatbot_preferences(self):
+        """Tạo default chatbot preferences theo ngành"""
+        return {
+            'user_memory_prompt': self.get_default_memory_prompt(),
+            'response_style': 'professional',
+            'department_priority': True,
+            'auto_role_loaded': True,  # Flag để biết đã auto-load
+            'role_setup_date': timezone.now().isoformat()
+        }
+    
+    # ✅ NEW: Default memory prompt theo từng ngành
+    def get_default_memory_prompt(self):
+        """Tạo default memory prompt theo ngành và chức vụ"""
+        
+        base_info = f"Tôi là {self.get_position_display()} {self.get_department_display()}"
+        
+        department_prompts = {
+            'cntt': f"{base_info}. Tôi quan tâm đến lập trình, AI/ML, cơ sở dữ liệu, và công nghệ web. Tôi thích câu trả lời có ví dụ code và giải pháp thực tế.",
+            
+            'duoc': f"{base_info}. Tôi chuyên về dược lý, hóa dược, và quản lý dược. Tôi quan tâm đến an toàn thuốc, tương tác thuốc, và quy định ngành dược.",
+            
+            'dien_tu': f"{base_info}. Tôi làm việc với mạch điện tử, vi xử lý, IoT và tự động hóa. Tôi thích thông tin về thiết bị, datasheet và ứng dụng thực tế.",
+            
+            'co_khi': f"{base_info}. Tôi chuyên về thiết kế máy, CAD/CAM, gia công và sản xuất. Tôi quan tâm đến công nghệ sản xuất và quản lý chất lượng.",
+            
+            'y_khoa': f"{base_info}. Tôi làm việc trong lĩnh vực lâm sàng, chẩn đoán và điều trị. Tôi cần thông tin y khoa chính xác và cập nhật.",
+            
+            'kinh_te': f"{base_info}. Tôi quan tâm đến tài chính, đầu tư, phân tích kinh tế và chính sách. Tôi thích dữ liệu và phân tích số liệu.",
+            
+            'luat': f"{base_info}. Tôi chuyên về pháp lý, hợp đồng và tư vấn luật. Tôi cần thông tin chính xác về quy định và thủ tục pháp lý.",
+            
+            'ngoai_ngu': f"{base_info}. Tôi giảng dạy ngoại ngữ và quan tâm đến phương pháp giảng dạy, văn hóa và giao tiếp.",
+            
+            'xay_dung': f"{base_info}. Tôi chuyên về kết cấu, vật liệu xây dựng và quản lý dự án. Tôi quan tâm đến tiêu chuẩn kỹ thuật và quy chuẩn.",
+            
+            'quan_tri': f"{base_info}. Tôi quan tâm đến quản lý doanh nghiệp, chiến lược và phát triển tổ chức.",
+            
+            'ke_toan': f"{base_info}. Tôi chuyên về kế toán, kiểm toán và báo cáo tài chính. Tôi cần thông tin về chuẩn mực và quy định kế toán.",
+            
+            'marketing': f"{base_info}. Tôi quan tâm đến marketing digital, thương hiệu và hành vi người tiêu dùng.",
+            
+            'tai_chinh': f"{base_info}. Tôi chuyên về tài chính doanh nghiệp, ngân hàng và đầu tư. Tôi quan tâm đến phân tích tài chính và quản lý rủi ro."
+        }
+        
+        return department_prompts.get(self.department, f"{base_info}. Tôi quan tâm đến thông tin chung về giáo dục đại học.")
     
     # ✅ THÊM: Các method hỗ trợ personalization
     def get_role_description(self):
@@ -128,7 +180,8 @@ class Faculty(AbstractUser):
             'specialization': self.specialization,
             'office_room': self.office_room,
             'preferences': self.chatbot_preferences,
-            'is_lecturer': self.position in ['giang_vien', 'tro_giang', 'truong_khoa', 'pho_truong_khoa', 'truong_bo_mon']
+            'is_lecturer': self.position in ['giang_vien', 'tro_giang', 'truong_khoa', 'pho_truong_khoa', 'truong_bo_mon'],
+            'department_priority_enabled': self.chatbot_preferences.get('department_priority', True)
         }
     
     def update_chatbot_preferences(self, preferences_data):
@@ -137,46 +190,64 @@ class Faculty(AbstractUser):
             self.chatbot_preferences = {}
         
         self.chatbot_preferences.update(preferences_data)
+        self.chatbot_preferences['last_updated'] = timezone.now().isoformat()
         self.save(update_fields=['chatbot_preferences'])
     
+    # ✅ NEW: Method để tạo system prompt có điều kiện department_priority  
     def get_personalized_system_prompt(self):
-        """Tạo system prompt cá nhân hóa dựa trên vai trò"""
-        base_prompt = f"""Bạn là AI assistant chuyên nghiệp của Đại học Bình Dương (BDU), được thiết kế ĐẶC BIỆT để hỗ trợ {self.get_role_description()}.
+        """Tạo system prompt cá nhân hóa dựa trên vai trò và preferences"""
+        
+        # Lấy user memory prompt
+        user_memory = self.chatbot_preferences.get('user_memory_prompt', '').strip()
+        if not user_memory:
+            user_memory = self.get_default_memory_prompt()
+        
+        # Kiểm tra department_priority
+        department_priority = self.chatbot_preferences.get('department_priority', True)
+        
+        base_prompt = f"""Bạn là AI assistant chuyên nghiệp của Đại học Bình Dương (BDU).
 
 🎯 THÔNG TIN NGƯỜI DÙNG:
 - Mã GV: {self.faculty_code}
 - Họ tên: {self.full_name}
 - Vai trò: {self.get_role_description()}
-- Khoa/Ngành: {self.get_department_display()}
-- Chuyên môn: {self.specialization or 'Chung'}
-- Phòng làm việc: {self.office_room or 'Không xác định'}
 
-🤖 QUY TẮC VAI TRÒ:
+🧠 THÔNG TIN CÁ NHÂN:
+{user_memory}
+
+🤖 QUY TẮC CHUNG:
 - LUÔN xưng hô: "thầy/cô {self.full_name.split()[-1] if self.full_name else self.faculty_code}"
-- Ưu tiên thông tin liên quan đến ngành {self.get_department_display()}
-- Tập trung vào nhu cầu của {self.get_position_display()}
-- Cung cấp thông tin chuyên sâu về {self.get_department_display()}
+- Bắt đầu: "Dạ thầy/cô,"
+- Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+- NGẮN GỌN - Chỉ 1-2 câu chính, đi thẳng vào vấn đề
+- KHÔNG CHẾ TẠO thông tin không có"""
 
-🎓 CHUYÊN MÔN THEO NGÀNH:"""
-        
-        # Thêm kiến thức chuyên ngành
-        department_knowledge = self._get_department_specific_knowledge()
-        if department_knowledge:
-            base_prompt += f"\n{department_knowledge}"
-        
-        base_prompt += f"""
+        # ✅ CHỈ THÊM CHUYÊN NGÀNH KHI department_priority = True
+        if department_priority and self.department != 'general':
+            department_knowledge = self._get_department_specific_knowledge()
+            if department_knowledge:
+                base_prompt += f"""
 
-✅ QUY TẮC TRẢ LỜI:
-1. Luôn bắt đầu với "Dạ thầy/cô {self.full_name.split()[-1] if self.full_name else self.faculty_code},"
-2. Ưu tiên thông tin phục vụ công việc {self.get_position_display()}
-3. Tập trung vào ngành {self.get_department_display()}
-4. Sử dụng thuật ngữ chuyên ngành phù hợp
-5. Kết thúc: "Thầy/cô cần hỗ trợ thêm gì về {self.get_department_display()} không ạ?"
+🎓 CHUYÊN MÔN NGÀNH {self.get_department_display().upper()}:
+{department_knowledge}
 
-🚫 TRÁNH:
-- Thông tin không liên quan đến {self.get_department_display()}
-- Tư vấn ngoài chuyên môn
-- Quyết định thay cho lãnh đạo trường"""
+📚 ƯU TIÊN CHUYÊN NGÀNH:
+- Tập trung vào thông tin liên quan đến ngành {self.get_department_display()}
+- Sử dụng thuật ngữ chuyên ngành phù hợp
+- Ưu tiên giải pháp thực tế trong ngành"""
+        else:
+            base_prompt += """
+
+🔄 CHẾ ĐỘ TỔNG QUÁT:
+- Trả lời thông tin chung về BDU
+- Không tập trung vào chuyên ngành cụ thể"""
+
+        base_prompt += """
+
+✅ PHONG CÁCH TRẢ LỜI:
+- Ngắn gọn, đi thẳng vào vấn đề
+- Không format phức tạp (**1. **2. hay bullets)
+- Không thông tin không chắc chắn"""
         
         return base_prompt
     
@@ -185,7 +256,7 @@ class Faculty(AbstractUser):
         knowledge_map = {
             'cntt': """
 - Ngành CNTT: Lập trình, Cơ sở dữ liệu, Mạng máy tính, AI/ML
-- Phòng lab: Lab tin học, Lab mạng, Lab phần mềm
+- Phòng lab: Lab tin học, Lab mạng, Lab phần mềm  
 - Thiết bị: Máy tính, Server, Thiết bị mạng
 - Nghiên cứu: AI, IoT, Big Data, Cyber Security
 - Hợp tác doanh nghiệp: FPT, Viettel, VNPT""",
@@ -234,6 +305,13 @@ class Faculty(AbstractUser):
         }
         
         return knowledge_map.get(self.department, "")
+
+    # ✅ NEW: Method để reset về default khi cần
+    def reset_to_auto_role(self):
+        """Reset về vai trò tự động theo ngành"""
+        self.chatbot_preferences = self.get_default_chatbot_preferences()
+        self.save(update_fields=['chatbot_preferences'])
+        return self.chatbot_preferences
 
 
 # ✅ GIỮ NGUYÊN: Các model khác không thay đổi

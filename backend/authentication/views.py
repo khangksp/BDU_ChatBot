@@ -47,7 +47,7 @@ def log_login_attempt(faculty_code, request, success, failure_reason=None):
 @permission_classes([permissions.AllowAny])
 def login_view(request):
     """
-    API đăng nhập cho giảng viên
+    API đăng nhập cho giảng viên với auto-load vai trò
     """
     serializer = LoginSerializer(data=request.data)
     
@@ -89,6 +89,9 @@ def login_view(request):
                 'message': 'Mật khẩu không chính xác'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
+        # ✅ NEW: Auto-setup chatbot preferences khi đăng nhập
+        preferences_setup_info = setup_chatbot_preferences_on_login(faculty)
+        
         # Đăng nhập thành công
         login(request, faculty)
         
@@ -112,13 +115,15 @@ def login_view(request):
         # Serialize user data
         user_data = FacultyProfileSerializer(faculty).data
         
+        # ✅ NEW: Thêm thông tin về chatbot setup
         return Response({
             'success': True,
             'message': 'Đăng nhập thành công',
             'data': {
                 'user': user_data,
                 'token': token.key,
-                'session_id': request.session.session_key
+                'session_id': request.session.session_key,
+                'chatbot_setup': preferences_setup_info  # ✅ NEW: Info về việc setup
             }
         }, status=status.HTTP_200_OK)
         
@@ -129,6 +134,82 @@ def login_view(request):
             'success': False,
             'message': 'Lỗi hệ thống. Vui lòng thử lại sau.'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ✅ NEW: Helper function để setup chatbot preferences
+def setup_chatbot_preferences_on_login(faculty):
+    """
+    Auto-setup chatbot preferences khi đăng nhập
+    Returns info về những gì đã được setup
+    """
+    setup_info = {
+        'was_setup': False,
+        'is_first_time': False,
+        'role_loaded': faculty.get_role_description(),
+        'department': faculty.get_department_display(),
+        'preferences_count': 0
+    }
+    
+    try:
+        # Kiểm tra xem đã có preferences chưa
+        if not faculty.chatbot_preferences:
+            # Lần đầu tiên đăng nhập - setup từ đầu
+            faculty.chatbot_preferences = faculty.get_default_chatbot_preferences()
+            faculty.save(update_fields=['chatbot_preferences'])
+            
+            setup_info.update({
+                'was_setup': True,
+                'is_first_time': True,
+                'message': f'Đã tự động thiết lập vai trò {faculty.get_role_description()}',
+                'preferences_count': len(faculty.chatbot_preferences)
+            })
+            
+            logger.info(f"✅ First-time chatbot setup for {faculty.faculty_code}: {faculty.get_role_description()}")
+            
+        else:
+            # Đã có preferences - kiểm tra xem có cần update không
+            current_prefs = faculty.chatbot_preferences
+            needs_update = False
+            
+            # Kiểm tra user_memory_prompt có empty không
+            if not current_prefs.get('user_memory_prompt', '').strip():
+                current_prefs['user_memory_prompt'] = faculty.get_default_memory_prompt()
+                needs_update = True
+            
+            # Kiểm tra response_style
+            if 'response_style' not in current_prefs:
+                current_prefs['response_style'] = 'professional'
+                needs_update = True
+            
+            # Kiểm tra department_priority
+            if 'department_priority' not in current_prefs:
+                current_prefs['department_priority'] = True
+                needs_update = True
+            
+            if needs_update:
+                current_prefs['last_login_update'] = timezone.now().isoformat()
+                faculty.save(update_fields=['chatbot_preferences'])
+                setup_info.update({
+                    'was_setup': True,
+                    'message': f'Đã cập nhật cài đặt cho vai trò {faculty.get_role_description()}',
+                    'preferences_count': len(current_prefs)
+                })
+                logger.info(f"✅ Updated chatbot preferences for {faculty.faculty_code}")
+            else:
+                setup_info.update({
+                    'message': f'Vai trò {faculty.get_role_description()} đã được thiết lập trước đó',
+                    'preferences_count': len(current_prefs)
+                })
+        
+        return setup_info
+        
+    except Exception as e:
+        logger.error(f"Error setting up chatbot preferences for {faculty.faculty_code}: {e}")
+        return {
+            'was_setup': False,
+            'error': str(e),
+            'message': 'Có lỗi khi thiết lập chatbot preferences'
+        }
 
 
 @api_view(['POST'])
@@ -361,16 +442,22 @@ def auth_status(request):
         })
         
 # ===============================
-# 🎯 PERSONALIZATION ENDPOINTS
+# 🎯 PERSONALIZATION ENDPOINTS - UPDATED
 # ===============================
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def chatbot_preferences(request):
-    """API lấy chatbot preferences của Faculty"""
+    """API lấy chatbot preferences của Faculty - UPDATED"""
     try:
         faculty = request.user
-        preferences = faculty.chatbot_preferences or {}
+        
+        # ✅ NEW: Ensure preferences exist
+        if not faculty.chatbot_preferences:
+            faculty.chatbot_preferences = faculty.get_default_chatbot_preferences()
+            faculty.save(update_fields=['chatbot_preferences'])
+        
+        preferences = faculty.chatbot_preferences
         
         return Response({
             'success': True,
@@ -381,7 +468,8 @@ def chatbot_preferences(request):
                     'code': faculty.department,
                     'name': faculty.get_department_display(),
                     'position': faculty.get_position_display()
-                }
+                },
+                'system_prompt': faculty.get_personalized_system_prompt()  # ✅ NEW: Include system prompt
             }
         }, status=status.HTTP_200_OK)
         
@@ -396,43 +484,63 @@ def chatbot_preferences(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def update_chatbot_preferences(request):
-    """API cập nhật chatbot preferences"""
+    """API cập nhật chatbot preferences - UPDATED để hỗ trợ structure mới"""
     try:
         faculty = request.user
         new_preferences = request.data.get('preferences', {})
         
-        # Validate preferences
+        # ✅ NEW: Validate new structure
+        # user_memory_prompt validation
+        user_memory_prompt = new_preferences.get('user_memory_prompt', '').strip()
+        if len(user_memory_prompt) > 1000:
+            return Response({
+                'success': False,
+                'message': 'Memory prompt không được vượt quá 1000 ký tự'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # response_style validation
         valid_response_styles = ['professional', 'friendly', 'technical', 'brief', 'detailed']
-        if 'response_style' in new_preferences:
-            if new_preferences['response_style'] not in valid_response_styles:
-                return Response({
-                    'success': False,
-                    'message': 'Response style không hợp lệ',
-                    'valid_options': valid_response_styles
-                }, status=status.HTTP_400_BAD_REQUEST)
+        response_style = new_preferences.get('response_style', 'professional')
+        if response_style not in valid_response_styles:
+            return Response({
+                'success': False,
+                'message': 'Response style không hợp lệ',
+                'valid_options': valid_response_styles
+            }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Validate focus_areas theo department
-        if 'focus_areas' in new_preferences:
-            valid_focus_areas = _get_valid_focus_areas_for_department(faculty.department)
-            invalid_areas = [area for area in new_preferences['focus_areas'] if area not in valid_focus_areas]
-            if invalid_areas:
-                return Response({
-                    'success': False,
-                    'message': f'Focus areas không hợp lệ: {invalid_areas}',
-                    'valid_options': valid_focus_areas
-                }, status=status.HTTP_400_BAD_REQUEST)
+        # department_priority validation (boolean)
+        department_priority = new_preferences.get('department_priority', True)
+        if not isinstance(department_priority, bool):
+            return Response({
+                'success': False,
+                'message': 'Department priority phải là true hoặc false'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Cập nhật preferences
-        faculty.update_chatbot_preferences(new_preferences)
+        # ✅ NEW: Cập nhật preferences với structure mới
+        updated_preferences = {
+            'user_memory_prompt': user_memory_prompt,
+            'response_style': response_style,
+            'department_priority': department_priority,
+            'last_updated': timezone.now().isoformat(),
+            'updated_by': 'user'  # Flag để biết user tự update
+        }
         
-        logger.info(f"Updated chatbot preferences for {faculty.faculty_code}")
+        faculty.update_chatbot_preferences(updated_preferences)
+        
+        logger.info(f"Updated chatbot preferences for {faculty.faculty_code}: memory_prompt={len(user_memory_prompt)} chars, style={response_style}, dept_priority={department_priority}")
         
         return Response({
             'success': True,
-            'message': 'Cấu hình chatbot đã được cập nhật thành công',
+            'message': 'Cài đặt chatbot đã được cập nhật thành công',
             'data': {
                 'preferences': faculty.chatbot_preferences,
-                'user_context': faculty.get_chatbot_context()
+                'user_context': faculty.get_chatbot_context(),
+                'system_prompt': faculty.get_personalized_system_prompt(),  # ✅ NEW: Return updated prompt
+                'changes': {
+                    'memory_prompt_length': len(user_memory_prompt),
+                    'response_style': response_style,
+                    'department_priority': department_priority
+                }
             }
         }, status=status.HTTP_200_OK)
         
@@ -440,27 +548,34 @@ def update_chatbot_preferences(request):
         logger.error(f"Update chatbot preferences error: {e}")
         return Response({
             'success': False,
-            'message': 'Lỗi khi cập nhật cấu hình chatbot'
+            'message': 'Lỗi khi cập nhật cài đặt chatbot'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def personalized_system_prompt(request):
-    """API lấy system prompt cá nhân hóa"""
+    """API lấy system prompt cá nhân hóa - UPDATED"""
     try:
         faculty = request.user
+        
+        # ✅ NEW: Ensure preferences exist
+        if not faculty.chatbot_preferences:
+            faculty.chatbot_preferences = faculty.get_default_chatbot_preferences()
+            faculty.save(update_fields=['chatbot_preferences'])
         
         return Response({
             'success': True,
             'data': {
                 'system_prompt': faculty.get_personalized_system_prompt(),
                 'user_context': faculty.get_chatbot_context(),
+                'preferences': faculty.chatbot_preferences,
                 'department_info': {
                     'code': faculty.department,
                     'name': faculty.get_department_display(),
                     'position': faculty.get_position_display(),
-                    'specialization': faculty.specialization
+                    'specialization': faculty.specialization,
+                    'department_priority_enabled': faculty.chatbot_preferences.get('department_priority', True)
                 }
             }
         }, status=status.HTTP_200_OK)
@@ -473,71 +588,127 @@ def personalized_system_prompt(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ✅ NEW: API để test department priority
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-def update_department_focus(request):
-    """API cập nhật focus areas theo ngành"""
+def test_department_priority(request):
+    """API để test xem department priority có hoạt động không"""
     try:
         faculty = request.user
-        focus_areas = request.data.get('focus_areas', [])
+        test_query = request.data.get('test_query', '')
         
-        # Validate focus areas theo department
-        valid_focus_areas = _get_valid_focus_areas_for_department(faculty.department)
-        filtered_focus_areas = [area for area in focus_areas if area in valid_focus_areas]
+        if not test_query:
+            return Response({
+                'success': False,
+                'message': 'Cần có test_query để kiểm tra'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Cập nhật preferences
-        faculty.update_chatbot_preferences({
-            'focus_areas': filtered_focus_areas,
-            'department_priority': True
-        })
+        # Tạo 2 system prompts: có và không có department priority
         
-        logger.info(f"Updated focus areas for {faculty.faculty_code}: {filtered_focus_areas}")
+        # Test với department_priority = True
+        faculty.chatbot_preferences['department_priority'] = True
+        prompt_with_dept = faculty.get_personalized_system_prompt()
+        
+        # Test với department_priority = False  
+        faculty.chatbot_preferences['department_priority'] = False
+        prompt_without_dept = faculty.get_personalized_system_prompt()
+        
+        # Restore original setting
+        original_dept_priority = request.data.get('original_dept_priority', True)
+        faculty.chatbot_preferences['department_priority'] = original_dept_priority
+        faculty.save(update_fields=['chatbot_preferences'])
         
         return Response({
             'success': True,
-            'message': 'Focus areas đã được cập nhật thành công',
             'data': {
-                'focus_areas': filtered_focus_areas,
-                'valid_options': valid_focus_areas,
-                'department': faculty.get_department_display()
+                'test_query': test_query,
+                'department': faculty.get_department_display(),
+                'prompts': {
+                    'with_department_priority': prompt_with_dept,
+                    'without_department_priority': prompt_without_dept
+                },
+                'differences': {
+                    'has_department_knowledge': 'CHUYÊN MÔN NGÀNH' in prompt_with_dept,
+                    'length_difference': len(prompt_with_dept) - len(prompt_without_dept)
+                },
+                'recommendation': 'Bật department priority để được hỗ trợ chuyên sâu về ngành' if faculty.department != 'general' else 'Department priority không cần thiết cho ngành chung'
             }
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        logger.error(f"Update focus areas error: {e}")
+        logger.error(f"Test department priority error: {e}")
         return Response({
             'success': False,
-            'message': 'Lỗi khi cập nhật focus areas'
+            'message': 'Lỗi khi test department priority'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+# ✅ NEW: API để reset về default role
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated]) 
+def reset_to_auto_role(request):
+    """API để reset về vai trò tự động theo ngành"""
+    try:
+        faculty = request.user
+        old_preferences = faculty.chatbot_preferences.copy() if faculty.chatbot_preferences else {}
+        
+        # Reset về default
+        new_preferences = faculty.reset_to_auto_role()
+        
+        logger.info(f"Reset chatbot preferences to auto role for {faculty.faculty_code}: {faculty.get_role_description()}")
+        
+        return Response({
+            'success': True,
+            'message': f'Đã reset về vai trò tự động: {faculty.get_role_description()}',
+            'data': {
+                'old_preferences': old_preferences,
+                'new_preferences': new_preferences,
+                'role_description': faculty.get_role_description(),
+                'department': faculty.get_department_display(),
+                'system_prompt': faculty.get_personalized_system_prompt()
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Reset to auto role error: {e}")
+        return Response({
+            'success': False,
+            'message': 'Lỗi khi reset về vai trò tự động'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ===============================
+# 🛠️ HELPER FUNCTIONS - SIMPLIFIED
+# ===============================
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def get_department_suggestions(request):
-    """API lấy gợi ý theo ngành"""
+    """API lấy gợi ý theo ngành - SIMPLIFIED"""
     try:
         faculty = request.user
         
-        # Lấy suggested topics và quick actions
-        suggested_topics = _get_suggested_topics_for_department(faculty.department)
-        quick_actions = _get_quick_actions_for_position(faculty.position)
-        valid_focus_areas = _get_valid_focus_areas_for_department(faculty.department)
+        # Simplified suggestions based on department
+        department_info = {
+            'code': faculty.department,
+            'name': faculty.get_department_display(),
+            'has_specific_knowledge': faculty.department != 'general'
+        }
+        
+        position_info = {
+            'code': faculty.position,
+            'name': faculty.get_position_display()
+        }
         
         return Response({
             'success': True,
             'data': {
-                'department': {
-                    'code': faculty.department,
-                    'name': faculty.get_department_display()
-                },
-                'position': {
-                    'code': faculty.position,
-                    'name': faculty.get_position_display()
-                },
-                'suggested_topics': suggested_topics,
-                'quick_actions': quick_actions,
-                'valid_focus_areas': valid_focus_areas,
-                'personalized_greeting': f"Xin chào {faculty.get_position_display()} {faculty.full_name}!"
+                'department': department_info,
+                'position': position_info,
+                'personalized_greeting': f"Xin chào {faculty.get_position_display()} {faculty.full_name}!",
+                'role_description': faculty.get_role_description(),
+                'auto_setup_available': True,
+                'department_priority_recommended': faculty.department != 'general'
             }
         }, status=status.HTTP_200_OK)
         
@@ -547,171 +718,3 @@ def get_department_suggestions(request):
             'success': False,
             'message': 'Lỗi khi lấy gợi ý'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# ===============================
-# 🛠️ HELPER FUNCTIONS
-# ===============================
-
-def _get_valid_focus_areas_for_department(department):
-    """Lấy các focus areas hợp lệ cho từng ngành"""
-    focus_areas_map = {
-        'cntt': [
-            'Lập trình Web', 'Mobile App', 'AI/Machine Learning', 
-            'Database Management', 'Network Security', 'Cloud Computing',
-            'Data Science', 'IoT Development', 'Software Engineering'
-        ],
-        'duoc': [
-            'Dược lý học', 'Hóa dược', 'Dược động học', 'Vi sinh dược',
-            'Phân tích dược', 'Công nghệ dược', 'Dược lâm sàng',
-            'Quản lý dược', 'Dược thảo'
-        ],
-        'dien_tu': [
-            'Mạch điện tử', 'Vi xử lý', 'IoT', 'Robotics', 'Automation',
-            'Truyền thông', 'Điều khiển tự động', 'Embedded Systems',
-            'Signal Processing', 'Power Electronics'
-        ],
-        'co_khi': [
-            'Thiết kế máy', 'CAD/CAM', 'Gia công CNC', 'Nhiệt động lực',
-            'Cơ học chất lưu', 'Vật liệu', 'Tự động hóa sản xuất',
-            'Bảo trì thiết bị', 'Quản lý sản xuất'
-        ],
-        'y_khoa': [
-            'Nội khoa', 'Ngoại khoa', 'Sản phụ khoa', 'Nhi khoa',
-            'Mắt', 'Tai mũi họng', 'Da liễu', 'Tâm thần',
-            'Chẩn đoán hình ảnh', 'Xét nghiệm y học'
-        ],
-        'kinh_te': [
-            'Tài chình doanh nghiệp', 'Ngân hàng', 'Chứng khoán',
-            'Bảo hiểm', 'Kinh tế vĩ mô', 'Kinh tế vi mô',
-            'Kinh tế lượng', 'Thương mại quốc tế', 'Marketing'
-        ],
-        'luat': [
-            'Luật dân sự', 'Luật hình sự', 'Luật kinh tế',
-            'Luật lao động', 'Luật hành chính', 'Luật quốc tế',
-            'Luật môi trường', 'Luật đất đai', 'Luật sở hữu trí tuệ'
-        ]
-    }
-    
-    return focus_areas_map.get(department, ['Tổng quát'])
-
-
-def _get_suggested_topics_for_department(department):
-    """Lấy các chủ đề gợi ý theo ngành"""
-    topics_map = {
-        'cntt': [
-            'Chương trình đào tạo CNTT',
-            'Phòng lab tin học',
-            'Thiết bị máy tính và server',
-            'Hợp tác doanh nghiệp IT',
-            'Nghiên cứu AI/ML',
-            'Đào tạo lập trình'
-        ],
-        'duoc': [
-            'Chương trình đào tạo Dược',
-            'Phòng thí nghiệm Dược',
-            'Thiết bị phân tích dược',
-            'Thực tập bệnh viện',
-            'Chứng chỉ hành nghề Dược sĩ',
-            'Nghiên cứu dược liệu'
-        ],
-        'dien_tu': [
-            'Chương trình Điện tử viễn thông',
-            'Lab vi xử lý và IoT',
-            'Thiết bị đo lường điện tử',
-            'Dự án IoT và Robotics',
-            'Thực tập doanh nghiệp',
-            'Nghiên cứu embedded systems'
-        ],
-        'co_khi': [
-            'Chương trình Cơ khí',
-            'Phòng CAD/CAM',
-            'Máy gia công CNC',
-            'Thực tập nhà máy',
-            'Thiết kế sản phẩm',
-            'Nghiên cứu automation'
-        ],
-        'y_khoa': [
-            'Chương trình Y khoa',
-            'Phòng giải phẫu',
-            'Thực hành lâm sàng',
-            'Bệnh viện liên kết',
-            'Chứng chỉ hành nghề',
-            'Nghiên cứu y sinh'
-        ],
-        'kinh_te': [
-            'Chương trình Kinh tế',
-            'Phần mềm phân tích tài chính',
-            'Thực tập ngân hàng',
-            'Nghiên cứu thị trường',
-            'Chứng chỉ CFA/FRM',
-            'Tư vấn tài chính'
-        ],
-        'luat': [
-            'Chương trình Luật',
-            'Phiên tòa giả định',
-            'Thực tập tòa án',
-            'Văn phòng luật sư',
-            'Chứng chỉ luật sư',
-            'Tư vấn pháp lý'
-        ]
-    }
-    
-    return topics_map.get(department, [
-        'Thông tin chung về trường',
-        'Quy định đào tạo',
-        'Cơ sở vật chất',
-        'Hoạt động nghiên cứu'
-    ])
-
-
-def _get_quick_actions_for_position(position):
-    """Lấy các quick actions theo chức vụ"""
-    actions_map = {
-        'giang_vien': [
-            'Xem lịch giảng dạy',
-            'Quản lý điểm sinh viên',
-            'Tài liệu giảng dạy',
-            'Nghiên cứu khoa học',
-            'Đề cương môn học'
-        ],
-        'truong_khoa': [
-            'Quản lý khoa',
-            'Kế hoạch đào tạo',
-            'Báo cáo hoạt động',
-            'Nhân sự khoa',
-            'Ngân sách khoa'
-        ],
-        'pho_truong_khoa': [
-            'Hỗ trợ quản lý khoa',
-            'Giám sát đào tạo',
-            'Phối hợp hoạt động',
-            'Báo cáo tình hình'
-        ],
-        'truong_bo_mon': [
-            'Quản lý bộ môn',
-            'Phân công giảng dạy',
-            'Tài liệu chuyên ngành',
-            'Hoạt động chuyên môn',
-            'Kế hoạch bộ môn'
-        ],
-        'tro_giang': [
-            'Hỗ trợ giảng dạy',
-            'Chuẩn bị bài giảng',
-            'Chấm bài tập',
-            'Tương tác sinh viên',
-            'Học tập nâng cao'
-        ],
-        'can_bo': [
-            'Công tác hành chính',
-            'Xử lý thủ tục',
-            'Hỗ trợ giảng viên',
-            'Quản lý tài liệu'
-        ]
-    }
-    
-    return actions_map.get(position, [
-        'Thông tin chung',
-        'Hỗ trợ kỹ thuật',
-        'Liên hệ phòng ban'
-    ])

@@ -142,8 +142,19 @@ class ChatView(APIView):
             
             # ✅ THÊM: Process với user context
             if user_context:
+                # Set user context vào gemini service cho personalization
+                chatbot_ai.response_generator.set_user_context(session_id, {
+                    'personalized_prompt': request.user.get_personalized_system_prompt(),
+                    'faculty_code': user_context.get('faculty_code'),
+                    'full_name': user_context.get('full_name'),
+                    'department': user_context.get('department'),
+                    'department_name': user_context.get('department_name'),
+                    'position_name': user_context.get('position_name'),
+                    'preferences': user_context.get('preferences')
+                })
+                
                 # Sử dụng personalized processing
-                ai_response = self._process_with_personalization(user_message, session_id, user_context)
+                ai_response = chatbot_ai.process_query(user_message, session_id)
             else:
                 # Sử dụng processing thông thường
                 ai_response = chatbot_ai.process_query(user_message, session_id)
@@ -242,33 +253,33 @@ Cảm ơn {personal_address} đã kiên nhẫn! 😊"""
         return self._get_safe_fallback_response(user_message)
     
     # ✅ THÊM: Method mới để xử lý personalization
-    def _process_with_personalization(self, message, session_id, user_context):
-        """Process message với personalization"""
-        try:
-            # Sử dụng gemini service với personalization
-            from ai_models.gemini_service import GeminiResponseGenerator
+    # def _process_with_personalization(self, message, session_id, user_context):
+    #     """Process message với personalization"""
+    #     try:
+    #         # Sử dụng gemini service với personalization
+    #         from ai_models.gemini_service import GeminiResponseGenerator
             
-            # Tạo enhanced context
-            enhanced_context = {
-                'user_context': user_context,
-                'force_education_response': True,
-                'personalized': True
-            }
+    #         # Tạo enhanced context
+    #         enhanced_context = {
+    #             'user_context': user_context,
+    #             'force_education_response': True,
+    #             'personalized': True
+    #         }
             
-            # Gọi generate_response_personalized nếu có
-            gemini_generator = GeminiResponseGenerator()
-            base_response = chatbot_ai.process_query(message, session_id)
+    #         # Gọi generate_response_personalized nếu có
+    #         gemini_generator = GeminiResponseGenerator()
+    #         base_response = chatbot_ai.process_query(message, session_id)
 
-            # Sau đó enhance với personalization
-            if hasattr(gemini_generator, 'enhance_with_personalization'):
-                return gemini_generator.enhance_with_personalization(base_response, user_context)
-            else:
-                return base_response
+    #         # Sau đó enhance với personalization
+    #         if hasattr(gemini_generator, 'enhance_with_personalization'):
+    #             return gemini_generator.enhance_with_personalization(base_response, user_context)
+    #         else:
+    #             return base_response
                 
-        except Exception as e:
-            logger.error(f"Personalized processing error: {e}")
-            # Fallback to regular processing
-            return chatbot_ai.process_query(message, session_id)
+    #     except Exception as e:
+    #         logger.error(f"Personalized processing error: {e}")
+    #         # Fallback to regular processing
+    #         return chatbot_ai.process_query(message, session_id)
     
     def _clean_response_text(self, text):
         """Clean and ensure safe UTF-8 text"""
