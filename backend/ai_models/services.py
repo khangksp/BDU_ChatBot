@@ -13,6 +13,8 @@ from .gemini_service import GeminiResponseGenerator, SimpleVietnameseRestorer
 import pandas as pd
 import random
 
+from .google_drive_service import google_drive_service # Import Google Drive service for file handling
+
 logger = logging.getLogger(__name__)
 
 class LecturerDecisionEngine:
@@ -338,8 +340,9 @@ class HybridChatbotAI:
         return self.sbert_retriever.knowledge_data
     
     def get_system_status(self):
-        """Get system status for lecturers"""
+        """Get system status for lecturers with Google Drive info"""
         gemini_status = self.response_generator.get_system_status()
+        drive_status = google_drive_service.get_system_status()
         
         return {
             'sbert_model': bool(self.sbert_retriever.model),
@@ -347,7 +350,7 @@ class HybridChatbotAI:
             'phobert_available': not self.intent_classifier.fallback_mode,
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'lecturer_focused_hybrid_with_enhanced_generation',
+            'mode': 'lecturer_focused_hybrid_with_google_drive_csv',  # ✅ Cập nhật mode
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'confidence_thresholds': self.decision_engine.confidence_thresholds,
             'generation_boost_enabled': self.decision_engine.generation_boost_settings['enable_boost'],
@@ -360,9 +363,11 @@ class HybridChatbotAI:
                 'enhanced_generation_boost',
                 'random_generation_enhancement',
                 'keyword_based_generation_boost',
-                'no_fabrication_policy'
+                'no_fabrication_policy',
+                'google_drive_csv_cache_integration'  # ✅ Cập nhật feature
             ],
-            'gemini_status': gemini_status
+            'gemini_status': gemini_status,
+            'google_drive_status': drive_status  # ✅ Bao gồm CSV cache info
         }
     
     def process_query(self, query, session_id=None):
@@ -622,27 +627,45 @@ class ChatbotAI:
             self.model = None
     
     def load_knowledge_base(self):
-        """Load knowledge base from database and CSV with lecturer focus"""
+        """Load knowledge base from Google Drive and database with lecturer focus"""
         try:
             # Load from database
             db_knowledge = list(KnowledgeBase.objects.filter(is_active=True).values(
                 'question', 'answer', 'category'
             ))
             
-            # Load from CSV file - enhanced for lecturers
-            csv_path = os.path.join(settings.BASE_DIR, 'data', 'QA.csv')
+            # ✅ Load from Google Drive (now cached as CSV)
             csv_knowledge = []
+            try:
+                csv_knowledge = google_drive_service.get_csv_data()
+                if csv_knowledge:
+                    logger.info(f"✅ Loaded {len(csv_knowledge)} records from Google Drive (CSV cache)")
+                else:
+                    logger.warning("⚠️ No data from Google Drive, using empty list")
+                    csv_knowledge = []
+            except Exception as e:
+                logger.error(f"❌ Failed to load from Google Drive: {str(e)}")
+                csv_knowledge = []
             
-            if os.path.exists(csv_path):
-                df = pd.read_csv(csv_path, encoding='utf-8')
-                if 'question' in df.columns and 'answer' in df.columns:
-                    csv_knowledge = df[['question', 'answer']].fillna('').to_dict('records')
-                    if 'category' in df.columns:
-                        for i, item in enumerate(csv_knowledge):
-                            item['category'] = df.iloc[i].get('category', 'Giảng viên')
-                    else:
-                        for item in csv_knowledge:
-                            item['category'] = 'Giảng viên'
+            # ✅ FALLBACK: Nếu Drive thất bại, thử load file local
+            if not csv_knowledge:
+                logger.info("🔄 Attempting fallback to local CSV")
+                csv_path = os.path.join(settings.BASE_DIR, 'data', 'QA.csv')
+                if os.path.exists(csv_path):
+                    try:
+                        df = pd.read_csv(csv_path, encoding='utf-8')
+                        if 'question' in df.columns and 'answer' in df.columns:
+                            csv_knowledge = df[['question', 'answer']].fillna('').to_dict('records')
+                            if 'category' in df.columns:
+                                for i, item in enumerate(csv_knowledge):
+                                    item['category'] = df.iloc[i].get('category', 'Giảng viên')
+                            else:
+                                for item in csv_knowledge:
+                                    item['category'] = 'Giảng viên'
+                            logger.info(f"✅ Fallback: Loaded {len(csv_knowledge)} records from local CSV")
+                    except Exception as e:
+                        logger.error(f"❌ Fallback CSV also failed: {str(e)}")
+                        csv_knowledge = []
             
             # Combine sources with priority for lecturer-specific content
             self.knowledge_data = csv_knowledge + db_knowledge  # CSV first for lecturer priority
@@ -651,11 +674,44 @@ class ChatbotAI:
             if self.model and self.knowledge_data:
                 self.build_faiss_index()
             
-            logger.info(f"✅ Loaded {len(self.knowledge_data)} knowledge entries for lecturers")
+            logger.info(f"✅ Total loaded: {len(self.knowledge_data)} knowledge entries for lecturers (Drive: {len(csv_knowledge)}, DB: {len(db_knowledge)})")
             
         except Exception as e:
             logger.error(f"Error loading knowledge: {str(e)}")
             self.knowledge_data = self.get_fallback_knowledge_lecturer()
+
+    
+    # Thêm method mới để get system status cho Google Drive
+    def get_system_status(self):
+        """Get system status for lecturers with Google Drive info"""
+        gemini_status = self.response_generator.get_system_status()
+        drive_status = google_drive_service.get_system_status()
+        
+        return {
+            'sbert_model': bool(self.sbert_retriever.model),
+            'faiss_index': bool(self.sbert_retriever.index),
+            'phobert_available': not self.intent_classifier.fallback_mode,
+            'gemini_available': gemini_status.get('gemini_api_available', False),
+            'knowledge_entries': len(self.sbert_retriever.knowledge_data),
+            'mode': 'lecturer_focused_hybrid_with_google_drive',
+            'memory_sessions': gemini_status.get('memory_sessions', 0),
+            'confidence_thresholds': self.decision_engine.confidence_thresholds,
+            'generation_boost_enabled': self.decision_engine.generation_boost_settings['enable_boost'],
+            'boost_probability': self.decision_engine.generation_boost_settings['boost_probability'],
+            'lecturer_features': [
+                'lecturer_keyword_detection',
+                'clarification_requests', 
+                'department_suggestions',
+                'formal_addressing',
+                'enhanced_generation_boost',
+                'random_generation_enhancement',
+                'keyword_based_generation_boost',
+                'no_fabrication_policy',
+                'google_drive_integration'  # ✅ MỚI
+            ],
+            'gemini_status': gemini_status,
+            'google_drive_status': drive_status  # ✅ MỚI
+        }
     
     def get_fallback_knowledge_lecturer(self):
         """Fallback knowledge data specifically for lecturers"""
