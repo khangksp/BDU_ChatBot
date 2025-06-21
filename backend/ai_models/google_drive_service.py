@@ -23,7 +23,7 @@ class GoogleDriveService:
         
         # ✅ ĐỌC CONFIG TỪ SETTINGS
         drive_config = getattr(settings, 'GOOGLE_DRIVE', {})
-        self.folder_id = drive_config.get('FOLDER_ID', '1589N-eP0KW3SLZwQtibxXnVoMrubPCqM')
+        self.folder_id = drive_config.get('FOLDER_ID', '1TCozZMg3kFaRXtyRWsrBqwr9T8DbFnq3')
         self.csv_filename = drive_config.get('CSV_FILENAME', 'QA.csv')
         self.cache_timeout = drive_config.get('CACHE_TIMEOUT', 300)
         
@@ -45,7 +45,7 @@ class GoogleDriveService:
     def _authenticate(self):
         """Authenticate with Google Drive API"""
         try:
-            service_account_file = Path(settings.BASE_DIR) / 'thinking-armor-463404-n1-3d39341f0318.json'
+            service_account_file = Path(settings.BASE_DIR) / 'thinking-armor-463404-n1-627b306232a8.json'
             
             if not service_account_file.exists():
                 logger.error(f"❌ Service account file not found: {service_account_file}")

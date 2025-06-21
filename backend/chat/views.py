@@ -203,6 +203,7 @@ class ChatView(APIView):
                 'response_time': processing_time,
                 'status': 'success',
                 'encoding': 'utf-8',
+                'reference_links': ai_response.get('reference_links', []),
                 # ✅ THÊM: Personalization info
                 'personalized': bool(user_context),
                 'user_context': {

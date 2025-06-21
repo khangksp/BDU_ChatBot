@@ -1,3 +1,4 @@
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import faiss
@@ -13,7 +14,7 @@ from .gemini_service import GeminiResponseGenerator, SimpleVietnameseRestorer
 import pandas as pd
 import random
 
-from .google_drive_service import google_drive_service # Import Google Drive service for file handling
+from .google_drive_service import google_drive_service
 
 logger = logging.getLogger(__name__)
 
@@ -426,7 +427,9 @@ class HybridChatbotAI:
                 'processing_time': processing_time,
                 'is_education': gemini_context is not None,
                 'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
-                'lecturer_optimized': True
+                'lecturer_optimized': True,
+                # ✅ NEW: Add reference links
+                'reference_links': retrieval_result.get('reference_links', [])
             }
             
         except Exception as e:
@@ -502,27 +505,7 @@ class HybridChatbotAI:
             
         else:
             logger.warning(f"⚠️ Unknown decision type: {decision_type}")
-            return "Dạ thầy/cô, em gặp khó khăn trong việc xử lý câu hỏi. Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"
-    
-    def _get_default_clarification_request(self, query):
-        """Default clarification request if Gemini fails"""
-        # Extract key topic for targeted clarification
-        query_words = query.lower().split()
-        
-        topic_keywords = {
-            'ngân hàng đề thi': ['ngân hàng', 'đề thi', 'đề'],
-            'kê khai nhiệm vụ': ['kê khai', 'nhiệm vụ'],
-            'tạp chí': ['tạp chí', 'bài viết'],
-            'thi đua khen thưởng': ['thi đua', 'khen thưởng'],
-            'báo cáo': ['báo cáo', 'nộp'],
-            'lịch giảng dạy': ['lịch', 'giảng dạy']
-        }
-        
-        for topic, keywords in topic_keywords.items():
-            if any(kw in query_words for kw in keywords):
-                return f"Dạ thầy/cô, để em hỗ trợ chính xác về {topic}, thầy/cô có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
-        
-        return "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+            return "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
     
     def _get_default_dont_know_response(self, query):
         """Default don't know response with department suggestion"""
@@ -597,14 +580,36 @@ class HybridChatbotAI:
             self.response_generator.clear_conversation_memory()
             self.conversation_memory.clear()
 
+    def _get_default_clarification_request(self, query):
+        """Default clarification request if Gemini fails"""
+        # Extract key topic for targeted clarification
+        query_words = query.lower().split()
+        
+        topic_keywords = {
+            'ngân hàng đề thi': ['ngân hàng', 'đề thi', 'đề'],
+            'kê khai nhiệm vụ': ['kê khai', 'nhiệm vụ'],
+            'tạp chí': ['tạp chí', 'bài viết'],
+            'thi đua khen thưởng': ['thi đua', 'khen thưởng'],
+            'báo cáo': ['báo cáo', 'nộp'],
+            'lịch giảng dạy': ['lịch', 'giảng dạy']
+        }
+        
+        for topic, keywords in topic_keywords.items():
+            if any(kw in query_words for kw in keywords):
+                return f"Dạ thầy/cô, để em hỗ trợ chính xác về {topic}, thầy/cô có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
+        
+        return "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+    
 
-# Keep original ChatbotAI for retrieval (unchanged but enhanced for lecturers)
+# Keep original ChatbotAI for retrieval (enhanced with links)
 class ChatbotAI:
     def __init__(self):
         self.model = None
         self.index = None
         self.knowledge_data = []
-        self.vietnamese_restorer = None  # ✅ THÊM
+        self.vietnamese_restorer = None
+        # ✅ NEW: Link mapping from link.csv
+        self.link_mapping = {}
         self.load_models()
     
     def load_models(self):
@@ -626,9 +631,97 @@ class ChatbotAI:
             logger.error(f"Error loading models: {str(e)}")
             self.model = None
     
+    def load_link_mapping(self):
+        """✅ ENHANCED: Load link mapping with debug"""
+        try:
+            link_csv_path = os.path.join(settings.BASE_DIR, 'data', 'link.csv')
+            logger.info(f"🔗 Attempting to load links from: {link_csv_path}")
+            
+            if os.path.exists(link_csv_path):
+                df_links = pd.read_csv(link_csv_path, encoding='utf-8')
+                logger.info(f"🔗 CSV loaded successfully. Columns: {df_links.columns.tolist()}")
+                logger.info(f"🔗 CSV shape: {df_links.shape}")
+                
+                # ✅ DEBUG: Print first few rows
+                logger.info(f"🔗 First 3 rows:\n{df_links.head(3).to_string()}")
+                
+                # Create mapping from STT to Link
+                for index, row in df_links.iterrows():
+                    stt = str(row['STT']).strip()
+                    link = str(row['Link']).strip()
+                    logger.info(f"🔗 Processing row {index}: STT='{stt}', Link='{link}'")
+                    
+                    if stt and link and stt != 'nan' and link != 'nan':
+                        self.link_mapping[stt] = link
+                        logger.info(f"✅ Added mapping: {stt} -> {link}")
+                
+                logger.info(f"✅ Total loaded: {len(self.link_mapping)} reference links")
+                logger.info(f"🔗 All mappings: {self.link_mapping}")
+                
+            else:
+                logger.error(f"❌ link.csv not found at {link_csv_path}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error loading link mapping: {str(e)}")
+            import traceback
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+            self.link_mapping = {}
+    
+    def get_reference_links(self, qa_item):
+        """✅ ENHANCED: Get reference links với debug chi tiết"""
+        logger.info(f"🔗 DEBUG: get_reference_links called with qa_item keys: {qa_item.keys()}")
+        
+        reference_links = []
+        
+        # Get STT from qa_item (if it exists)
+        stt_value = qa_item.get('STT', '')
+        logger.info(f"🔗 DEBUG: Raw STT value: '{stt_value}' (type: {type(stt_value)})")
+        
+        if not stt_value:
+            logger.warning(f"🔗 DEBUG: No STT found in qa_item")
+            return reference_links
+        
+        # Handle multiple STT values separated by commas or semicolons
+        stt_list = []
+        if isinstance(stt_value, str):
+            # Split by comma, semicolon, or space
+            stt_parts = re.split(r'[,;\s]+', stt_value.strip())
+            stt_list = [part.strip() for part in stt_parts if part.strip()]
+            logger.info(f"🔗 DEBUG: Parsed STT list: {stt_list}")
+        else:
+            stt_list = [str(stt_value).strip()]
+            logger.info(f"🔗 DEBUG: STT converted to string: {stt_list}")
+        
+        # Get links for each STT
+        for stt in stt_list:
+            logger.info(f"🔗 DEBUG: Checking STT '{stt}' in link_mapping...")
+            logger.info(f"🔗 DEBUG: Link mapping has {len(self.link_mapping)} entries")
+            logger.info(f"🔗 DEBUG: First 5 keys in link_mapping: {list(self.link_mapping.keys())[:5]}")
+            
+            if stt in self.link_mapping:
+                link_url = self.link_mapping[stt]
+                logger.info(f"✅ FOUND: STT '{stt}' -> '{link_url}'")
+                reference_links.append({
+                    'stt': stt,
+                    'url': link_url,
+                    'title': f"Tài liệu tham khảo {stt}"
+                })
+            else:
+                logger.warning(f"❌ NOT FOUND: STT '{stt}' not in link_mapping")
+                # Debug: show similar keys
+                similar_keys = [k for k in self.link_mapping.keys() if stt.lower() in k.lower() or k.lower() in stt.lower()]
+                if similar_keys:
+                    logger.info(f"🔗 DEBUG: Similar keys found: {similar_keys}")
+        
+        logger.info(f"🔗 DEBUG: Final reference_links: {reference_links}")
+        return reference_links
+
     def load_knowledge_base(self):
         """Load knowledge base from Google Drive and database with lecturer focus"""
         try:
+            # ✅ FIRST: Load link mapping
+            self.load_link_mapping()
+            
             # Load from database
             db_knowledge = list(KnowledgeBase.objects.filter(is_active=True).values(
                 'question', 'answer', 'category'
@@ -655,13 +748,8 @@ class ChatbotAI:
                     try:
                         df = pd.read_csv(csv_path, encoding='utf-8')
                         if 'question' in df.columns and 'answer' in df.columns:
-                            csv_knowledge = df[['question', 'answer']].fillna('').to_dict('records')
-                            if 'category' in df.columns:
-                                for i, item in enumerate(csv_knowledge):
-                                    item['category'] = df.iloc[i].get('category', 'Giảng viên')
-                            else:
-                                for item in csv_knowledge:
-                                    item['category'] = 'Giảng viên'
+                            # ✅ ENHANCED: Include all columns including STT
+                            csv_knowledge = df.fillna('').to_dict('records')
                             logger.info(f"✅ Fallback: Loaded {len(csv_knowledge)} records from local CSV")
                     except Exception as e:
                         logger.error(f"❌ Fallback CSV also failed: {str(e)}")
@@ -675,66 +763,38 @@ class ChatbotAI:
                 self.build_faiss_index()
             
             logger.info(f"✅ Total loaded: {len(self.knowledge_data)} knowledge entries for lecturers (Drive: {len(csv_knowledge)}, DB: {len(db_knowledge)})")
+            logger.info(f"✅ Reference links available: {len(self.link_mapping)} links")
             
         except Exception as e:
             logger.error(f"Error loading knowledge: {str(e)}")
             self.knowledge_data = self.get_fallback_knowledge_lecturer()
 
-    
-    # Thêm method mới để get system status cho Google Drive
-    def get_system_status(self):
-        """Get system status for lecturers with Google Drive info"""
-        gemini_status = self.response_generator.get_system_status()
-        drive_status = google_drive_service.get_system_status()
-        
-        return {
-            'sbert_model': bool(self.sbert_retriever.model),
-            'faiss_index': bool(self.sbert_retriever.index),
-            'phobert_available': not self.intent_classifier.fallback_mode,
-            'gemini_available': gemini_status.get('gemini_api_available', False),
-            'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'lecturer_focused_hybrid_with_google_drive',
-            'memory_sessions': gemini_status.get('memory_sessions', 0),
-            'confidence_thresholds': self.decision_engine.confidence_thresholds,
-            'generation_boost_enabled': self.decision_engine.generation_boost_settings['enable_boost'],
-            'boost_probability': self.decision_engine.generation_boost_settings['boost_probability'],
-            'lecturer_features': [
-                'lecturer_keyword_detection',
-                'clarification_requests', 
-                'department_suggestions',
-                'formal_addressing',
-                'enhanced_generation_boost',
-                'random_generation_enhancement',
-                'keyword_based_generation_boost',
-                'no_fabrication_policy',
-                'google_drive_integration'  # ✅ MỚI
-            ],
-            'gemini_status': gemini_status,
-            'google_drive_status': drive_status  # ✅ MỚI
-        }
-    
     def get_fallback_knowledge_lecturer(self):
         """Fallback knowledge data specifically for lecturers"""
         return [
             {
                 'question': 'ngân hàng đề thi',
                 'answer': 'Giảng viên cần báo cáo kết quả xây dựng ngân hàng đề thi kết thúc học phần và lập kế hoạch cho học kỳ tiếp theo. Nộp về Phòng Đảm bảo chất lượng và Khảo thí qua email ldkham@bdu.edu.vn trước hạn quy định.',
-                'category': 'Giảng viên'
+                'category': 'Giảng viên',
+                'STT': '1'
             },
             {
                 'question': 'kê khai nhiệm vụ năm học',
                 'answer': 'Giảng viên cơ hữu và thỉnh giảng cần kê khai nhiệm vụ năm học bao gồm giảng dạy, nghiên cứu khoa học và các hoạt động khác. Khoa tổng hợp và báo cáo lên nhà trường.',
-                'category': 'Giảng viên'
+                'category': 'Giảng viên',
+                'STT': '2'
             },
             {
                 'question': 'tạp chí khoa học',
                 'answer': 'Tạp chí Khoa học và Công nghệ Trường Đại học Bình Dương nhận bài viết từ giảng viên, nghiên cứu sinh và các nhà khoa học. Gửi bài qua email chỉ định của tòa soạn.',
-                'category': 'Giảng viên'
+                'category': 'Giảng viên',
+                'STT': '3'
             },
             {
                 'question': 'thi đua khen thưởng',
                 'answer': 'Nhà trường tổ chức đánh giá thi đua, khen thưởng cá nhân và tập thể xuất sắc trong năm học. Có các danh hiệu như Chiến sĩ thi đua, Lao động tiên tiến...',
-                'category': 'Giảng viên'
+                'category': 'Giảng viên',
+                'STT': '4'
             }
         ]
     
@@ -774,6 +834,8 @@ class ChatbotAI:
                 if idx < len(self.knowledge_data):
                     result = self.knowledge_data[idx].copy()
                     result['similarity'] = float(score)
+                    # ✅ NEW: Add reference links for this result
+                    result['reference_links'] = self.get_reference_links(result)
                     results.append(result)
             
             return results[0] if results else (None, 0), results
@@ -805,7 +867,9 @@ class ChatbotAI:
                 
                 if total_score > best_score:
                     best_score = total_score
-                    best_match = item
+                    best_match = item.copy()
+                    # ✅ NEW: Add reference links
+                    best_match['reference_links'] = self.get_reference_links(best_match)
         
         return best_match, best_score
     
@@ -817,7 +881,8 @@ class ChatbotAI:
                     'response': 'Dạ thầy/cô, vui lòng nhập câu hỏi cụ thể ạ. 🎓',
                     'confidence': 0.1,
                     'method': 'empty_query',
-                    'sources': []
+                    'sources': [],
+                    'reference_links': []
                 }
             
             # ✅ THÊM: Restore Vietnamese trước khi search
@@ -838,19 +903,46 @@ class ChatbotAI:
             if best_match:
                 similarity = best_match.get('similarity', confidence if 'confidence' in locals() else 0)
                 
+                # ✅ DEBUG: Log best_match details
+                logger.info(f"🔗 DEBUG: best_match keys: {best_match.keys()}")
+                logger.info(f"🔗 DEBUG: best_match STT: {best_match.get('STT', 'NO_STT_FOUND')}")
+                
+                # ✅ NEW: Collect all reference links from top results
+                all_reference_links = []
+                for i, result in enumerate(all_results[:3]):  # Top 3 results
+                    if result and 'reference_links' in result:
+                        logger.info(f"🔗 DEBUG: Result {i} has reference_links: {result['reference_links']}")
+                        all_reference_links.extend(result['reference_links'])
+                    else:
+                        logger.info(f"🔗 DEBUG: Result {i} has NO reference_links")
+                
+                logger.info(f"🔗 DEBUG: all_reference_links collected: {all_reference_links}")
+                
+                # Remove duplicates based on STT
+                unique_links = {}
+                for link in all_reference_links:
+                    stt = link['stt']
+                    if stt not in unique_links:
+                        unique_links[stt] = link
+                
+                final_links = list(unique_links.values())
+                logger.info(f"🔗 DEBUG: Final unique reference links: {final_links}")
+                
                 return {
                     'response': best_match['answer'],
                     'confidence': similarity,
                     'method': 'retrieval',
                     'sources': self._format_sources(all_results[:2]),
-                    'category': best_match.get('category', 'Giảng viên')
+                    'category': best_match.get('category', 'Giảng viên'),
+                    'reference_links': final_links  # ✅ NEW: Include reference links
                 }
             else:
                 return {
                     'response': 'Em chưa có thông tin về vấn đề này.',
                     'confidence': 0.1,
                     'method': 'no_match',
-                    'sources': []
+                    'sources': [],
+                    'reference_links': []
                 }
             
         except Exception as e:
@@ -859,7 +951,8 @@ class ChatbotAI:
                 'response': 'Đã có lỗi xảy ra trong hệ thống.',
                 'confidence': 0.1,
                 'method': 'error',
-                'sources': []
+                'sources': [],
+                'reference_links': []
             }
     
     def _format_sources(self, results):

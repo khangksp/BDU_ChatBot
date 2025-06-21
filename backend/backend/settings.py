@@ -215,7 +215,7 @@ CORS_ALLOWED_ORIGINS = [
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
-    "https://cfa5-113-161-160-243.ngrok-free.app"
+    "https://2823-14-161-210-24.ngrok-free.app"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -260,7 +260,7 @@ CSRF_TRUSTED_ORIGINS = [
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
     "https://*.ngrok.io",
     "https://*.ngrok-free.app",
-    "https://cfa5-113-161-160-243.ngrok-free.app",
+    "https://2823-14-161-210-24.ngrok-free.app",
 ]
 
 # =============================================================================
@@ -497,9 +497,9 @@ PERSONALIZATION_CACHE = {
 # Google Drive settings
 GOOGLE_DRIVE = {
     'ENABLED': True,
-    'FOLDER_ID': '1589N-eP0KW3SLZwQtibxXnVoMrubPCqM',  # ID từ link Drive
+    'FOLDER_ID': '1TCozZMg3kFaRXtyRWsrBqwr9T8DbFnq3',  # ID từ link Drive
     'CSV_FILENAME': 'QA.csv',
-    'SERVICE_ACCOUNT_FILE': BASE_DIR / 'thinking-armor-463404-n1-3d39341f0318.json',
+    'SERVICE_ACCOUNT_FILE': BASE_DIR / 'thinking-armor-463404-n1-627b306232a8.json',
     'CACHE_TIMEOUT': 60,  # 1 phút
     'SCOPES': ['https://www.googleapis.com/auth/drive.readonly']
 }
