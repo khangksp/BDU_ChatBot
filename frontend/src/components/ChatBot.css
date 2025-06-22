@@ -24,7 +24,7 @@
     --border-radius-xl: 16px;
     
     --sidebar-width: 280px;
-    --sidebar-width-closed: 60px;
+    --sidebar-width-closed: 90px;
 }
 
 * {
@@ -101,11 +101,16 @@ body {
 }
 
 .logo-icon {
-    font-size: 28px;
     background: var(--gradient-primary);
     padding: 8px;
     border-radius: var(--border-radius);
     color: var(--neutral-white);
+}
+
+.logo-image {
+    width: 36px;
+    height: 32px;
+    object-fit: contain;
 }
 
 .logo-text h3 {
@@ -521,31 +526,50 @@ body {
     position: relative;
 }
 
+.floating-icon {
+    font-size: 64px;
+    animation: float 3s ease-in-out infinite;
+    z-index: 2;
+    position: relative;
+    width: 80px;                      /* 👈 THÊM width cố định */
+    height: 80px;                     /* 👈 THÊM height cố định */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.floating-logo {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    border-radius: 20%;
+    background: linear-gradient(135deg, #ffd543 0%, #fe5252 100%, #f55253 100%);
+    padding: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 3;
+}
+
 .pulse-ring {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
-    width: 120px;
-    height: 120px;
+    transform: translate(-50%, -50%) scale(0.5); /* 👈 Thêm scale ban đầu */
+    width: 80px;                      /* 👈 Bằng container size */
+    height: 80px;
     border: 2px solid var(--primary-orange);
     border-radius: 50%;
     opacity: 0.3;
     animation: pulse-ring 2s ease-out infinite;
-}
-
-@keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
+    z-index: 1;
 }
 
 @keyframes pulse-ring {
     0% {
-        transform: translate(-50%, -50%) scale(0.5);
+        transform: translate(-50%, -50%) scale(0.8); /* 👈 Bắt đầu từ 0.8 */
         opacity: 0.7;
     }
     100% {
-        transform: translate(-50%, -50%) scale(1.2);
+        transform: translate(-50%, -50%) scale(1.4); /* 👈 Kết thúc ở 1.4 */
         opacity: 0;
     }
 }

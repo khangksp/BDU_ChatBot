@@ -45,7 +45,12 @@ urlpatterns = [
     path('api/', include('chat.urls')),
     path('api/knowledge/', include('knowledge.urls')),
     path('api/auth/', include('authentication.urls')),
+    path('api/qa/', include('qa_management.urls')),
 ]
+
+admin.site.site_header = "BDU Chatbot Administration"
+admin.site.site_title = "BDU Admin"
+admin.site.index_title = "BDU Chatbot Management System"
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

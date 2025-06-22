@@ -23,7 +23,7 @@ class GoogleDriveService:
         
         # ✅ ĐỌC CONFIG TỪ SETTINGS
         drive_config = getattr(settings, 'GOOGLE_DRIVE', {})
-        self.folder_id = drive_config.get('FOLDER_ID', '1TCozZMg3kFaRXtyRWsrBqwr9T8DbFnq3')
+        self.folder_id = drive_config.get('FOLDER_ID', '1589N-eP0KW3SLZwQtibxXnVoMrubPCqM')
         self.csv_filename = drive_config.get('CSV_FILENAME', 'QA.csv')
         self.cache_timeout = drive_config.get('CACHE_TIMEOUT', 300)
         

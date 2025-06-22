@@ -215,8 +215,12 @@ const Login = ({ onLoginSuccess }) => {
     return (
         <div className="login-container">
             <div className="login-header">
-                <h1>🎓 Chatbot Đại học Bình Dương</h1>
-                <p>Hệ thống hỗ trợ thông tin tuyển sinh và đào tạo</p>
+                <img
+                    src="../assets/logoBDUEng.png"
+                    alt="Banner BDU"
+                    className="login-logo"
+                />
+                <h1>Chatbot Đại học Bình Dương</h1>
             </div>
 
             <div className="login-box">
@@ -385,16 +389,6 @@ const Login = ({ onLoginSuccess }) => {
                         </form>
                     </>
                 )}
-            </div>
-
-            <div className="login-footer">
-                <div className="footer-info">
-                    <span>🤖 Powered by AI • PhoBERT + Whisper + FAISS</span>
-                    <span>Made with ❤️ for Đại học Bình Dương</span>
-                </div>
-                <div className="debug-info">
-                    Backend: {API_BASE_URL} | Status: {connectionStatus}
-                </div>
             </div>
         </div>
     );

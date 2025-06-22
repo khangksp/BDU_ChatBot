@@ -543,7 +543,13 @@ Hãy đặt câu hỏi để bắt đầu!`,
             <div className={`modern-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
                 <div className="sidebar-header">
                     <div className="logo-section">
-                        <div className="logo-icon">🎓</div>
+                        <div className="logo-icon">
+                            <img 
+                                src="../assets/logo.png" 
+                                alt="BDU Logo" 
+                                className="logo-image"
+                            />
+                        </div>
                         <div className="logo-text">
                             <h3>BDU ChatBot</h3>
                             <span>Trợ lý AI thông minh</span>
@@ -657,7 +663,13 @@ Hãy đặt câu hỏi để bắt đầu!`,
                     {messages.length === 0 || (messages.length === 1 && messages[0].type === 'bot') ? (
                         <div className="welcome-section">
                             <div className="welcome-animation">
-                                <div className="floating-icon">🤖</div>
+                                <div className="floating-icon">
+                                    <img
+                                        src="../assets/logo.png"
+                                        alt="BDU Assistant"
+                                        className="floating-logo"
+                                    />
+                                </div>
                                 <div className="pulse-ring"></div>
                             </div>
                             

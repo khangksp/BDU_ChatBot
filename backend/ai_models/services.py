@@ -1,4 +1,3 @@
-
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import faiss
@@ -345,13 +344,31 @@ class HybridChatbotAI:
         gemini_status = self.response_generator.get_system_status()
         drive_status = google_drive_service.get_system_status()
         
+        # ✅ NEW: Add QA Management status
+        qa_management_status = {}
+        try:
+            from qa_management.models import QAEntry, QASyncLog
+            qa_management_status = {
+                'available': True,
+                'total_entries': QAEntry.objects.count(),
+                'active_entries': QAEntry.objects.filter(is_active=True).count(),
+                'pending_sync': QAEntry.objects.filter(sync_status='pending').count(),
+                'synced_entries': QAEntry.objects.filter(sync_status='synced').count(),
+                'error_entries': QAEntry.objects.filter(sync_status='error').count(),
+            }
+        except Exception as e:
+            qa_management_status = {
+                'available': False,
+                'error': str(e)
+            }
+        
         return {
             'sbert_model': bool(self.sbert_retriever.model),
             'faiss_index': bool(self.sbert_retriever.index),
             'phobert_available': not self.intent_classifier.fallback_mode,
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'lecturer_focused_hybrid_with_google_drive_csv',  # ✅ Cập nhật mode
+            'mode': 'lecturer_focused_hybrid_with_qa_management',  # ✅ Updated mode
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'confidence_thresholds': self.decision_engine.confidence_thresholds,
             'generation_boost_enabled': self.decision_engine.generation_boost_settings['enable_boost'],
@@ -365,10 +382,13 @@ class HybridChatbotAI:
                 'random_generation_enhancement',
                 'keyword_based_generation_boost',
                 'no_fabrication_policy',
-                'google_drive_csv_cache_integration'  # ✅ Cập nhật feature
+                'qa_management_integration',  # ✅ NEW feature
+                'real_time_sync',  # ✅ NEW feature
+                'admin_interface'  # ✅ NEW feature
             ],
             'gemini_status': gemini_status,
-            'google_drive_status': drive_status  # ✅ Bao gồm CSV cache info
+            'google_drive_status': drive_status,
+            'qa_management_status': qa_management_status  # ✅ NEW
         }
     
     def process_query(self, query, session_id=None):
@@ -600,8 +620,27 @@ class HybridChatbotAI:
         
         return "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
     
+    # ✅ NEW: Method to force reload after QA Management changes
+    def reload_after_qa_update(self):
+        """Reload knowledge base after QA Management updates"""
+        logger.info("🔄 Reloading knowledge base after QA Management update...")
+        
+        # Clear caches
+        if hasattr(self.sbert_retriever, 'cached_data'):
+            self.sbert_retriever.cached_data = None
+            self.sbert_retriever.cache_timestamp = 0
+        
+        # Reload knowledge base
+        self.sbert_retriever.load_knowledge_base()
+        
+        # Rebuild FAISS index
+        if self.sbert_retriever.model and self.sbert_retriever.knowledge_data:
+            self.sbert_retriever.build_faiss_index()
+        
+        logger.info("✅ Knowledge base reloaded successfully")
 
-# Keep original ChatbotAI for retrieval (enhanced with links)
+
+# Keep original ChatbotAI for retrieval (enhanced with links and QA Management integration)
 class ChatbotAI:
     def __init__(self):
         self.model = None
@@ -610,6 +649,9 @@ class ChatbotAI:
         self.vietnamese_restorer = None
         # ✅ NEW: Link mapping from link.csv
         self.link_mapping = {}
+        # ✅ NEW: Cache properties for QA Management integration
+        self.cached_data = None
+        self.cache_timestamp = 0
         self.load_models()
     
     def load_models(self):
@@ -632,53 +674,50 @@ class ChatbotAI:
             self.model = None
     
     def load_link_mapping(self):
-        """✅ ENHANCED: Load link mapping with debug"""
+        """✅ FIXED: Load link mapping with reduced logging"""
         try:
             link_csv_path = os.path.join(settings.BASE_DIR, 'data', 'link.csv')
-            logger.info(f"🔗 Attempting to load links from: {link_csv_path}")
+            logger.info(f"🔗 Loading reference links from: {link_csv_path}")
             
             if os.path.exists(link_csv_path):
                 df_links = pd.read_csv(link_csv_path, encoding='utf-8')
-                logger.info(f"🔗 CSV loaded successfully. Columns: {df_links.columns.tolist()}")
-                logger.info(f"🔗 CSV shape: {df_links.shape}")
+                logger.info(f"🔗 CSV loaded successfully. Shape: {df_links.shape}")
                 
-                # ✅ DEBUG: Print first few rows
-                logger.info(f"🔗 First 3 rows:\n{df_links.head(3).to_string()}")
+                # ✅ REDUCED LOGGING: Only show first 3 rows for debugging
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"🔗 First 3 rows:\n{df_links.head(3).to_string()}")
                 
                 # Create mapping from STT to Link
                 for index, row in df_links.iterrows():
                     stt = str(row['STT']).strip()
                     link = str(row['Link']).strip()
-                    logger.info(f"🔗 Processing row {index}: STT='{stt}', Link='{link}'")
                     
                     if stt and link and stt != 'nan' and link != 'nan':
                         self.link_mapping[stt] = link
-                        logger.info(f"✅ Added mapping: {stt} -> {link}")
                 
                 logger.info(f"✅ Total loaded: {len(self.link_mapping)} reference links")
-                logger.info(f"🔗 All mappings: {self.link_mapping}")
+                
+                # ✅ REDUCED LOGGING: Only show sample mappings for debugging
+                if logger.isEnabledFor(logging.DEBUG) and self.link_mapping:
+                    sample_keys = list(self.link_mapping.keys())[:3]
+                    sample_mappings = {k: self.link_mapping[k] for k in sample_keys}
+                    logger.debug(f"🔗 Sample mappings: {sample_mappings}")
                 
             else:
                 logger.error(f"❌ link.csv not found at {link_csv_path}")
                 
         except Exception as e:
             logger.error(f"❌ Error loading link mapping: {str(e)}")
-            import traceback
-            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
             self.link_mapping = {}
     
     def get_reference_links(self, qa_item):
-        """✅ ENHANCED: Get reference links với debug chi tiết"""
-        logger.info(f"🔗 DEBUG: get_reference_links called with qa_item keys: {qa_item.keys()}")
-        
+        """✅ FIXED: Get reference links with reduced logging"""
         reference_links = []
         
         # Get STT from qa_item (if it exists)
         stt_value = qa_item.get('STT', '')
-        logger.info(f"🔗 DEBUG: Raw STT value: '{stt_value}' (type: {type(stt_value)})")
         
         if not stt_value:
-            logger.warning(f"🔗 DEBUG: No STT found in qa_item")
             return reference_links
         
         # Handle multiple STT values separated by commas or semicolons
@@ -687,52 +726,57 @@ class ChatbotAI:
             # Split by comma, semicolon, or space
             stt_parts = re.split(r'[,;\s]+', stt_value.strip())
             stt_list = [part.strip() for part in stt_parts if part.strip()]
-            logger.info(f"🔗 DEBUG: Parsed STT list: {stt_list}")
         else:
             stt_list = [str(stt_value).strip()]
-            logger.info(f"🔗 DEBUG: STT converted to string: {stt_list}")
         
         # Get links for each STT
         for stt in stt_list:
-            logger.info(f"🔗 DEBUG: Checking STT '{stt}' in link_mapping...")
-            logger.info(f"🔗 DEBUG: Link mapping has {len(self.link_mapping)} entries")
-            logger.info(f"🔗 DEBUG: First 5 keys in link_mapping: {list(self.link_mapping.keys())[:5]}")
-            
             if stt in self.link_mapping:
                 link_url = self.link_mapping[stt]
-                logger.info(f"✅ FOUND: STT '{stt}' -> '{link_url}'")
                 reference_links.append({
                     'stt': stt,
                     'url': link_url,
                     'title': f"Tài liệu tham khảo {stt}"
                 })
-            else:
-                logger.warning(f"❌ NOT FOUND: STT '{stt}' not in link_mapping")
-                # Debug: show similar keys
-                similar_keys = [k for k in self.link_mapping.keys() if stt.lower() in k.lower() or k.lower() in stt.lower()]
-                if similar_keys:
-                    logger.info(f"🔗 DEBUG: Similar keys found: {similar_keys}")
+                # ✅ REDUCED LOGGING: Only log when found
+                logger.debug(f"✅ FOUND reference link: STT '{stt}' -> '{link_url}'")
         
-        logger.info(f"🔗 DEBUG: Final reference_links: {reference_links}")
         return reference_links
 
     def load_knowledge_base(self):
-        """Load knowledge base from Google Drive and database with lecturer focus"""
+        """✅ ENHANCED: Load knowledge base with QA Management integration"""
         try:
             # ✅ FIRST: Load link mapping
             self.load_link_mapping()
             
-            # Load from database
+            # ✅ NEW: Load from QA Management database FIRST (highest priority)
+            db_qa_entries = []
+            try:
+                from qa_management.models import QAEntry
+                qa_entries = QAEntry.objects.filter(is_active=True).order_by('stt')
+                
+                for entry in qa_entries:
+                    db_qa_entries.append({
+                        'question': entry.question,
+                        'answer': entry.answer,
+                        'category': entry.category or 'Giảng viên',
+                        'STT': entry.stt,  # ✅ Include STT for reference links
+                    })
+                logger.info(f"✅ Loaded {len(db_qa_entries)} entries from QA Management database")
+            except Exception as e:
+                logger.warning(f"⚠️ QA Management not available or no data: {str(e)}")
+            
+            # Load from legacy database
             db_knowledge = list(KnowledgeBase.objects.filter(is_active=True).values(
                 'question', 'answer', 'category'
             ))
             
-            # ✅ Load from Google Drive (now cached as CSV)
+            # ✅ Load from Google Drive (fallback/backup)
             csv_knowledge = []
             try:
                 csv_knowledge = google_drive_service.get_csv_data()
                 if csv_knowledge:
-                    logger.info(f"✅ Loaded {len(csv_knowledge)} records from Google Drive (CSV cache)")
+                    logger.info(f"✅ Loaded {len(csv_knowledge)} records from Google Drive (backup/fallback)")
                 else:
                     logger.warning("⚠️ No data from Google Drive, using empty list")
                     csv_knowledge = []
@@ -741,7 +785,7 @@ class ChatbotAI:
                 csv_knowledge = []
             
             # ✅ FALLBACK: Nếu Drive thất bại, thử load file local
-            if not csv_knowledge:
+            if not csv_knowledge and not db_qa_entries:
                 logger.info("🔄 Attempting fallback to local CSV")
                 csv_path = os.path.join(settings.BASE_DIR, 'data', 'QA.csv')
                 if os.path.exists(csv_path):
@@ -755,14 +799,18 @@ class ChatbotAI:
                         logger.error(f"❌ Fallback CSV also failed: {str(e)}")
                         csv_knowledge = []
             
-            # Combine sources with priority for lecturer-specific content
-            self.knowledge_data = csv_knowledge + db_knowledge  # CSV first for lecturer priority
+            # ✅ PRIORITY: QA Management DB > Drive CSV > Legacy DB
+            # This ensures QA Management data takes precedence
+            self.knowledge_data = db_qa_entries + csv_knowledge + db_knowledge
             
             # Build FAISS index
             if self.model and self.knowledge_data:
                 self.build_faiss_index()
             
-            logger.info(f"✅ Total loaded: {len(self.knowledge_data)} knowledge entries for lecturers (Drive: {len(csv_knowledge)}, DB: {len(db_knowledge)})")
+            logger.info(f"✅ Total loaded: {len(self.knowledge_data)} knowledge entries for lecturers")
+            logger.info(f"   📊 QA Management: {len(db_qa_entries)} entries")
+            logger.info(f"   📊 Google Drive: {len(csv_knowledge)} entries") 
+            logger.info(f"   📊 Legacy DB: {len(db_knowledge)} entries")
             logger.info(f"✅ Reference links available: {len(self.link_mapping)} links")
             
         except Exception as e:
@@ -903,20 +951,11 @@ class ChatbotAI:
             if best_match:
                 similarity = best_match.get('similarity', confidence if 'confidence' in locals() else 0)
                 
-                # ✅ DEBUG: Log best_match details
-                logger.info(f"🔗 DEBUG: best_match keys: {best_match.keys()}")
-                logger.info(f"🔗 DEBUG: best_match STT: {best_match.get('STT', 'NO_STT_FOUND')}")
-                
                 # ✅ NEW: Collect all reference links from top results
                 all_reference_links = []
                 for i, result in enumerate(all_results[:3]):  # Top 3 results
                     if result and 'reference_links' in result:
-                        logger.info(f"🔗 DEBUG: Result {i} has reference_links: {result['reference_links']}")
                         all_reference_links.extend(result['reference_links'])
-                    else:
-                        logger.info(f"🔗 DEBUG: Result {i} has NO reference_links")
-                
-                logger.info(f"🔗 DEBUG: all_reference_links collected: {all_reference_links}")
                 
                 # Remove duplicates based on STT
                 unique_links = {}
@@ -926,7 +965,6 @@ class ChatbotAI:
                         unique_links[stt] = link
                 
                 final_links = list(unique_links.values())
-                logger.info(f"🔗 DEBUG: Final unique reference links: {final_links}")
                 
                 return {
                     'response': best_match['answer'],

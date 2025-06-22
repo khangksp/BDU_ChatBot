@@ -56,7 +56,25 @@ LOCAL_APPS = [
     'knowledge',
     'chat',
     'ai_models',
+    'qa_management',
 ]
+
+QA_MANAGEMENT = {
+    'AUTO_SYNC_ON_SAVE': False,  # Automatically sync to Drive when saving in admin
+    'BACKUP_BEFORE_SYNC': True,  # Create backup before major sync operations
+    'MAX_ENTRIES_PER_PAGE': 50,  # Pagination in admin
+    'SYNC_BATCH_SIZE': 100,  # Number of entries to process in one batch
+    'ADMIN_PERMISSIONS': {
+        'SUPERUSER_ONLY': False,  # If True, only superusers can access QA management
+        'STAFF_REQUIRED': True,  # Staff permission required
+        'CUSTOM_PERMISSIONS': []  # Custom permissions if needed
+    },
+    'UI_SETTINGS': {
+        'SHOW_PREVIEW_ROWS': 5,  # Number of rows to show in CSV preview
+        'MAX_UPLOAD_SIZE_MB': 10,  # Maximum CSV upload size
+        'AUTO_REFRESH_INTERVAL': 30,  # Auto-refresh interval for sync status (seconds)
+    }
+}
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -314,6 +332,27 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
+        
+        'qa_management': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'qa_management.models': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'qa_management.services': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'qa_management.admin': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     },
 }
 
@@ -497,16 +536,87 @@ PERSONALIZATION_CACHE = {
 # Google Drive settings
 GOOGLE_DRIVE = {
     'ENABLED': True,
-    'FOLDER_ID': '1TCozZMg3kFaRXtyRWsrBqwr9T8DbFnq3',  # ID từ link Drive
+    'FOLDER_ID': '1589N-eP0KW3SLZwQtibxXnVoMrubPCqM',  # ID từ link Drive
     'CSV_FILENAME': 'QA.csv',
     'SERVICE_ACCOUNT_FILE': BASE_DIR / 'thinking-armor-463404-n1-627b306232a8.json',
     'CACHE_TIMEOUT': 60,  # 1 phút
-    'SCOPES': ['https://www.googleapis.com/auth/drive.readonly']
+    'SCOPES': ['https://www.googleapis.com/auth/drive.file','https://www.googleapis.com/auth/drive']
 }
+
+GOOGLE_DRIVE.update({
+    'WRITE_ENABLED': True,  # Enable write operations
+    'BACKUP_ENABLED': True,  # Enable automatic backups
+    'BACKUP_RETENTION_DAYS': 30,  # Keep backups for 30 days
+    'CONFLICT_RESOLUTION': 'database_wins',  # Options: 'database_wins', 'drive_wins', 'ask_user'
+    'BATCH_UPLOAD_SIZE': 1000,  # Number of entries per batch upload
+})
 
 # Data source priority
 KNOWLEDGE_BASE_SOURCES = {
     'PRIMARY': 'google_drive',    # Ưu tiên Google Drive
     'FALLBACK': 'local_csv',      # Fallback về local CSV
     'SECONDARY': 'database'       # Database là nguồn phụ
+}
+
+# =============================================================================
+# 🔗 CẤU HÌNH QA MANAGEMENT
+# =============================================================================
+
+# ✅ NEW: Task scheduling (for future cron jobs)
+QA_SYNC_SCHEDULE = {
+    'AUTO_IMPORT_ENABLED': False,  # Enable automatic import from Drive
+    'AUTO_IMPORT_INTERVAL': 3600,  # Import every hour (seconds)
+    'AUTO_EXPORT_ENABLED': False,  # Enable automatic export to Drive
+    'AUTO_EXPORT_INTERVAL': 1800,  # Export every 30 minutes (seconds)
+    'INDEX_REBUILD_ENABLED': True,  # Enable automatic FAISS index rebuild
+    'INDEX_REBUILD_AFTER_SYNC': True,  # Rebuild index after successful sync
+}
+
+# ✅ ENHANCED: Admin interface customization
+ADMIN_INTERFACE = {
+    'QA_MANAGEMENT': {
+        'SHOW_DASHBOARD_STATS': True,
+        'ENABLE_BULK_ACTIONS': True,
+        'SHOW_SYNC_STATUS': True,
+        'AUTO_SAVE_DRAFTS': False,  # For future implementation
+        'ENABLE_PREVIEW_MODE': True,
+    }
+}
+
+# ✅ NEW: Data validation settings
+QA_DATA_VALIDATION = {
+    'STT_PATTERN': r'^[A-Za-z0-9_-]+$',  # STT format validation
+    'MIN_QUESTION_LENGTH': 5,  # Minimum question length
+    'MIN_ANSWER_LENGTH': 10,  # Minimum answer length
+    'MAX_QUESTION_LENGTH': 500,  # Maximum question length
+    'MAX_ANSWER_LENGTH': 2000,  # Maximum answer length
+    'FORBIDDEN_WORDS': [],  # Words that should not appear in Q&A
+    'REQUIRED_KEYWORDS': [],  # Keywords that should appear (optional)
+}
+
+# ✅ ENHANCED: Security settings for QA Management
+if not DEBUG:
+    # Production security for QA Management
+    QA_MANAGEMENT.update({
+        'REQUIRE_2FA': False,  # Require 2FA for QA management (future)
+        'IP_WHITELIST': [],  # IP whitelist for QA admin access
+        'SESSION_TIMEOUT': 3600,  # Session timeout for QA admin (seconds)
+        'AUDIT_LOG_ENABLED': True,  # Enable audit logging
+    })
+
+# ✅ NEW: Integration settings
+CHATBOT_INTEGRATION = {
+    'AUTO_REBUILD_INDEX': True,  # Automatically rebuild FAISS index after QA changes
+    'CACHE_INVALIDATION': True,  # Invalidate chatbot cache after QA changes
+    'NOTIFICATION_ENABLED': False,  # Send notifications on QA updates (future)
+    'WEBHOOK_URLS': [],  # Webhook URLs to call after QA updates (future)
+}
+
+# ✅ ENHANCED: File handling
+FILE_UPLOAD_SETTINGS = {
+    'QA_UPLOAD_PATH': 'qa_uploads/',
+    'ALLOWED_EXTENSIONS': ['.csv', '.xlsx'],
+    'MAX_FILE_SIZE': 10 * 1024 * 1024,  # 10MB
+    'SCAN_FOR_VIRUSES': False,  # Enable virus scanning (future)
+    'AUTO_CLEANUP_DAYS': 7,  # Auto-delete uploaded files after 7 days
 }
