@@ -10,33 +10,66 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# ✅ FALLBACK SYSTEM PROMPT cho trường hợp không có personalization
-FALLBACK_LECTURER_SYSTEM_PROMPT = """Bạn là AI assistant của Đại học Bình Dương (BDU), chuyên hỗ trợ giảng viên.
+def get_fallback_system_prompt(response_style='professional'):
+    """Get fallback system prompt based on response style"""
+    
+    base_prompt = """Bạn là AI assistant của Đại học Bình Dương (BDU), chuyên hỗ trợ giảng viên.
 
 🎯 QUY TẮC QUAN TRỌNG:
 - LUÔN xưng hô: "thầy/cô" (TUYỆT ĐỐI KHÔNG dùng "bạn", "mình", "anh/chị")
 - Bắt đầu: "Dạ thầy/cô,"
 - Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-- NGẮN GỌN - Chỉ 1-2 câu chính, đi thẳng vào vấn đề
 - KHÔNG CHẾ TẠO thông tin không có
-- KHÔNG dùng format phức tạp với **1. **2. hay bullets
+- KHÔNG dùng format phức tạp với **1. **2. hay bullets"""
 
-✅ PHONG CÁCH MẪU:
-"Dạ thầy/cô, [thông tin chính ngắn gọn]. [Thêm 1 câu bổ sung nếu cần]. 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+    style_additions = {
+        'professional': """
 
-🚫 TUYỆT ĐỐI TRÁNH:
-- Format phức tạp (**1. **2. **3. etc.)
-- Bullets (• hoặc *)
-- Câu trả lời dài dòng trên 3 câu
-- Thông tin không chắc chắn
-- Chế tạo số liệu, quy định
+✅ PHONG CÁCH CHUYÊN NGHIỆP:
+- Ngôn từ trang trọng, lịch sự, chuẩn mực
+- Sử dụng thuật ngữ chính xác và phù hợp
+- Trình bày có hệ thống, logic rõ ràng
+- Tôn trọng cấp bậc và quy trình
+- NGẮN GỌN - Chỉ 1-2 câu chính, đi thẳng vào vấn đề""",
 
-📝 KHI KHÔNG HIỂU RÕ:
-- Hỏi lại để làm rõ: "Dạ thầy/cô, để em hỗ trợ chính xác, thầy/cô có thể nói rõ hơn về [vấn đề cụ thể] không ạ?"
+        'friendly': """
 
-❌ KHI KHÔNG CÓ THÔNG TIN:
-- Nói thẳng: "Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ [bộ phận liên quan] để được hỗ trợ chi tiết ạ."
-"""
+✅ PHONG CÁCH THÂN THIỆN:
+- Ngôn từ gần gũi, ấm áp và dễ chịu
+- Sử dụng emoji phù hợp để tạo không khí vui vẻ 😊
+- Tạo cảm giác thoải mái, gần gũi
+- Giọng điệu vui vẻ, nhiệt tình
+- Độ dài vừa phải, khoảng 2-3 câu""",
+
+        'technical': """
+
+✅ PHONG CÁCH KỸ THUẬT:
+- Sử dụng thuật ngữ chuyên môn chính xác
+- Giải thích chi tiết các khía cạnh kỹ thuật  
+- Đưa ra ví dụ cụ thể, số liệu thực tế
+- Tập trung vào độ chính xác và đầy đủ
+- Có thể dài hơn để giải thích kỹ thuật (3-4 câu)""",
+
+        'brief': """
+
+✅ PHONG CÁCH NGẮN GỌN:
+- Trả lời súc tích, đi thẳng vào trọng tâm
+- Tối đa 1 câu cho mỗi ý chính
+- Không giải thích dài dòng hay lòng vòng
+- Tập trung vào thông tin cốt lõi nhất
+- Loại bỏ các chi tiết không cần thiết""",
+
+        'detailed': """
+
+✅ PHONG CÁCH CHI TIẾT:
+- Giải thích đầy đủ, toàn diện từng khía cạnh
+- Đưa ra nhiều ví dụ minh họa cụ thể
+- Phân tích từ nhiều góc độ khác nhau
+- Cung cấp ngữ cảnh và background rộng
+- Có thể dài 4-5 câu để giải thích đầy đủ"""
+    }
+    
+    return base_prompt + style_additions.get(response_style, style_additions['professional'])
 
 class ConversationMemory:
     """Quản lý bộ nhớ hội thoại"""
@@ -133,7 +166,7 @@ class SimpleVietnameseRestorer:
     
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.model_name = "gemini-1.5-flash"
+        self.model_name = "gemini-2.0-flash"
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         
         # Simple cache to avoid repeated API calls
@@ -262,21 +295,50 @@ class SimpleVietnameseRestorer:
                 del self.cache[k]
 
 class GeminiResponseGenerator:
-    """Gemini API Response Generator cho Giảng viên BDU với Personalization"""
+    """Gemini API Response Generator cho Giảng viên BDU với Enhanced Personalization"""
     
     def __init__(self, api_key: str = None):
         from django.conf import settings
         self.api_key = api_key or settings.GEMINI_API_KEY
-        self.model_name = "gemini-1.5-flash"
+        self.model_name = "gemini-2.0-flash"
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         
         self.memory = ConversationMemory(max_history=10)
         self.vietnamese_restorer = SimpleVietnameseRestorer(self.api_key)
         
-        # ✅ NEW: User context cache for personalization
+        # User context cache for personalization
         self._user_context_cache = {}
         
-        # ✅ UPDATED: Role consistency for lecturers
+        # ✅ FIXED: Style-specific generation configs
+        self.style_generation_configs = {
+            'professional': {
+                "temperature": 0.3,
+                "maxOutputTokens": 120,
+                "topP": 0.8
+            },
+            'friendly': {
+                "temperature": 0.6,
+                "maxOutputTokens": 150,
+                "topP": 0.9
+            },
+            'technical': {
+                "temperature": 0.2,
+                "maxOutputTokens": 200,
+                "topP": 0.7
+            },
+            'brief': {
+                "temperature": 0.4,
+                "maxOutputTokens": 80,
+                "topP": 0.8
+            },
+            'detailed': {
+                "temperature": 0.5,
+                "maxOutputTokens": 250,
+                "topP": 0.8
+            }
+        }
+        
+        # Role consistency rules (unchanged)
         self.role_consistency_rules = {
             'identity': 'AI assistant của Đại học Bình Dương (BDU) hỗ trợ giảng viên',
             'personality': 'lịch sự, chuyên nghiệp, tôn trọng',
@@ -287,7 +349,7 @@ class GeminiResponseGenerator:
             ]
         }
         
-        logger.info("✅ Gemini Response Generator initialized with Personalization support")
+        logger.info("✅ Gemini Response Generator initialized with Enhanced Style Support")
 
     # ✅ NEW: Personalization methods
     def set_user_context(self, session_id: str, user_context: dict):
@@ -299,26 +361,40 @@ class GeminiResponseGenerator:
         """Lấy personalized system prompt từ user context"""
         try:
             if not session_id or session_id not in self._user_context_cache:
-                return FALLBACK_LECTURER_SYSTEM_PROMPT
+                return get_fallback_system_prompt()
             
             user_context = self._user_context_cache[session_id]
             if 'personalized_prompt' in user_context:
                 logger.info(f"✅ Using personalized prompt for {user_context.get('faculty_code', 'Unknown')}")
                 return user_context['personalized_prompt']
             
-            return FALLBACK_LECTURER_SYSTEM_PROMPT
+            return get_fallback_system_prompt()
             
         except Exception as e:
             logger.error(f"Error getting personalized prompt: {e}")
-            return FALLBACK_LECTURER_SYSTEM_PROMPT
+            return get_fallback_system_prompt()
+    
+    # ✅ NEW: Get response style from user context
+    def _get_user_response_style(self, session_id: str = None):
+        """Get user's preferred response style"""
+        try:
+            if session_id and session_id in self._user_context_cache:
+                user_context = self._user_context_cache[session_id]
+                preferences = user_context.get('preferences', {})
+                return preferences.get('response_style', 'professional')
+            return 'professional'
+        except Exception as e:
+            logger.error(f"Error getting response style: {e}")
+            return 'professional'    
 
+    # ✅ ENHANCED: Generate response with style-aware processing
     def generate_response(self, query: str, context: Optional[Dict] = None, 
                       intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
                       session_id: str = None) -> Dict[str, Any]:
-        """✅ ENHANCED: Generate response with enhanced generation support"""
+        """Generate response with enhanced style-aware generation"""
         start_time = time.time()
         
-        print(f"\n--- LECTURER REQUEST (Session: {session_id}) ---")
+        print(f"\n--- ENHANCED STYLE-AWARE REQUEST (Session: {session_id}) ---")
         print(f"🧠 MEMORY DEBUG: Total active sessions = {len(self.memory.conversations)}")
 
         try:
@@ -327,38 +403,47 @@ class GeminiResponseGenerator:
                 restored_query = self.vietnamese_restorer.restore_vietnamese_tone(query)
                 if restored_query != query:
                     logger.info(f"🎯 Query restored: '{query}' -> '{restored_query}'")
-                    query = restored_query  # Use restored version for processing
+                    query = restored_query
 
-            # 1. Get conversation context
+            # ✅ NEW: Get user's response style
+            user_response_style = self._get_user_response_style(session_id)
+            print(f"🎨 USER STYLE: {user_response_style}")
+
+            # Get conversation context
             conversation_context = {}
             if session_id:
                 conversation_context = self.memory.get_conversation_context(session_id)
                 print(f"🧠 MEMORY DEBUG: History length = {len(conversation_context.get('history', []))}")
-                print(f"🧠 MEMORY DEBUG: Context summary = {conversation_context.get('context_summary', 'None')}")
 
-            # 2. Determine response strategy for lecturers
+            # Get user context for personalization
+            user_context = None
+            if session_id and session_id in self._user_context_cache:
+                user_context = self._user_context_cache[session_id]
+                print(f"👤 USER CONTEXT: {user_context.get('faculty_code', 'Unknown')} - Style: {user_response_style}")
+
+            # Determine response strategy
             response_strategy = self._determine_lecturer_response_strategy(
                 query, context, intent_info, conversation_context
             )
             
-            # ✅ ENHANCED: Check for special lecturer instructions
+            # ✅ FIXED: Handle instruction-based responses
             instruction = context.get('instruction', '') if context else ''
             
             if instruction == 'direct_answer_lecturer':
-                response = self._generate_direct_lecturer_answer(query, context, session_id)
+                response = self._generate_direct_lecturer_answer(query, context, session_id, user_response_style)
             elif instruction in ['enhance_answer_lecturer', 'enhance_answer_lecturer_boosted']:
-                response = self._generate_enhanced_lecturer_answer(query, context, intent_info, entities, session_id)
+                response = self._generate_enhanced_lecturer_answer(query, context, intent_info, entities, session_id, user_response_style)
             elif instruction == 'clarification_needed':
-                response = self._generate_clarification_request(query, context, session_id)
+                response = self._generate_clarification_request(query, context, session_id, user_response_style)
             elif instruction == 'dont_know_lecturer':
-                response = self._generate_dont_know_response(query, context, session_id)
+                response = self._generate_dont_know_response(query, context, session_id, user_response_style)
             else:
-                # 3. Check out of scope 
+                # Check out of scope and generate response
                 if context and context.get('emergency_education', False):
                     print(f"🚨 GEMINI: Emergency education mode activated")
                     pass 
                 elif not self._is_lecturer_education_related(query) and not context.get('force_education_response', False):
-                    response = self._get_contextual_out_of_scope_response_lecturer(conversation_context, session_id)
+                    response = self._get_contextual_out_of_scope_response_lecturer(conversation_context, session_id, user_response_style)
                     
                     if session_id:
                         self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
@@ -370,30 +455,19 @@ class GeminiResponseGenerator:
                         'generation_time': time.time() - start_time,
                         'original_query': original_query,
                         'restored_query': query,
-                        'personalized': session_id in self._user_context_cache
+                        'personalized': session_id in self._user_context_cache,
+                        'response_style': user_response_style  # ✅ NEW
                     }
                 
-                # 4. Build prompt for lecturers with personalization
-                enhanced_prompt = self._build_lecturer_context_aware_prompt(
-                    query, context, intent_info, entities, response_strategy, conversation_context, session_id
-                )
-                
-                # 5. Call Gemini API
-                response = self._call_gemini_api_optimized(enhanced_prompt, response_strategy)
-                
-                # 6. Post-process to ensure lecturer consistency
-                if response:
-                    response = self._post_process_with_lecturer_consistency(
-                        response, query, context, response_strategy, conversation_context, session_id
-                    )
+                # ✅ FIXED: Use simplified response generation
+                response = self._generate_style_aware_response(query, context, session_id, user_response_style)
             
-            final_response = response or self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id)
+            final_response = response or self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id, user_response_style)
             
-            # 7. Save to memory
+            # Save to memory
             if session_id:
                 print(f"🧠 MEMORY DEBUG: Saving interaction to memory...")
                 self.memory.add_interaction(session_id, original_query, final_response, intent_info, entities)
-                print(f"🧠 MEMORY DEBUG: Memory saved. New history length = {len(self.memory.conversations.get(session_id, {}).get('history', []))}")
 
             return {
                 'response': final_response,
@@ -404,13 +478,16 @@ class GeminiResponseGenerator:
                 'original_query': original_query,
                 'restored_query': query,
                 'vietnamese_restoration_used': query != original_query,
-                'personalized': session_id in self._user_context_cache,
+                'personalized': bool(user_context),
+                'response_style': user_response_style,  # ✅ NEW
+                'style_applied': user_response_style,  # ✅ NEW
                 'enhanced_generation': response_strategy == 'enhanced_generation'
             }
             
         except Exception as e:
             logger.error(f"Gemini API error: {str(e)}")
-            fallback_response = self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id)
+            user_response_style = self._get_user_response_style(session_id)
+            fallback_response = self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id, user_response_style)
             
             if session_id:
                 self.memory.add_interaction(session_id, original_query, fallback_response, intent_info, entities)
@@ -422,13 +499,13 @@ class GeminiResponseGenerator:
                 'generation_time': time.time() - start_time,
                 'original_query': original_query,
                 'restored_query': query,
-                'personalized': session_id in self._user_context_cache
+                'personalized': session_id in self._user_context_cache,
+                'response_style': user_response_style  # ✅ NEW
             }
 
-    def _generate_direct_lecturer_answer(self, query, context, session_id=None):
-        """Generate direct answer for lecturers with high confidence"""
+    def _generate_direct_lecturer_answer(self, query, context, session_id=None, response_style='professional'):
+        """Generate direct answer with style awareness"""
         
-        # ✅ UPDATED: Sử dụng personalized prompt
         system_prompt = self._get_personalized_system_prompt(session_id)
         
         prompt = f"""
@@ -445,28 +522,25 @@ class GeminiResponseGenerator:
         - Dùng CHÍNH XÁC thông tin từ CSDL
         - Bắt đầu: "Dạ thầy/cô,"
         - Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-        - NGẮN GỌN, đi thẳng vào vấn đề
+        - Áp dụng phong cách: {response_style}
         - KHÔNG format phức tạp
         
         Trả lời:
         """
         
-        response = self._call_gemini_api_optimized(prompt, 'direct_enhance')
+        response = self._call_gemini_api_with_style(prompt, 'direct_enhance', response_style)
         return response or f"Dạ thầy/cô, {context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
     
-    def _generate_enhanced_lecturer_answer(self, query, context, intent_info, entities, session_id):
-        """✅ ENHANCED: Generate enhanced answer with MORE GENERATION for lecturers"""
+    def _generate_enhanced_lecturer_answer(self, query, context, intent_info, entities, session_id, response_style='professional'):
+        """Generate enhanced answer with style awareness"""
         
-        # Get personalized system prompt
         system_prompt = self._get_personalized_system_prompt(session_id)
         
-        # Check if this is a boosted generation request
         is_generation_boosted = (
             context.get('generation_boosted', False) or 
             context.get('instruction') == 'enhance_answer_lecturer_boosted'
         )
         
-        # Enhanced prompts based on boost status
         if is_generation_boosted:
             prompt = f"""
             {system_prompt}
@@ -483,19 +557,13 @@ class GeminiResponseGenerator:
             - BỔ SUNG thêm ngữ cảnh, lý do, hoặc hướng dẫn chi tiết
             - GIẢI THÍCH tại sao điều này quan trọng cho giảng viên
             - THÊM tips hoặc lưu ý thực tế nếu phù hợp
+            - Áp dụng phong cách: {response_style}
             - Bắt đầu: "Dạ thầy/cô,"
             - Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-            - Độ dài: 3-4 câu (nhiều hơn bình thường)
-            
-            VÍ DỤ TĂNG CƯỜNG:
-            - Nếu về ngân hàng đề thi → thêm về tầm quan trọng của việc này
-            - Nếu về kê khai nhiệm vụ → thêm về thời gian và quy trình
-            - Nếu về tạp chí → thêm về tiêu chí và lợi ích
             
             Trả lời:
             """
         else:
-            # Standard enhancement prompt
             prompt = f"""
             {system_prompt}
             
@@ -509,53 +577,92 @@ class GeminiResponseGenerator:
             YÊU CẦU:
             - Sử dụng thông tin CSDL làm gốc
             - Bổ sung ngữ cảnh phù hợp nếu cần
+            - Áp dụng phong cách: {response_style}
             - Bắt đầu: "Dạ thầy/cô,"
             - Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-            - NGẮN GỌN, 2-3 câu tối đa
             
             Trả lời:
             """
         
-        response = self._call_gemini_api_optimized(prompt, 'enhanced_generation' if is_generation_boosted else 'balanced')
+        response = self._call_gemini_api_with_style(prompt, 'enhanced_generation' if is_generation_boosted else 'balanced', response_style)
         return response or f"Dạ thầy/cô, {context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
 
-        
-    def _generate_clarification_request(self, query, context, session_id=None):
-        """Generate clarification request for lecturers"""
-        
-        # ✅ NEW: Lấy thông tin user để personalize clarification
-        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
-        department_name = user_context.get('department_name', '')
-        
-        # Extract key topic from query for targeted clarification
-        query_words = query.lower().split()
-        key_topics = []
-        
-        topic_keywords = {
-            'ngân hàng đề thi': ['ngân hàng', 'đề thi', 'đề'],
-            'kê khai nhiệm vụ': ['kê khai', 'nhiệm vụ'],
-            'tạp chí': ['tạp chí', 'bài viết'],
-            'thi đua khen thưởng': ['thi đua', 'khen thưởng'],
-            'giờ chuẩn': ['giờ', 'chuẩn'],
-            'nghiên cứu': ['nghiên cứu'],
-            'báo cáo': ['báo cáo'],
-            'lịch giảng dạy': ['lịch', 'giảng dạy', 'thời khóa biểu']
-        }
-        
-        for topic, keywords in topic_keywords.items():
-            if any(kw in query_words for kw in keywords):
-                key_topics.append(topic)
-        
-        if key_topics:
-            topic_text = key_topics[0]
-            if department_name:
-                return f"Dạ thầy/cô, để em hỗ trợ chính xác về {topic_text} cho ngành {department_name}, thầy/cô có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
+    # ✅ NEW: Style-aware API call
+    def _call_gemini_api_with_style(self, prompt: str, strategy: str, response_style: str = 'professional') -> Optional[str]:
+        """Call Gemini API with style-specific generation config"""
+        try:
+            headers = {'Content-Type': 'application/json'}
+            
+            # Get style-specific config
+            style_config = self.style_generation_configs.get(response_style, self.style_generation_configs['professional'])
+            
+            # Merge with strategy-specific adjustments
+            generation_configs = {
+                'quick_clarify': {"temperature": style_config["temperature"] * 0.8, "maxOutputTokens": min(style_config["maxOutputTokens"], 80)},
+                'direct_enhance': {"temperature": style_config["temperature"], "maxOutputTokens": style_config["maxOutputTokens"]},
+                'enhanced_generation': {"temperature": style_config["temperature"] * 1.2, "maxOutputTokens": style_config["maxOutputTokens"] + 50},
+                'balanced': style_config
+            }
+            
+            config = generation_configs.get(strategy, style_config)
+            
+            # Ensure temperature is within bounds
+            config["temperature"] = max(0.1, min(1.0, config["temperature"]))
+            
+            print(f"🎨 STYLE CONFIG: {response_style} -> temp={config['temperature']}, tokens={config['maxOutputTokens']}")
+            
+            data = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": config,
+                "safetySettings": [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                ]
+            }
+            
+            url = f"{self.base_url}?key={self.api_key}"
+            response = requests.post(url, headers=headers, json=data, timeout=20)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'candidates' in result and result['candidates']:
+                    candidate = result['candidates'][0]
+                    if 'content' in candidate and 'parts' in candidate['content']:
+                        return candidate['content']['parts'][0]['text']
             else:
-                return f"Dạ thầy/cô, để em hỗ trợ chính xác về {topic_text}, thầy/cô có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
+                logger.error(f"Gemini API Error {response.status_code}: {response.text}")
+            return None
+        
+        except Exception as e:
+            logger.error(f"Gemini API call failed: {str(e)}")
+            return None
+        
+    def _generate_clarification_request(self, query, context, session_id=None, response_style='professional'):
+        """Generate clarification request with style"""
+        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
+        full_name = user_context.get('full_name', '')
+        
+        if full_name:
+            name_suffix = full_name.split()[-1]
+            personal_address = f"thầy/cô {name_suffix}"
         else:
-            return f"Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
-    
-    def _generate_dont_know_response(self, query, context, session_id=None):
+            personal_address = "thầy/cô"
+        
+        # Style-specific clarification
+        if response_style == 'friendly':
+            return f"Dạ {personal_address}, để em có thể hỗ trợ {personal_address} tốt nhất, {personal_address} có thể chia sẻ thêm chi tiết về vấn đề này được không ạ? 😊 Em rất sẵn lòng giúp đỡ!"
+        elif response_style == 'brief':
+            return f"Dạ {personal_address}, cần thêm thông tin chi tiết ạ. 🎓"
+        elif response_style == 'technical':
+            return f"Dạ {personal_address}, để cung cấp hướng dẫn kỹ thuật chính xác, {personal_address} vui lòng cung cấp thêm thông số và yêu cầu cụ thể ạ."
+        elif response_style == 'detailed':
+            return f"Dạ {personal_address}, để em có thể đưa ra câu trả lời toàn diện và chi tiết nhất, {personal_address} có thể bổ sung thêm về bối cảnh, mục đích sử dụng, và các yêu cầu cụ thể không ạ? Điều này sẽ giúp em hỗ trợ {personal_address} một cách hiệu quả nhất."
+        else:  # professional
+            return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+            
+    def _generate_dont_know_response(self, query, context, session_id=None, response_style='professional'):
         """Generate don't know response for lecturers"""
         
         # Suggest relevant departments based on query content
@@ -654,135 +761,6 @@ class GeminiResponseGenerator:
         
         return 'balanced'
 
-    def _build_lecturer_context_aware_prompt(self, query, context, intent_info, entities, strategy, conversation_context, session_id=None):
-        """Xây dựng prompt cho giảng viên với personalized system prompt"""
-        
-        # ✅ UPDATED: Sử dụng personalized system prompt
-        personalized_prompt = self._get_personalized_system_prompt(session_id)
-        
-        base_personality = f"""
-        {personalized_prompt}
-
-        🤖 QUY TẮC VAI TRÒ NGHIÊM NGẶT:
-        - LUÔN giữ vai trò: "{self.role_consistency_rules['identity']}"
-        - KHÔNG BAO GIỜ xưng hô là: {', '.join(self.role_consistency_rules['prohibited_roles'])}
-        - LUÔN nói "em là AI assistant của BDU hỗ trợ giảng viên" nếu được hỏi về vai trò.
-
-        🗣️ PHONG CÁCH CHO GIẢNG VIÊN:
-        - LUÔN bắt đầu câu trả lời bằng "Dạ thầy/cô,".
-        - LUÔN kết thúc bằng "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-        - Dùng emoji phù hợp (🎓, 📚, 📊, 📋).
-        - TUYỆT ĐỐI KHÔNG nói dài dòng hay lặp lại.
-        - ĐI THẲNG VÀO TRỌNG TÂM.
-        """
-        
-        context_info = str(context.get('response', '')) if isinstance(context, dict) else str(context or '')
-        
-        memory_context = ""
-        conversation_flow = ""
-        
-        if conversation_context.get('history'):
-            flow_items = []
-            for h in conversation_context['history'][-3:]:
-                flow_items.append(f"Thầy/cô hỏi: '{h['user_query'][:40]}...' -> Em trả lời: '{h['bot_response'][:50]}...'")
-            
-            conversation_flow = "\n".join(flow_items)
-            
-            memory_context = f"""
-            ---
-            📚 NGỮ CẢNH HỘI THOẠI TRƯỚC VỚI GIẢNG VIÊN:
-            - Chủ đề chính đang thảo luận: {conversation_context.get('context_summary', 'Chung')}
-            - Các lĩnh vực thầy/cô quan tâm: {', '.join(conversation_context.get('user_interests', [])) or 'Chưa rõ'}
-            - Dòng chảy hội thoại gần đây:
-            {conversation_flow}
-            ---
-            """
-        
-        strategy_prompts = {
-            'enhanced_generation': f"""
-            {base_personality}
-            {memory_context}
-            
-            NHIỆM VỤ ĐẶC BIỆT: Tạo sinh BỔ SUNG có ý nghĩa cho giảng viên
-            
-            CÂU HỎI GIẢNG VIÊN: {query}
-            
-            THÔNG TIN CƠ BẢN TỪ CSDL:
-            {context_info}
-            
-            YÊU CẦU TĂNG CƯỜNG TẠO SINH:
-            - SỬ DỤNG thông tin CSDL làm nền tảng chính
-            - BỔ SUNG ngữ cảnh, lý do, hoặc hướng dẫn thực tế
-            - GIẢI THÍCH tại sao điều này quan trọng cho công việc giảng viên
-            - THÊM lời khuyên hoặc tips hữu ích nếu phù hợp
-            - Độ dài: 3-4 câu (dài hơn bình thường)
-            - Vẫn giữ phong cách lịch sự, tôn trọng
-            
-            HƯỚNG DẪN TẠO SINH:
-            - Về ngân hàng đề thi → thêm về quy trình, tầm quan trọng
-            - Về kê khai nhiệm vụ → thêm về deadline, các bước thực hiện
-            - Về tạp chí khoa học → thêm về tiêu chí, lợi ích nghề nghiệp
-            - Về thi đua khen thưởng → thêm về ý nghĩa, động lực
-            - Về báo cáo → thêm về cách chuẩn bị, lưu ý
-            
-            Trả lời:
-            """,
-            
-            'follow_up_continuation': f"""
-            {base_personality}
-            {memory_context}
-            NHIỆM VỤ: Thầy/cô đang hỏi tiếp về CÙNG CHỦ ĐỀ.
-            ⚠️ KIỂM TRA: Thầy/cô hỏi "{query}". Đây là câu hỏi tiếp nối về chủ đề "{conversation_context.get('context_summary', 'trước đó')}".
-            HÀNH ĐỘNG: Cung cấp thông tin BỔ SUNG, đừng lặp lại ý cũ. Bắt đầu bằng "Dạ thầy/cô, ngoài ra về [chủ đề]..." hoặc một cách tự nhiên. Trả lời ngắn gọn.
-            DỮ LIỆU THAM KHẢO (nếu có): {context_info}
-            Trả lời:
-            """,
-            
-            'follow_up_clarification': f"""
-            {base_personality}
-            {memory_context}
-            NHIỆM VỤ: Thầy/cô muốn làm RÕ HƠN về CÙNG CHỦ ĐỀ.
-            ⚠️ KIỂM TRA: Thầy/cô hỏi "{query}". Đây là yêu cầu làm rõ về chủ đề "{conversation_context.get('context_summary', 'trước đó')}".
-            HÀNH ĐỘNG: Giải thích chi tiết, cụ thể hơn. Bắt đầu bằng "Dạ thầy/cô, để làm rõ hơn về [chủ đề]...".
-            DỮ LIỆU THAM KHẢO (nếu có): {context_info}
-            Trả lời:
-            """,
-            
-            'topic_shift': f"""
-            {base_personality}
-            {memory_context}
-            NHIỆM VỤ: Thầy/cô đã CHUYỂN SANG một chủ đề MỚI.
-            ⚠️ KIỂM TRA: Thầy/cô hỏi "{query}". Chủ đề này khác với chủ đề trước đó.
-            HÀNH ĐỘNG: Trả lời trực tiếp vào chủ đề mới. TUYỆT ĐỐI KHÔNG dùng các cụm từ như "như đã nói", "ngoài ra". Có thể thừa nhận sự thay đổi một cách nhẹ nhàng nếu muốn.
-            DỮ LIỆU THAM KHẢO (nếu có): {context_info}
-            Trả lời:
-            """,
-            
-            'memory_reference': f"""
-            {base_personality}
-            {memory_context}
-            NHIỆM VỤ: Thầy/cô đang hỏi về những gì đã nói (kiểm tra trí nhớ).
-            ⚠️ KIỂM TRA: Thầy/cô hỏi "{query}".
-            HÀNH ĐỘNG: Dựa vào 'Dòng chảy hội thoại gần đây' để tóm tắt ngắn gọn 1-2 ý chính đã trao đổi. Hỏi xem thầy/cô muốn biết thêm gì không.
-            Trả lời:
-            """,
-            
-            'balanced': f"""
-            {base_personality}
-            {memory_context if 'history' in conversation_context else ''}
-            NHIỆM VỤ: Trả lời câu hỏi của thầy/cô một cách tự nhiên, cân bằng.
-            ⚠️ KIỂM TRA: Thầy/cô hỏi "{query}". Đây có vẻ là một câu hỏi mới hoặc không có liên kết rõ ràng.
-            HÀNH ĐỘNG: Trả lời trực tiếp, ngắn gọn, đi thẳng vào vấn đề. KHÔNG tham chiếu đến hội thoại trước trừ khi câu hỏi CỰC KỲ liên quan.
-            DỮ LIỆU THAM KHẢO (nếu có): {context_info}
-            Trả lời:
-            """
-        }
-
-        # Use 'balanced' as default prompt for other strategies not specifically defined
-        final_prompt = strategy_prompts.get(strategy, strategy_prompts['balanced'])
-        print(f"📝 LECTURER PROMPT DEBUG (Strategy: {strategy}):\n{final_prompt[:400]}...") # Print part of prompt for debugging
-        return final_prompt
-
     def _post_process_with_lecturer_consistency(self, response, query, context, strategy, conversation_context, session_id=None):
         """Post-process để đảm bảo nhất quán cho giảng viên với personalization"""
         if not response:
@@ -834,7 +812,6 @@ class GeminiResponseGenerator:
             response = re.sub(r'\s*(Thầy/cô có.*?không ạ\?|Cần.*?không\?|Có.*?không\?)?\s*$', '', response.strip())
             response += ' Thầy/cô có cần hỗ trợ thêm gì không ạ?'
             
-        
         # 5. ✅ REMOVE: Loại bỏ format phức tạp
         response = re.sub(r'\*\*\d+\.\s*', '', response)  # Remove **1. **2. etc
         response = re.sub(r'^\s*\d+\.\s*', '', response, flags=re.MULTILINE)  # Remove numbered lists
@@ -843,7 +820,7 @@ class GeminiResponseGenerator:
         
         return response.strip()
     
-    def _get_contextual_out_of_scope_response_lecturer(self, conversation_context, session_id=None):
+    def _get_contextual_out_of_scope_response_lecturer(self, conversation_context, session_id=None, user_response_style='professional'):
         """Out of scope response cho giảng viên với personalization"""
         
         # ✅ NEW: Personalized out of scope response
@@ -868,7 +845,7 @@ class GeminiResponseGenerator:
         else:
             return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về trường không ạ?"
     
-    def _get_smart_fallback_with_context_lecturer(self, query, intent_info, conversation_context, session_id=None):
+    def _get_smart_fallback_with_context_lecturer(self, query, intent_info, conversation_context, session_id=None, user_response_style='professional'):
         """Smart fallback với conversation context cho giảng viên và personalization"""
         
         # ✅ NEW: Personalized fallback
@@ -941,56 +918,102 @@ class GeminiResponseGenerator:
         query_lower = query.lower()
         return any(kw in query_lower for kw in lecturer_education_keywords)
 
-    # Keep existing methods but ensure they're adapted for lecturers
-    def _call_gemini_api_optimized(self, prompt: str, strategy: str) -> Optional[str]:
-        """✅ ENHANCED: Call Gemini API with generation-optimized configs"""
-        try:
-            headers = {'Content-Type': 'application/json'}
-            generation_configs = {
-                'quick_clarify': {"temperature": 0.3, "maxOutputTokens": 60},
-                'direct_enhance': {"temperature": 0.4, "maxOutputTokens": 120},
-                'conversational_brief': {"temperature": 0.6, "maxOutputTokens": 90},
-                'structured_info': {"temperature": 0.2, "maxOutputTokens": 200},
-                'supportive_brief': {"temperature": 0.5, "maxOutputTokens": 150},
-                'follow_up_continuation': {"temperature": 0.4, "maxOutputTokens": 120},
-                'follow_up_clarification': {"temperature": 0.3, "maxOutputTokens": 180},
-                'topic_shift': {"temperature": 0.5, "maxOutputTokens": 120},
-                'memory_reference': {"temperature": 0.2, "maxOutputTokens": 100},
-                'balanced': {"temperature": 0.5, "maxOutputTokens": 150},
-                # ✅ NEW: Enhanced generation config
-                'enhanced_generation': {"temperature": 0.7, "maxOutputTokens": 200}  # Higher temp & tokens for creativity
-            }
-            
-            config = generation_configs.get(strategy, generation_configs['balanced'])
-            
-            data = {
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": config,
-                "safetySettings": [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-                ]
-            }
-            
-            url = f"{self.base_url}?key={self.api_key}"
-            response = requests.post(url, headers=headers, json=data, timeout=20)
-            
-            if response.status_code == 200:
-                result = response.json()
-                if 'candidates' in result and result['candidates']:
-                    candidate = result['candidates'][0]
-                    if 'content' in candidate and 'parts' in candidate['content']:
-                        return candidate['content']['parts'][0]['text']
-            else:
-                logger.error(f"Gemini API Error {response.status_code}: {response.text}")
-            return None
+    # ✅ ADDED: Missing methods for personalization testing
+    def _build_enhanced_prompt(self, query: str, context=None, intent_info=None, entities=None, session_id=None, response_style='professional'):
+        """Build enhanced prompt with style awareness"""
+        system_prompt = self._get_personalized_system_prompt(session_id)
+        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
+        full_name = user_context.get('full_name', '')
+        personal_address = f"thầy/cô {full_name.split()[-1]}" if full_name else "thầy/cô"
         
-        except Exception as e:
-            logger.error(f"Gemini API call failed: {str(e)}")
-            return None
+        context_info = str(context.get('response', '')) if isinstance(context, dict) else str(context or '')
+        
+        prompt = f"""{system_prompt}
+        
+🎨 PHONG CÁCH: {response_style}
+CÂU HỎI: {query}
+THÔNG TIN: {context_info}
+
+YÊU CẦU:
+- Bắt đầu: "Dạ {personal_address},"
+- Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+- Áp dụng phong cách: {response_style}
+
+Trả lời:"""
+        return prompt
     
+    def _generate_style_aware_response(self, query: str, context=None, session_id=None, response_style='professional'):
+        """Generate style-aware response"""
+        prompt = self._build_enhanced_prompt(query, context, None, None, session_id, response_style)
+        response = self._call_gemini_api_with_style(prompt, 'balanced', response_style)
+        if response:
+            response = self._post_process_with_lecturer_consistency(response, query, context, 'balanced', {}, session_id)
+        return response or self._get_smart_fallback_with_context_lecturer(query, None, {}, session_id, response_style)
+    
+    def test_response_style(self, test_query: str, response_style: str, session_id=None):
+        """Test response style functionality"""
+        try:
+            test_context = {'response': 'Đây là thông tin test từ database.', 'confidence': 0.8}
+            response = self._generate_style_aware_response(test_query, test_context, session_id, response_style)
+            
+            style_info = {
+                'professional': 'Chuyên nghiệp - trang trọng, lịch sự',
+                'friendly': 'Thân thiện - gần gũi, vui vẻ với emoji',
+                'technical': 'Kỹ thuật - chi tiết, thuật ngữ chuyên môn',
+                'brief': 'Ngắn gọn - súc tích, đi thẳng vào vấn đề',
+                'detailed': 'Chi tiết - đầy đủ, nhiều ví dụ'
+            }
+            
+            return {
+                'success': True,
+                'test_query': test_query,
+                'response': response,
+                'current_style': response_style,
+                'current_style_name': style_info.get(response_style, 'Unknown'),
+                'style_applied': response_style,
+                'config_used': self.style_generation_configs.get(response_style, {}),
+                'recommendation': f"Phong cách '{style_info.get(response_style)}' đã được áp dụng thành công."
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'test_query': test_query, 'current_style': response_style}
+    
+    def validate_user_preferences(self, preferences):
+        """Validate user preferences"""
+        errors, warnings = [], []
+        
+        if 'response_style' in preferences:
+            style = preferences['response_style']
+            if style not in self.style_generation_configs:
+                errors.append(f"Invalid response_style: {style}")
+        
+        if 'user_memory_prompt' in preferences:
+            memory = preferences['user_memory_prompt']
+            if isinstance(memory, str):
+                if len(memory) > 1000:
+                    errors.append("user_memory_prompt too long (max 1000 characters)")
+                elif len(memory) > 900:
+                    warnings.append("user_memory_prompt approaching limit")
+            else:
+                errors.append("user_memory_prompt must be string")
+        
+        if 'department_priority' in preferences:
+            if not isinstance(preferences['department_priority'], bool):
+                errors.append("department_priority must be boolean")
+        
+        return {'valid': len(errors) == 0, 'errors': errors, 'warnings': warnings}
+    
+    def get_user_context(self, session_id: str):
+        """Get user context for session"""
+        return self._user_context_cache.get(session_id)
+    
+    def clear_user_context(self, session_id=None):
+        """Clear user context"""
+        if session_id:
+            if session_id in self._user_context_cache:
+                del self._user_context_cache[session_id]
+        else:
+            self._user_context_cache.clear()
+
     def get_conversation_memory(self, session_id: str):
         return self.memory.get_conversation_context(session_id)
     
@@ -1001,19 +1024,22 @@ class GeminiResponseGenerator:
         else:
             self.memory.conversations.clear()
     
+    # ✅ ENHANCED: System status with style info
     def get_system_status(self) -> Dict[str, Any]:
-        """Get system status for lecturers with personalization info"""
+        """Get system status with style support info"""
         try:
             test_prompt = "Test ngắn cho giảng viên"
-            response = self._call_gemini_api_optimized(test_prompt, 'quick_clarify')
+            response = self._call_gemini_api_with_style(test_prompt, 'quick_clarify', 'professional')
             
             return {
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.api_key),
                 'service_status': 'active' if response else 'error',
-                'mode': 'lecturer_focused_with_memory_and_personalization',
+                'mode': 'lecturer_focused_with_style_support',
                 'memory_sessions': len(self.memory.conversations),
                 'personalization_sessions': len(self._user_context_cache),
+                'supported_styles': list(self.style_generation_configs.keys()),  # ✅ NEW
+                'style_generation_configs': self.style_generation_configs,  # ✅ NEW
                 'features': [
                     'lecturer_conversation_memory',
                     'lecturer_role_consistency',
@@ -1024,7 +1050,10 @@ class GeminiResponseGenerator:
                     'lecturer_department_suggestions',
                     'personalized_system_prompts',
                     'personalized_addressing',
-                    'department_specific_responses'
+                    'department_specific_responses',
+                    'response_style_support',  # ✅ NEW
+                    'style_aware_generation',  # ✅ NEW
+                    'dynamic_style_configs'  # ✅ NEW
                 ]
             }
         except Exception as e:
@@ -1033,4 +1062,3 @@ class GeminiResponseGenerator:
                 'service_status': 'error',
                 'error': str(e)
             }
-            

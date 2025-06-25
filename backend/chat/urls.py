@@ -16,4 +16,8 @@ urlpatterns = [
     # Personalized chat endpoints
     path('personalized-context/', views.PersonalizedChatContextView.as_view(), name='personalized-chat-context'),
     path('system-status-personalized/', views.PersonalizedSystemStatusView.as_view(), name='system-status-personalized'),
+    
+    # Chat sessions management
+    path('chat-sessions/', views.ChatSessionsView.as_view(), name='chat-sessions'),
+    path('chat-sessions/<str:session_id>/', views.ChatSessionDetailView.as_view(), name='chat-session-detail'),
 ]

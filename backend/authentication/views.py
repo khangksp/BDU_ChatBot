@@ -448,16 +448,29 @@ def auth_status(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def chatbot_preferences(request):
-    """API lấy chatbot preferences của Faculty - UPDATED"""
+    """API lấy chatbot preferences của Faculty - ENHANCED"""
     try:
         faculty = request.user
         
-        # ✅ NEW: Ensure preferences exist
+        # Ensure preferences exist
         if not faculty.chatbot_preferences:
             faculty.chatbot_preferences = faculty.get_default_chatbot_preferences()
             faculty.save(update_fields=['chatbot_preferences'])
         
         preferences = faculty.chatbot_preferences
+        
+        # ✅ NEW: Include style information
+        style_info = {
+            'current_style': preferences.get('response_style', 'professional'),
+            'available_styles': [
+                {
+                    'code': choice[0],
+                    'name': choice[1],
+                    'description': _get_style_description(choice[0])
+                }
+                for choice in Faculty.RESPONSE_STYLE_CHOICES
+            ]
+        }
         
         return Response({
             'success': True,
@@ -469,7 +482,22 @@ def chatbot_preferences(request):
                     'name': faculty.get_department_display(),
                     'position': faculty.get_position_display()
                 },
-                'system_prompt': faculty.get_personalized_system_prompt()  # ✅ NEW: Include system prompt
+                'style_info': style_info,  # ✅ NEW
+                'system_prompt': faculty.get_personalized_system_prompt(),
+                'validation_rules': {  # ✅ NEW: Frontend validation info
+                    'user_memory_prompt': {
+                        'max_length': 1000,
+                        'required': False
+                    },
+                    'response_style': {
+                        'required': True,
+                        'options': [choice[0] for choice in Faculty.RESPONSE_STYLE_CHOICES]
+                    },
+                    'department_priority': {
+                        'type': 'boolean',
+                        'default': True
+                    }
+                }
             }
         }, status=status.HTTP_200_OK)
         
@@ -480,66 +508,81 @@ def chatbot_preferences(request):
             'message': 'Lỗi khi lấy cấu hình chatbot'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def update_chatbot_preferences(request):
-    """API cập nhật chatbot preferences - UPDATED để hỗ trợ structure mới"""
+    """API cập nhật chatbot preferences - ENHANCED với validation"""
     try:
         faculty = request.user
         new_preferences = request.data.get('preferences', {})
         
-        # ✅ NEW: Validate new structure
-        # user_memory_prompt validation
-        user_memory_prompt = new_preferences.get('user_memory_prompt', '').strip()
-        if len(user_memory_prompt) > 1000:
+        # ✅ ENHANCED VALIDATION
+        validation_errors = []
+        
+        # 1. Validate user_memory_prompt
+        if 'user_memory_prompt' in new_preferences:
+            user_memory_prompt = new_preferences.get('user_memory_prompt', '').strip()
+            if len(user_memory_prompt) > 1000:
+                validation_errors.append('Memory prompt không được vượt quá 1000 ký tự')
+            # Clean and normalize
+            new_preferences['user_memory_prompt'] = user_memory_prompt
+        
+        # 2. Validate response_style
+        if 'response_style' in new_preferences:
+            response_style = new_preferences.get('response_style')
+            valid_styles = [choice[0] for choice in Faculty.RESPONSE_STYLE_CHOICES]
+            if response_style not in valid_styles:
+                validation_errors.append(f'Phong cách trả lời không hợp lệ. Chọn từ: {", ".join(valid_styles)}')
+        
+        # 3. Validate department_priority
+        if 'department_priority' in new_preferences:
+            department_priority = new_preferences.get('department_priority')
+            if not isinstance(department_priority, bool):
+                validation_errors.append('Tùy chọn ưu tiên chuyên ngành phải là true hoặc false')
+        
+        # Return validation errors if any
+        if validation_errors:
             return Response({
                 'success': False,
-                'message': 'Memory prompt không được vượt quá 1000 ký tự'
+                'message': 'Dữ liệu không hợp lệ',
+                'validation_errors': validation_errors
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # response_style validation
-        valid_response_styles = ['professional', 'friendly', 'technical', 'brief', 'detailed']
-        response_style = new_preferences.get('response_style', 'professional')
-        if response_style not in valid_response_styles:
+        # ✅ UPDATE: Use the model's validation method
+        try:
+            faculty.update_chatbot_preferences(new_preferences)
+        except ValueError as ve:
             return Response({
                 'success': False,
-                'message': 'Response style không hợp lệ',
-                'valid_options': valid_response_styles
+                'message': str(ve)
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # department_priority validation (boolean)
-        department_priority = new_preferences.get('department_priority', True)
-        if not isinstance(department_priority, bool):
-            return Response({
-                'success': False,
-                'message': 'Department priority phải là true hoặc false'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # ✅ SUCCESS RESPONSE with detailed info
+        updated_preferences = faculty.chatbot_preferences
+        changes_made = []
         
-        # ✅ NEW: Cập nhật preferences với structure mới
-        updated_preferences = {
-            'user_memory_prompt': user_memory_prompt,
-            'response_style': response_style,
-            'department_priority': department_priority,
-            'last_updated': timezone.now().isoformat(),
-            'updated_by': 'user'  # Flag để biết user tự update
-        }
+        if 'user_memory_prompt' in new_preferences:
+            changes_made.append(f'Memory prompt: {len(new_preferences["user_memory_prompt"])} ký tự')
+        if 'response_style' in new_preferences:
+            style_name = dict(Faculty.RESPONSE_STYLE_CHOICES).get(new_preferences['response_style'])
+            changes_made.append(f'Phong cách: {style_name}')
+        if 'department_priority' in new_preferences:
+            priority_text = 'Bật' if new_preferences['department_priority'] else 'Tắt'
+            changes_made.append(f'Ưu tiên chuyên ngành: {priority_text}')
         
-        faculty.update_chatbot_preferences(updated_preferences)
-        
-        logger.info(f"Updated chatbot preferences for {faculty.faculty_code}: memory_prompt={len(user_memory_prompt)} chars, style={response_style}, dept_priority={department_priority}")
+        logger.info(f"✅ Updated chatbot preferences for {faculty.faculty_code}: {', '.join(changes_made)}")
         
         return Response({
             'success': True,
-            'message': 'Cài đặt chatbot đã được cập nhật thành công',
+            'message': 'Cài đặt chatbot đã được cập nhật thành công! 🎉',
             'data': {
-                'preferences': faculty.chatbot_preferences,
+                'preferences': updated_preferences,
                 'user_context': faculty.get_chatbot_context(),
-                'system_prompt': faculty.get_personalized_system_prompt(),  # ✅ NEW: Return updated prompt
-                'changes': {
-                    'memory_prompt_length': len(user_memory_prompt),
-                    'response_style': response_style,
-                    'department_priority': department_priority
+                'system_prompt': faculty.get_personalized_system_prompt(),
+                'changes_summary': changes_made,  # ✅ NEW: Summary of changes
+                'style_info': {
+                    'current_style': updated_preferences.get('response_style', 'professional'),
+                    'style_description': _get_style_description(updated_preferences.get('response_style', 'professional'))
                 }
             }
         }, status=status.HTTP_200_OK)
@@ -555,14 +598,16 @@ def update_chatbot_preferences(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def personalized_system_prompt(request):
-    """API lấy system prompt cá nhân hóa - UPDATED"""
+    """API lấy system prompt cá nhân hóa - ENHANCED"""
     try:
         faculty = request.user
         
-        # ✅ NEW: Ensure preferences exist
+        # Ensure preferences exist
         if not faculty.chatbot_preferences:
             faculty.chatbot_preferences = faculty.get_default_chatbot_preferences()
             faculty.save(update_fields=['chatbot_preferences'])
+        
+        current_style = faculty.chatbot_preferences.get('response_style', 'professional')
         
         return Response({
             'success': True,
@@ -570,12 +615,25 @@ def personalized_system_prompt(request):
                 'system_prompt': faculty.get_personalized_system_prompt(),
                 'user_context': faculty.get_chatbot_context(),
                 'preferences': faculty.chatbot_preferences,
+                'style_info': {  # ✅ NEW: Detailed style info
+                    'current_style': current_style,
+                    'style_name': dict(Faculty.RESPONSE_STYLE_CHOICES).get(current_style),
+                    'style_description': _get_style_description(current_style),
+                    'style_instructions': faculty.get_style_specific_instructions(current_style)
+                },
                 'department_info': {
                     'code': faculty.department,
                     'name': faculty.get_department_display(),
                     'position': faculty.get_position_display(),
                     'specialization': faculty.specialization,
                     'department_priority_enabled': faculty.chatbot_preferences.get('department_priority', True)
+                },
+                'prompt_components': {  # ✅ NEW: Break down prompt components
+                    'user_info': f"Mã GV: {faculty.faculty_code}, Họ tên: {faculty.full_name}",
+                    'role': faculty.get_role_description(),
+                    'memory_prompt': faculty.chatbot_preferences.get('user_memory_prompt', ''),
+                    'style_applied': current_style,
+                    'department_priority': faculty.chatbot_preferences.get('department_priority', True)
                 }
             }
         }, status=status.HTTP_200_OK)
@@ -587,6 +645,62 @@ def personalized_system_prompt(request):
             'message': 'Lỗi khi lấy system prompt'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# ✅ NEW: Test response style endpoint
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def test_response_style(request):
+    """API để test different response styles với same query"""
+    try:
+        faculty = request.user
+        test_query = request.data.get('test_query', 'Hỏi về ngân hàng đề thi')
+        
+        if not test_query:
+            return Response({
+                'success': False,
+                'message': 'Cần có test_query để kiểm tra'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generate prompts for all styles
+        style_prompts = {}
+        current_style = faculty.chatbot_preferences.get('response_style', 'professional')
+        
+        for style_code, style_name in Faculty.RESPONSE_STYLE_CHOICES:
+            # Temporarily set style
+            temp_preferences = faculty.chatbot_preferences.copy()
+            temp_preferences['response_style'] = style_code
+            
+            # Generate prompt với temporary style
+            faculty.chatbot_preferences['response_style'] = style_code
+            prompt = faculty.get_personalized_system_prompt()
+            
+            style_prompts[style_code] = {
+                'style_name': style_name,
+                'style_description': _get_style_description(style_code),
+                'sample_prompt_section': faculty.get_style_specific_instructions(style_code),
+                'would_change_response': style_code != current_style
+            }
+        
+        # Restore original style
+        faculty.chatbot_preferences['response_style'] = current_style
+        
+        return Response({
+            'success': True,
+            'data': {
+                'test_query': test_query,
+                'current_style': current_style,
+                'current_style_name': dict(Faculty.RESPONSE_STYLE_CHOICES).get(current_style),
+                'department': faculty.get_department_display(),
+                'style_comparison': style_prompts,
+                'recommendation': f'Phong cách hiện tại "{dict(Faculty.RESPONSE_STYLE_CHOICES).get(current_style)}" phù hợp cho {faculty.get_position_display()}'
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Test response style error: {e}")
+        return Response({
+            'success': False,
+            'message': 'Lỗi khi test response style'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ✅ NEW: API để test department priority
 @api_view(['POST'])
@@ -643,29 +757,45 @@ def test_department_priority(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ✅ NEW: API để reset về default role
+# ✅ ENHANCED: Reset endpoint with style consideration
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated]) 
 def reset_to_auto_role(request):
-    """API để reset về vai trò tự động theo ngành"""
+    """API để reset về vai trò tự động theo ngành - ENHANCED"""
     try:
         faculty = request.user
         old_preferences = faculty.chatbot_preferences.copy() if faculty.chatbot_preferences else {}
         
-        # Reset về default
+        # Get preferred style from request or keep current
+        keep_style = request.data.get('keep_current_style', False)
+        preferred_style = request.data.get('preferred_style', 'professional')
+        
+        # Reset to default
         new_preferences = faculty.reset_to_auto_role()
         
-        logger.info(f"Reset chatbot preferences to auto role for {faculty.faculty_code}: {faculty.get_role_description()}")
+        # Optionally keep current style
+        if keep_style and old_preferences.get('response_style'):
+            new_preferences['response_style'] = old_preferences['response_style']
+            faculty.chatbot_preferences['response_style'] = old_preferences['response_style']
+            faculty.save(update_fields=['chatbot_preferences'])
+        elif preferred_style in [choice[0] for choice in Faculty.RESPONSE_STYLE_CHOICES]:
+            new_preferences['response_style'] = preferred_style
+            faculty.chatbot_preferences['response_style'] = preferred_style
+            faculty.save(update_fields=['chatbot_preferences'])
+        
+        logger.info(f"✅ Reset chatbot preferences to auto role for {faculty.faculty_code}: {faculty.get_role_description()}")
         
         return Response({
             'success': True,
-            'message': f'Đã reset về vai trò tự động: {faculty.get_role_description()}',
+            'message': f'Đã reset về vai trò tự động: {faculty.get_role_description()} 🔄',
             'data': {
                 'old_preferences': old_preferences,
                 'new_preferences': new_preferences,
                 'role_description': faculty.get_role_description(),
                 'department': faculty.get_department_display(),
-                'system_prompt': faculty.get_personalized_system_prompt()
+                'system_prompt': faculty.get_personalized_system_prompt(),
+                'style_kept': keep_style,
+                'final_style': new_preferences.get('response_style', 'professional')
             }
         }, status=status.HTTP_200_OK)
         
@@ -681,18 +811,52 @@ def reset_to_auto_role(request):
 # 🛠️ HELPER FUNCTIONS - SIMPLIFIED
 # ===============================
 
+def _get_style_description(style_code):
+    """Get detailed description for response style"""
+    descriptions = {
+        'professional': '🏢 Chuyên nghiệp - Trang trọng, lịch sự, sử dụng thuật ngữ chính xác',
+        'friendly': '😊 Thân thiện - Gần gũi, dễ gần, sử dụng emoji và ngôn từ ấm áp',
+        'technical': '🔧 Kỹ thuật - Chi tiết, thuật ngữ chuyên môn, phân tích sâu',
+        'brief': '⚡ Ngắn gọn - Trả lời súc tích, đi thẳng vào vấn đề',
+        'detailed': '📚 Chi tiết - Giải thích đầy đủ, nhiều ví dụ và ngữ cảnh'
+    }
+    return descriptions.get(style_code, 'Mô tả không có sẵn')
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def get_department_suggestions(request):
-    """API lấy gợi ý theo ngành - SIMPLIFIED"""
+    """API lấy gợi ý theo ngành - ENHANCED with style suggestions"""
     try:
         faculty = request.user
         
-        # Simplified suggestions based on department
+        # Department-specific style recommendations
+        style_recommendations = {
+            'cntt': ['technical', 'detailed'],  # CNTT thích technical
+            'duoc': ['professional', 'technical'],  # Dược cần professional + technical
+            'dien_tu': ['technical', 'detailed'],  # Điện tử thích technical
+            'co_khi': ['technical', 'professional'],  # Cơ khí thích technical + professional
+            'y_khoa': ['professional', 'detailed'],  # Y khoa cần professional + detailed
+            'kinh_te': ['professional', 'detailed'],  # Kinh tế thích professional + detailed
+            'luat': ['professional', 'brief'],  # Luật thích professional + brief
+            'ngoai_ngu': ['friendly', 'detailed'],  # Ngoại ngữ thích friendly
+            'general': ['professional', 'friendly']  # General linh hoạt
+        }
+        
+        suggested_styles = style_recommendations.get(faculty.department, ['professional'])
+        
         department_info = {
             'code': faculty.department,
             'name': faculty.get_department_display(),
-            'has_specific_knowledge': faculty.department != 'general'
+            'has_specific_knowledge': faculty.department != 'general',
+            'suggested_response_styles': [
+                {
+                    'code': style,
+                    'name': dict(Faculty.RESPONSE_STYLE_CHOICES).get(style),
+                    'description': _get_style_description(style),
+                    'why_recommended': _get_style_recommendation_reason(style, faculty.department)
+                }
+                for style in suggested_styles
+            ]
         }
         
         position_info = {
@@ -705,10 +869,38 @@ def get_department_suggestions(request):
             'data': {
                 'department': department_info,
                 'position': position_info,
-                'personalized_greeting': f"Xin chào {faculty.get_position_display()} {faculty.full_name}!",
+                'personalized_greeting': f"Chào {faculty.get_position_display()} {faculty.full_name}!",
                 'role_description': faculty.get_role_description(),
                 'auto_setup_available': True,
-                'department_priority_recommended': faculty.department != 'general'
+                'department_priority_recommended': faculty.department != 'general',
+                'style_suggestions': suggested_styles,
+                'current_style': faculty.chatbot_preferences.get('response_style', 'professional'),
+                'quick_setup_options': [  # ✅ NEW: Quick setup options
+                    {
+                        'name': 'Setup for Teaching',
+                        'description': 'Tối ưu cho hoạt động giảng dạy',
+                        'settings': {
+                            'response_style': 'friendly',
+                            'department_priority': True
+                        }
+                    },
+                    {
+                        'name': 'Setup for Research',
+                        'description': 'Tối ưu cho nghiên cứu khoa học',
+                        'settings': {
+                            'response_style': 'technical',
+                            'department_priority': True
+                        }
+                    },
+                    {
+                        'name': 'Setup for Administration',
+                        'description': 'Tối ưu cho công tác quản lý',
+                        'settings': {
+                            'response_style': 'professional',
+                            'department_priority': False
+                        }
+                    }
+                ]
             }
         }, status=status.HTTP_200_OK)
         
@@ -718,3 +910,16 @@ def get_department_suggestions(request):
             'success': False,
             'message': 'Lỗi khi lấy gợi ý'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+def _get_style_recommendation_reason(style_code, department):
+    """Get reason why a style is recommended for a department"""
+    reasons = {
+        ('technical', 'cntt'): 'Phù hợp với thuật ngữ kỹ thuật và giải thích chi tiết về công nghệ',
+        ('technical', 'dien_tu'): 'Cần thiết cho việc giải thích mạch điện và thiết bị kỹ thuật',
+        ('professional', 'y_khoa'): 'Đảm bảo tính chính xác và nghiêm túc trong lĩnh vực y tế',
+        ('professional', 'luat'): 'Phù hợp với tính chất nghiêm túc của lĩnh vực pháp lý',
+        ('friendly', 'ngoai_ngu'): 'Tạo môi trường học tập thoải mái cho việc học ngôn ngữ',
+        ('detailed', 'kinh_te'): 'Cần giải thích đầy đủ các khái niệm và phân tích kinh tế',
+    }
+    
+    return reasons.get((style_code, department), f'Phù hợp với đặc thù của ngành {department}')

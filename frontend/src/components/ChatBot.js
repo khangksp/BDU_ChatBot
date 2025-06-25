@@ -7,6 +7,7 @@ import './ChatBot.css';
 import { API_BASE_URL } from '../config.js';
 
 const ChatBot = () => {
+    // ✅ 1. BASIC STATES FIRST
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const [sessionId, setSessionId] = useState('');
@@ -24,24 +25,33 @@ const ChatBot = () => {
     // Reference sources state
     const [expandedSources, setExpandedSources] = useState(new Set());
     
-    // UI States
-    const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [chatSessions, setChatSessions] = useState([
-        { id: 1, title: 'Đoạn chat 1', active: true },
-        { id: 2, title: 'Đoạn chat 2', active: false }
-    ]);
+    // ✅ 2. PERSONALIZATION STATES (MUST BE BEFORE useEffect)
+    const [showPersonalization, setShowPersonalization] = useState(false);
+    const [user, setUser] = useState(null);
+    const [personalizationEnabled, setPersonalizationEnabled] = useState(false);
     
+    // ✅ 3. CHAT HISTORY STATES
+    const [currentSessionId, setCurrentSessionId] = useState('');
+    const [loadingSessions, setLoadingSessions] = useState(false);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    
+    // ✅ STATE DECLARATIONS
+    const [contextMenu, setContextMenu] = useState(null);
+    const [showRenameModal, setShowRenameModal] = useState(false);
+    const [renameSessionId, setRenameSessionId] = useState('');
+    const [newSessionTitle, setNewSessionTitle] = useState('');
+
+    // ✅ 4. UI STATES
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [chatSessions, setChatSessions] = useState([]);
+
+    // ✅ 5. REFS
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const audioChunks = useRef([]);
     const recordingInterval = useRef(null);
 
-    // Personalization states
-    const [showPersonalization, setShowPersonalization] = useState(false);
-    const [user, setUser] = useState(null);
-    const [personalizationEnabled, setPersonalizationEnabled] = useState(false);
-
-    // Cấu hình axios với base URL và timeout
+    // ✅ 6. MAIN SETUP useEffect (FIRST)
     useEffect(() => {
         axios.defaults.baseURL = API_BASE_URL;
         axios.defaults.timeout = 30000;
@@ -59,6 +69,55 @@ const ChatBot = () => {
             }
         };
     }, []);
+
+    // ✅ 7. CHAT SESSIONS useEffect (AFTER user is declared)
+    useEffect(() => {
+        if (user && personalizationEnabled) {
+            console.log('Loading chat sessions for user:', user.faculty_code);
+            loadChatSessions();
+        }
+    }, [user, personalizationEnabled]);
+
+    useEffect(() => {
+        // Close context menu when clicking outside
+        const handleClickOutside = (event) => {
+            if (contextMenu && !event.target.closest('.context-menu') && !event.target.closest('.chat-menu-btn')) {
+                setContextMenu(null);
+            }
+        };
+
+        document.addEventListener('click', handleClickOutside);
+        return () => {
+            document.removeEventListener('click', handleClickOutside);
+        };
+    }, [contextMenu]);
+
+    // ✅ 8. CONNECTION STATUS useEffect
+    useEffect(() => {
+        if (connectionStatus === 'connected') {
+            // Only set welcome message if no user or no sessions loaded
+            if (!user || chatSessions.length === 0) {
+                const newSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+                setSessionId(newSessionId);
+                
+                const welcomeMessage = {
+                    type: 'bot',
+                    content: getPersonalizedWelcomeMessage(),
+                    timestamp: new Date(),
+                    confidence: 1.0
+                };
+                
+                setMessages([welcomeMessage]);
+            }
+        }
+    }, [connectionStatus, speechSupported, user]);
+
+    // ✅ 9. SCROLL useEffect
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    // ✅ 10. HELPER FUNCTIONS
 
     const testConnection = async () => {
         try {
@@ -123,6 +182,364 @@ const ChatBot = () => {
             setSpeechSupported(false);
         }
     };
+
+    // ✅ 11. SIMPLIFIED CHAT SESSION FUNCTIONS
+
+    const showContextMenu = (e, sessionId) => {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        const rect = e.target.getBoundingClientRect();
+        setContextMenu({
+            sessionId: sessionId,
+            x: rect.left,
+            y: rect.bottom + 5,
+            show: true
+        });
+    };
+
+    const hideContextMenu = () => {
+        setContextMenu(null);
+    };
+
+    const handleRenameSession = (sessionId) => {
+        const session = chatSessions.find(s => s.session_id === sessionId || s.id === sessionId);
+        setRenameSessionId(sessionId);
+        setNewSessionTitle(session?.title || '');
+        setShowRenameModal(true);
+        hideContextMenu();
+    };
+
+    const confirmRenameSession = async () => {
+        if (!newSessionTitle.trim()) return;
+        
+        try {
+            const response = await axios.patch(`/api/chat-sessions/${renameSessionId}/`, {
+                title: newSessionTitle.trim()
+            });
+            
+            if (response.data.success) {
+                // Update local state
+                setChatSessions(prev => 
+                    prev.map(session => 
+                        (session.session_id === renameSessionId || session.id === renameSessionId)
+                            ? { ...session, title: newSessionTitle.trim() }
+                            : session
+                    )
+                );
+                
+                console.log('Session renamed successfully');
+            }
+        } catch (error) {
+            console.error('Error renaming session:', error);
+            alert('Lỗi khi đổi tên đoạn chat. Vui lòng thử lại.');
+        } finally {
+            setShowRenameModal(false);
+            setRenameSessionId('');
+            setNewSessionTitle('');
+        }
+    };
+
+    const handleDeleteSession = async (sessionId) => {
+        const confirmed = window.confirm('Bạn có chắc muốn xóa đoạn chat này không?');
+        if (!confirmed) return;
+        
+        try {
+            const response = await axios.delete(`/api/chat-sessions/${sessionId}/`);
+            
+            if (response.data.success) {
+                // Remove from local state
+                setChatSessions(prev => 
+                    prev.filter(session => 
+                        session.session_id !== sessionId && session.id !== sessionId
+                    )
+                );
+                
+                // If deleted session was active, create new one
+                const deletedSession = chatSessions.find(s => 
+                    (s.session_id === sessionId || s.id === sessionId) && s.active
+                );
+                
+                if (deletedSession) {
+                    await createNewChatSession();
+                }
+                
+                console.log('Session deleted successfully');
+            }
+        } catch (error) {
+            console.error('Error deleting session:', error);
+            alert('Lỗi khi xóa đoạn chat. Vui lòng thử lại.');
+        } finally {
+            hideContextMenu();
+        }
+    };
+
+    const loadChatSessions = async () => {
+        if (!user) {
+            console.log('No user found, skipping load sessions');
+            return;
+        }
+        
+        setLoadingSessions(true);
+        try {
+            console.log('Calling /api/chat-sessions/ for user:', user.faculty_code);
+            const response = await axios.get('/api/chat-sessions/');
+            
+            if (response.data.success) {
+                const sessions = response.data.sessions;
+                console.log('Loaded sessions:', sessions);
+                
+                if (sessions.length > 0) {
+                    // Set session đầu tiên là active
+                    const updatedSessions = sessions.map((session, index) => ({
+                        ...session,
+                        active: index === 0,
+                        id: session.session_id // Để tương thích với UI hiện tại
+                    }));
+                    
+                    setChatSessions(updatedSessions);
+                    
+                    // Load messages của session đầu tiên
+                    if (updatedSessions[0]) {
+                        setCurrentSessionId(updatedSessions[0].session_id);
+                        loadSessionMessages(updatedSessions[0].session_id);
+                    }
+                } else {
+                    // Tạo session mới nếu chưa có
+                    console.log('No sessions found, creating new one');
+                    createNewChatSession();
+                }
+            }
+        } catch (error) {
+            console.error('Error loading chat sessions:', error);
+            // Fallback: load welcome message without sessions
+            loadWelcomeMessage();
+        } finally {
+            setLoadingSessions(false);
+        }
+    };
+
+    const loadSessionMessages = async (sessionId) => {
+        setLoadingMessages(true);
+        try {
+            console.log('Loading messages for session:', sessionId);
+            const response = await axios.get(`/api/chat-sessions/${sessionId}/`);
+            
+            if (response.data.success) {
+                const loadedMessages = response.data.messages.map(msg => ({
+                    ...msg,
+                    timestamp: new Date(msg.timestamp),
+                    sources: msg.sources || [],
+                    reference_links: msg.reference_links || []
+                }));
+                
+                console.log('Loaded messages:', loadedMessages.length);
+                setMessages(loadedMessages);
+                setSessionId(sessionId);
+                setCurrentSessionId(sessionId);
+            }
+        } catch (error) {
+            console.error('Error loading session messages:', error);
+            // Fallback: tạo session mới
+            createNewChatSession();
+        } finally {
+            setLoadingMessages(false);
+        }
+    };
+
+    const createNewChatSession = async () => {
+        try {
+            if (!user) {
+                // Fallback cho user chưa login
+                const fallbackSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+                setSessionId(fallbackSessionId);
+                setCurrentSessionId(fallbackSessionId);
+                loadWelcomeMessage();
+                return fallbackSessionId;
+            }
+
+            console.log('Creating new session for user:', user.faculty_code);
+            const response = await axios.post('/api/chat-sessions/', {
+                title: `Chat mới - ${new Date().toLocaleTimeString('vi-VN')}`
+            });
+            
+            if (response.data.success) {
+                const newSession = {
+                    id: response.data.session_id,
+                    session_id: response.data.session_id,
+                    title: response.data.title,
+                    active: true,
+                    message_count: 0,
+                    preview: '',
+                    last_message_time: new Date().toISOString()
+                };
+                
+                // Update sessions list
+                setChatSessions(prev => [
+                    newSession,
+                    ...prev.map(s => ({ ...s, active: false }))
+                ]);
+                
+                // Set current session
+                setSessionId(newSession.session_id);
+                setCurrentSessionId(newSession.session_id);
+                
+                // Clear messages và hiển thị welcome message
+                loadWelcomeMessage();
+                
+                return newSession.session_id;
+            }
+        } catch (error) {
+            console.error('Error creating new session:', error);
+            // Fallback: tạo session ID local
+            const fallbackSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            setSessionId(fallbackSessionId);
+            setCurrentSessionId(fallbackSessionId);
+            loadWelcomeMessage();
+            return fallbackSessionId;
+        }
+    };
+
+    const loadWelcomeMessage = () => {
+        const welcomeMessage = {
+            type: 'bot',
+            content: getPersonalizedWelcomeMessage(),
+            timestamp: new Date(),
+            confidence: 1.0
+        };
+        setMessages([welcomeMessage]);
+    };
+
+    const getPersonalizedWelcomeMessage = () => {
+        if (user) {
+            const name = user.full_name?.split(' ').pop() || user.faculty_code;
+            return `Xin chào ${user.position_name || 'giảng viên'} ${name}! 
+
+Tôi là ChatBDU, trợ lý AI của Đại học Bình Dương. Tôi có thể hỗ trợ ${user.position_name?.toLowerCase() || 'bạn'} về:
+
+• 📚 Thông tin đào tạo và ngành học
+• 🎓 Quy định và thủ tục  
+• 💰 Học phí và chính sách
+• 🏢 Cơ sở vật chất
+• 📞 Thông tin liên hệ
+
+${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏi!' : 'Hãy đặt câu hỏi để bắt đầu!'}`;
+        }
+        
+        // Fallback cho user chưa login
+        return `Xin chào! Tôi là trợ lý AI của Đại học Bình Dương. Tôi có thể giúp bạn:
+
+• 📚 Thông tin tuyển sinh và ngành học
+• 💰 Học phí và chính sách hỗ trợ  
+• 🎓 Đời sống sinh viên
+• 🏢 Cơ sở vật chất và tiện ích
+• 📞 Thông tin liên hệ
+
+${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏi!' : 'Hãy đặt câu hỏi để bắt đầu!'}`;
+    };
+
+    const switchChatSession = async (sessionId) => {
+        // Update active state
+        setChatSessions(prev => 
+            prev.map(session => ({
+                ...session,
+                active: session.session_id === sessionId || session.id === sessionId
+            }))
+        );
+        
+        // Load messages của session đó
+        await loadSessionMessages(sessionId);
+        
+        // Scroll to bottom
+        setTimeout(() => scrollToBottom(), 100);
+    };
+
+    const createNewChat = async () => {
+        await createNewChatSession();
+    };
+
+    const clearChat = async () => {
+        await createNewChatSession();
+    };
+
+    const renderChatSessions = () => {
+        if (loadingSessions) {
+            return (
+                <div className="loading-sessions">
+                    <div className="spinner-small"></div>
+                    <span>Đang tải...</span>
+                </div>
+            );
+        }
+
+        if (chatSessions.length === 0) {
+            return (
+                <div className="empty-sessions">
+                    <p>Chưa có đoạn chat nào</p>
+                    <button onClick={createNewChat}>Tạo chat đầu tiên</button>
+                </div>
+            );
+        }
+
+        return (
+            <>
+                {chatSessions.map(session => (
+                    <div 
+                        key={session.session_id || session.id}
+                        className={`chat-item ${session.active ? 'active' : ''}`}
+                        onClick={() => switchChatSession(session.session_id || session.id)}
+                    >
+                        <span className="chat-icon">💬</span>
+                        <div className="chat-info">
+                            <span className="chat-title">{session.title}</span>
+                            {session.preview && (
+                                <span className="chat-preview">{session.preview}</span>
+                            )}
+                            <span className="chat-time">
+                                {session.last_message_time ? 
+                                    new Date(session.last_message_time).toLocaleDateString('vi-VN') :
+                                    'Mới tạo'
+                                }
+                            </span>
+                        </div>
+                        <div className="chat-menu">
+                            <button 
+                                className="chat-menu-btn"
+                                onClick={(e) => showContextMenu(e, session.session_id || session.id)}
+                                title="Tùy chọn"
+                            >
+                                ⋯
+                            </button>
+                        </div>
+                    </div>
+                ))}
+                
+                {/* ✅ SIMPLIFIED Context Menu - Only Rename and Delete */}
+                {contextMenu && contextMenu.show && (
+                    <div 
+                        className="context-menu"
+                        style={{
+                            position: 'fixed',
+                            left: contextMenu.x,
+                            top: contextMenu.y,
+                            zIndex: 1000
+                        }}
+                    >
+                        <div className="context-menu-item" onClick={() => handleRenameSession(contextMenu.sessionId)}>
+                            <span className="menu-icon">✏️</span>
+                            <span className="menu-text">Đổi tên</span>
+                        </div>
+                        <div className="context-menu-item danger" onClick={() => handleDeleteSession(contextMenu.sessionId)}>
+                            <span className="menu-icon">🗑️</span>
+                            <span className="menu-text">Xóa</span>
+                        </div>
+                    </div>
+                )}
+            </>
+        );
+    };
+
+    // ✅ 12. SPEECH FUNCTIONS (unchanged)
 
     const startRecording = async () => {
         try {
@@ -316,37 +733,11 @@ const ChatBot = () => {
         setExpandedSources(newExpanded);
     };
 
-    useEffect(() => {
-        if (connectionStatus === 'connected') {
-            const newSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-            setSessionId(newSessionId);
-            
-            const welcomeMessage = {
-                type: 'bot',
-                content: `Xin chào! Tôi là trợ lý AI của Đại học Bình Dương. Tôi có thể giúp bạn:
-
-• 📚 Thông tin tuyển sinh và ngành học
-• 💰 Học phí và chính sách hỗ trợ  
-• 🎓 Đời sống sinh viên
-• 🏢 Cơ sở vật chất và tiện ích
-• 📞 Thông tin liên hệ
-
-${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏi!' : 'Hãy đặt câu hỏi để bắt đầu!'}`,
-                timestamp: new Date(),
-                confidence: 1.0
-            };
-            
-            setMessages([welcomeMessage]);
-        }
-    }, [connectionStatus, speechSupported]);
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
+
+    // ✅ 13. CHAT FUNCTIONS
 
     const sendMessage = async () => {
         if (!inputMessage.trim() || isLoading || connectionStatus !== 'connected') return;
@@ -488,54 +879,13 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         return '#F44336';
     };
 
-    const clearChat = () => {
-        const newSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-        setSessionId(newSessionId);
-        
-        const welcomeMessage = {
-            type: 'bot',
-            content: `Cuộc trò chuyện mới đã bắt đầu! 🎉
-
-Tôi sẵn sàng hỗ trợ bạn với:
-• 📚 Thông tin tuyển sinh 
-• 🎓 Các ngành đào tạo
-• 💰 Học phí và hỗ trợ
-• 🏢 Cơ sở vật chất
-
-Hãy đặt câu hỏi để bắt đầu!`,
-            timestamp: new Date(),
-            confidence: 1.0
-        };
-        
-        setMessages([welcomeMessage]);
-        setExpandedSources(new Set());
-    };
-
     const retryConnection = () => {
         setConnectionStatus('checking');
         setMessages([]);
         testConnection();
     };
 
-    const createNewChat = () => {
-        const newId = Math.max(...chatSessions.map(s => s.id)) + 1;
-        const newSession = {
-            id: newId,
-            title: `Đoạn chat ${newId}`,
-            active: false
-        };
-        setChatSessions(prev => [...prev, newSession]);
-    };
-
-    const switchChatSession = (id) => {
-        setChatSessions(prev => 
-            prev.map(session => ({
-                ...session,
-                active: session.id === id
-            }))
-        );
-        clearChat();
-    };
+    // ✅ 14. RENDER JSX
 
     return (
         <div className="modern-chatbot-container">
@@ -586,21 +936,14 @@ Hãy đặt câu hỏi để bắt đầu!`,
 
                 <div className="sidebar-content">
                     <div className="chat-list-header">
-                        <h4>Đoạn chat</h4>
+                        <h4>Đoạn chat ({chatSessions.length})</h4>
+                        {loadingMessages && (
+                            <span className="loading-indicator">⏳</span>
+                        )}
                     </div>
                     
                     <div className="chat-list">
-                        {chatSessions.map(session => (
-                            <div 
-                                key={session.id}
-                                className={`chat-item ${session.active ? 'active' : ''}`}
-                                onClick={() => switchChatSession(session.id)}
-                            >
-                                <span className="chat-icon">💬</span>
-                                <span className="chat-title">{session.title}</span>
-                                <button className="chat-menu-btn">⋯</button>
-                            </div>
-                        ))}
+                        {renderChatSessions()}
                     </div>
                 </div>
 
@@ -659,7 +1002,7 @@ Hãy đặt câu hỏi để bắt đầu!`,
                 </div>
 
                 {/* Messages Area */}
-                <div className="modern-messages-area">
+                <div className={`modern-messages-area ${loadingMessages ? 'loading' : ''}`}>
                     {messages.length === 0 || (messages.length === 1 && messages[0].type === 'bot') ? (
                         <div className="welcome-section">
                             <div className="welcome-animation">
@@ -919,6 +1262,60 @@ Hãy đặt câu hỏi để bắt đầu!`,
                         console.log('Personalization updated:', newData);
                     }}
                 />
+            )}
+
+            {/* ✅ SIMPLIFIED Rename Modal */}
+            {showRenameModal && (
+                <div className="modal-overlay" onClick={() => setShowRenameModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>✏️ Đổi tên đoạn chat</h3>
+                            <button 
+                                className="modal-close"
+                                onClick={() => setShowRenameModal(false)}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <input
+                                type="text"
+                                value={newSessionTitle}
+                                onChange={(e) => setNewSessionTitle(e.target.value)}
+                                placeholder="Nhập tên mới cho đoạn chat..."
+                                className="rename-input"
+                                maxLength={100}
+                                autoFocus
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                        confirmRenameSession();
+                                    }
+                                    if (e.key === 'Escape') {
+                                        setShowRenameModal(false);
+                                    }
+                                }}
+                            />
+                            <div className="input-hint">
+                                💡 Tên mới sẽ giúp bạn dễ dàng tìm lại đoạn chat này
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button 
+                                className="btn-cancel"
+                                onClick={() => setShowRenameModal(false)}
+                            >
+                                Hủy
+                            </button>
+                            <button 
+                                className="btn-confirm"
+                                onClick={confirmRenameSession}
+                                disabled={!newSessionTitle.trim()}
+                            >
+                                💾 Lưu
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

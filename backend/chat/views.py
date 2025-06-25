@@ -46,23 +46,32 @@ class APIRootView(APIView):
                 })
         
         system_status = chatbot_ai.get_system_status()
-        
-        # ✅ THÊM: Speech service status
         speech_status = speech_service.get_system_status()
         
+        # ✅ NEW: Add personalization status
+        personalization_status = {
+            'enabled': True,
+            'active_personalized_sessions': len(chatbot_ai.response_generator._user_context_cache),
+            'supported_response_styles': list(chatbot_ai.response_generator.style_generation_configs.keys()),
+            'style_aware_generation': True
+        }
+        
         return Response({
-            'message': 'Chatbot API - Đại học Bình Dương',
-            'version': '3.1.0',  # ← Tăng version
+            'message': 'Enhanced Chatbot API - Đại học Bình Dương với Personalization',
+            'version': '4.0.0',  # ✅ Version bump for personalization
             'status': 'active',
             'system_status': system_status,
-            'speech_status': speech_status,  # ← THÊM
+            'speech_status': speech_status,
+            'personalization_status': personalization_status,  # ✅ NEW
             'endpoints': {
                 'chat': '/api/chat/',
                 'health': '/api/health/',
                 'history': '/api/history/',
                 'feedback': '/api/feedback/',
-                'speech_to_text': '/api/speech-to-text/',  # ← THÊM
-                'speech_status': '/api/speech-status/',    # ← THÊM
+                'speech_to_text': '/api/speech-to-text/',
+                'speech_status': '/api/speech-status/',
+                'personalized_context': '/api/personalized-context/',  # ✅ NEW
+                'personalized_status': '/api/personalized-status/',  # ✅ NEW
             },
             'features': [
                 'Natural Language Generation',
@@ -70,7 +79,11 @@ class APIRootView(APIView):
                 'Conversation Memory',
                 'Emotional Context',
                 'UTF-8 Safe Encoding',
-                'Speech-to-Text (Whisper)',  # ← THÊM
+                'Speech-to-Text (Whisper)',
+                'Enhanced Personalization',  # ✅ NEW
+                'Response Style Adaptation',  # ✅ NEW
+                'User Memory Integration',  # ✅ NEW
+                'Department-Specific Responses',  # ✅ NEW
             ]
         })
 
@@ -78,26 +91,44 @@ class ChatView(APIView):
     """Enhanced Chat API with Natural Responses"""
     
     def get(self, request):
-        """GET method - API information"""
+        """GET method - API information with personalization"""
         system_status = chatbot_ai.get_system_status()
-        speech_status = speech_service.get_system_status()  # ← THÊM
+        speech_status = speech_service.get_system_status()
+        
+        # ✅ NEW: Include personalization info
+        user_personalization = None
+        if request.user.is_authenticated:
+            user_personalization = {
+                'faculty_code': request.user.faculty_code,
+                'full_name': request.user.full_name,
+                'department': request.user.get_department_display(),
+                'position': request.user.get_position_display(),
+                'current_style': request.user.chatbot_preferences.get('response_style', 'professional'),
+                'department_priority': request.user.chatbot_preferences.get('department_priority', True),
+                'has_custom_memory': bool(request.user.chatbot_preferences.get('user_memory_prompt', '').strip())
+            }
         
         return Response({
-            'message': 'Natural Language Chat API',
+            'message': 'Enhanced Personalized Chat API',
             'system_status': system_status,
-            'speech_status': speech_status,  # ← THÊM
-            'method': 'POST để gửi tin nhắn',
+            'speech_status': speech_status,
+            'user_personalization': user_personalization,  # ✅ NEW
+            'method': 'POST để gửi tin nhắn với personalization',
             'features': [
                 'PhoBERT Intent Classification',
                 'SBERT + FAISS Retrieval',
                 'Conversation Memory',
                 'UTF-8 Safe Processing',
-                'Speech-to-Text Integration'  # ← THÊM
+                'Speech-to-Text Integration',
+                'Response Style Adaptation',  # ✅ NEW
+                'Personalized System Prompts',  # ✅ NEW
+                'User Memory Integration',  # ✅ NEW
+                'Department-Specific Responses'  # ✅ NEW
             ]
         })
     
     def post(self, request):
-        """POST method - Process chat with personalization support"""
+        """POST method - Process chat with enhanced personalization support"""
         start_time = time.time()
         
         try:
@@ -105,11 +136,11 @@ class ChatView(APIView):
             user_message = request.data.get('message', '').strip()
             session_id = request.data.get('session_id', str(uuid.uuid4()))
             
-            # ✅ THÊM: Lấy user_id để personalization
+            # ✅ ENHANCED: Get user_id and personalization info
             user_id = request.user.id if request.user.is_authenticated else None
             
-            print(f"🔍 CHAT DEBUG: user_id = {user_id}, session_id = {session_id}")
-            print(f"🔍 CHAT DEBUG: User message = {user_message}")
+            print(f"🔍 ENHANCED CHAT DEBUG: user_id = {user_id}, session_id = {session_id}")
+            print(f"🔍 ENHANCED CHAT DEBUG: User message = {user_message}")
             
             if not user_message:
                 return Response(
@@ -129,37 +160,61 @@ class ChatView(APIView):
             except UnicodeError:
                 user_message = user_message.encode('utf-8', errors='ignore').decode('utf-8')
             
-            # ✅ THÊM: Lấy user context nếu có
+            # ✅ ENHANCED: Get comprehensive user context với detailed preferences
             user_context = None
+            personalization_info = {}
+            
             if user_id and request.user.is_authenticated:
                 try:
                     user_context = request.user.get_chatbot_context()
-                    print(f"👤 USER CONTEXT: {user_context.get('role_description', 'Unknown')}")
+                    
+                    # ✅ NEW: Extract detailed personalization info
+                    personalization_info = {
+                        'response_style': user_context.get('current_response_style', 'professional'),
+                        'department_priority': user_context.get('department_priority_enabled', True),
+                        'department': user_context.get('department_name', 'Unknown'),
+                        'position': user_context.get('position_name', 'Unknown'),
+                        'has_custom_memory': bool(request.user.chatbot_preferences.get('user_memory_prompt', '').strip()),
+                        'memory_length': len(request.user.chatbot_preferences.get('user_memory_prompt', '')),
+                        'personalized_prompt_available': True
+                    }
+                    
+                    print(f"👤 ENHANCED USER CONTEXT: {user_context.get('role_description', 'Unknown')}")
+                    print(f"🎨 PERSONALIZATION INFO: Style={personalization_info['response_style']}, Dept_Priority={personalization_info['department_priority']}")
+                    
                 except Exception as e:
-                    logger.warning(f"Could not get user context: {e}")
+                    logger.warning(f"Could not get enhanced user context: {e}")
+                    personalization_info['error'] = str(e)
             
-            logger.info(f"💬 Processing: {user_message[:50]}... (User: {user_context.get('faculty_code') if user_context else 'Anonymous'})")
+            logger.info(f"💬 Processing with enhanced personalization: {user_message[:50]}... (User: {user_context.get('faculty_code') if user_context else 'Anonymous'})")
             
-            # ✅ THÊM: Process với user context
+            # ✅ ENHANCED: Process với comprehensive user context
             if user_context:
-                # Set user context vào gemini service cho personalization
-                chatbot_ai.response_generator.set_user_context(session_id, {
+                # Set enhanced user context vào gemini service
+                enhanced_context = {
                     'personalized_prompt': request.user.get_personalized_system_prompt(),
                     'faculty_code': user_context.get('faculty_code'),
                     'full_name': user_context.get('full_name'),
                     'department': user_context.get('department'),
                     'department_name': user_context.get('department_name'),
                     'position_name': user_context.get('position_name'),
-                    'preferences': user_context.get('preferences')
-                })
+                    'preferences': user_context.get('preferences'),
+                    # ✅ NEW: Style and memory specific context
+                    'response_style': personalization_info.get('response_style', 'professional'),
+                    'user_memory_prompt': request.user.chatbot_preferences.get('user_memory_prompt', ''),
+                    'department_priority_enabled': personalization_info.get('department_priority', True)
+                }
                 
-                # Sử dụng personalized processing
+                chatbot_ai.response_generator.set_user_context(session_id, enhanced_context)
+                
+                # Process with personalization
                 ai_response = chatbot_ai.process_query(user_message, session_id)
             else:
-                # Sử dụng processing thông thường
+                # Process without personalization
                 ai_response = chatbot_ai.process_query(user_message, session_id)
             
-            print(f"🔍 CHAT DEBUG: AI response method = {ai_response.get('method', 'unknown')}")
+            print(f"🔍 ENHANCED CHAT DEBUG: AI response method = {ai_response.get('method', 'unknown')}")
+            print(f"🎨 ENHANCED CHAT DEBUG: Applied style = {ai_response.get('response_style', 'none')}")
             
             # ENSURE UTF-8 safe response
             response_text = ai_response['response']
@@ -173,8 +228,18 @@ class ChatView(APIView):
             
             processing_time = time.time() - start_time
             
-            # Save chat history với user context
+            # ✅ ENHANCED: Save chat history với comprehensive personalization data
             try:
+                # Enhanced entities with personalization info
+                enhanced_entities = {
+                    'user_context': user_context,
+                    'personalization_info': personalization_info,
+                    'personalized': bool(user_context),
+                    'response_style_applied': ai_response.get('response_style', 'none'),
+                    'style_applied': ai_response.get('style_applied', 'none'),
+                    'department_priority_used': user_context.get('department_priority_enabled') if user_context else False
+                }
+                
                 chat_record = ChatHistory.objects.create(
                     session_id=session_id,
                     user_message=user_message,
@@ -182,17 +247,14 @@ class ChatView(APIView):
                     confidence_score=ai_response.get('confidence', 0.7),
                     response_time=processing_time,
                     user_ip=get_client_ip(request),
-                    # ✅ THÊM: Lưu user context vào entities
-                    entities=json.dumps({
-                        'user_context': user_context,
-                        'personalized': bool(user_context)
-                    }) if user_context else None
+                    user=request.user if request.user.is_authenticated else None,
+                    entities=json.dumps(enhanced_entities) if enhanced_entities else None  # ✅ Enhanced entities
                 )
-                logger.info(f"✅ Chat saved: {chat_record.id}")
+                logger.info(f"✅ Enhanced chat saved: {chat_record.id}")
             except Exception as e:
-                logger.error(f"Error saving chat: {str(e)}")
+                logger.error(f"Error saving enhanced chat: {str(e)}")
             
-            # Return enhanced response
+            # ✅ ENHANCED: Return comprehensive response with personalization details
             return Response({
                 'session_id': session_id,
                 'response': response_text,
@@ -204,36 +266,55 @@ class ChatView(APIView):
                 'status': 'success',
                 'encoding': 'utf-8',
                 'reference_links': ai_response.get('reference_links', []),
-                # ✅ THÊM: Personalization info
-                'personalized': bool(user_context),
-                'user_context': {
-                    'department': user_context.get('department_name') if user_context else None,
-                    'position': user_context.get('position_name') if user_context else None,
-                    'faculty_code': user_context.get('faculty_code') if user_context else None
-                } if user_context else None
+                
+                # ✅ ENHANCED: Detailed personalization response
+                'personalization': {
+                    'enabled': bool(user_context),
+                    'user_info': {
+                        'department': personalization_info.get('department'),
+                        'position': personalization_info.get('position'),
+                        'faculty_code': user_context.get('faculty_code') if user_context else None
+                    } if user_context else None,
+                    'style_info': {
+                        'requested_style': personalization_info.get('response_style', 'professional'),
+                        'applied_style': ai_response.get('response_style', 'none'),
+                        'style_applied_successfully': ai_response.get('response_style') == personalization_info.get('response_style')
+                    } if user_context else None,
+                    'memory_info': {
+                        'has_custom_memory': personalization_info.get('has_custom_memory', False),
+                        'memory_length': personalization_info.get('memory_length', 0)
+                    } if user_context else None,
+                    'department_priority_used': personalization_info.get('department_priority', False)
+                }
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
-            logger.error(f"❌ Chat error: {str(e)}")
+            logger.error(f"❌ Enhanced chat error: {str(e)}")
             
-            # Safe fallback response với personalization
-            fallback_response = self._get_safe_fallback_response_personalized(
+            # Enhanced fallback response với personalization
+            fallback_response = self._get_enhanced_fallback_response_personalized(
                 locals().get('user_message', ''),
-                locals().get('user_context')
+                locals().get('user_context'),
+                locals().get('personalization_info', {})
             )
             
             return Response({
                 'session_id': locals().get('session_id', str(uuid.uuid4())),
                 'response': fallback_response,
                 'confidence': 0.3,
-                'method': 'safe_fallback',
+                'method': 'enhanced_fallback',
                 'response_time': time.time() - start_time,
                 'status': 'fallback',
-                'personalized': bool(locals().get('user_context'))
+                'personalization': {
+                    'enabled': bool(locals().get('user_context')),
+                    'fallback_used': True,
+                    'error': str(e)
+                }
             })
     
-    def _get_safe_fallback_response_personalized(self, user_message='', user_context=None):
-        """Safe fallback response với personalization"""
+    
+    def _get_enhanced_fallback_response_personalized(self, user_message='', user_context=None, personalization_info={}):
+        """Enhanced fallback response với comprehensive personalization"""
         if user_context:
             full_name = user_context.get('full_name', '')
             faculty_code = user_context.get('faculty_code', '')
@@ -241,7 +322,52 @@ class ChatView(APIView):
             personal_address = f"thầy/cô {name_suffix}"
             department_name = user_context.get('department_name', 'BDU')
             
-            return f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn.
+            # ✅ NEW: Style-aware fallback responses
+            response_style = personalization_info.get('response_style', 'professional')
+            
+            if response_style == 'friendly':
+                return f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn nhé! 😊
+
+Trong thời gian này, {personal_address} có thể:
+• Liên hệ trực tiếp khoa {department_name} 📞
+• Gọi tổng đài: 0274.xxx.xxxx  
+• Email: info@bdu.edu.vn 📧
+• Website: www.bdu.edu.vn 🌐
+
+Em sẽ cố gắng hỗ trợ {personal_address} tốt hơn! 🎓✨"""
+
+            elif response_style == 'brief':
+                return f"""Dạ {personal_address}, hệ thống đang cải thiện. 
+
+Liên hệ: khoa {department_name} hoặc 0274.xxx.xxxx
+
+Cảm ơn {personal_address}! 🎓"""
+
+            elif response_style == 'detailed':
+                return f"""Dạ xin lỗi {personal_address}, hệ thống chatbot đang trong quá trình nâng cấp và tối ưu hóa để có thể phục vụ {personal_address} một cách tốt nhất.
+
+Trong thời gian chờ đợi này, {personal_address} có thể sử dụng các kênh hỗ trợ sau:
+• Liên hệ trực tiếp với khoa {department_name} để được tư vấn chuyên môn
+• Gọi tổng đài hỗ trợ: 0274.xxx.xxxx (giờ hành chính)
+• Gửi email: info@bdu.edu.vn với tiêu đề rõ ràng
+• Truy cập website chính thức: www.bdu.edu.vn để cập nhật thông tin mới nhất
+• Liên hệ trực tiếp phòng ban liên quan nếu có vấn đề cụ thể
+
+Em xin lỗi vì sự bất tiện này và cam kết sẽ phục vụ {personal_address} tốt hơn trong thời gian sớm nhất! 🎓"""
+
+            elif response_style == 'technical':
+                return f"""Dạ {personal_address}, hệ thống AI đang thực hiện maintenance và optimization procedures.
+
+Technical Support Channels:
+• Department {department_name}: Direct consultation
+• Hotline: 0274.xxx.xxxx
+• Email: info@bdu.edu.vn
+• Portal: www.bdu.edu.vn
+
+System recovery in progress. Appreciate your patience! 🎓"""
+
+            else:  # professional (default)
+                return f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn.
 
 Trong thời gian này, {personal_address} có thể:
 • Liên hệ trực tiếp khoa {department_name}
@@ -249,55 +375,18 @@ Trong thời gian này, {personal_address} có thể:
 • Email: info@bdu.edu.vn
 • Website: www.bdu.edu.vn
 
-Cảm ơn {personal_address} đã kiên nhẫn! 😊"""
+Cảm ơn {personal_address} đã kiên nhẫn! 🎓"""
         
         return self._get_safe_fallback_response(user_message)
     
-    # ✅ THÊM: Method mới để xử lý personalization
-    # def _process_with_personalization(self, message, session_id, user_context):
-    #     """Process message với personalization"""
-    #     try:
-    #         # Sử dụng gemini service với personalization
-    #         from ai_models.gemini_service import GeminiResponseGenerator
-            
-    #         # Tạo enhanced context
-    #         enhanced_context = {
-    #             'user_context': user_context,
-    #             'force_education_response': True,
-    #             'personalized': True
-    #         }
-            
-    #         # Gọi generate_response_personalized nếu có
-    #         gemini_generator = GeminiResponseGenerator()
-    #         base_response = chatbot_ai.process_query(message, session_id)
-
-    #         # Sau đó enhance với personalization
-    #         if hasattr(gemini_generator, 'enhance_with_personalization'):
-    #             return gemini_generator.enhance_with_personalization(base_response, user_context)
-    #         else:
-    #             return base_response
-                
-    #     except Exception as e:
-    #         logger.error(f"Personalized processing error: {e}")
-    #         # Fallback to regular processing
-    #         return chatbot_ai.process_query(message, session_id)
-    
     def _clean_response_text(self, text):
-        """Clean and ensure safe UTF-8 text"""
+        """Clean and ensure safe UTF-8 text (unchanged from original)"""
         import re
         
         # Remove control characters and invalid UTF-8
         text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x84\x86-\x9f]', '', text)
         
         # Fix common encoding issues
-        text = text.replace('â€™', "'")
-        text = text.replace('â€œ', '"')
-        text = text.replace('â€', '"')
-        text = text.replace('â€"', '-')
-        
-        # # Remove any garbled Vietnamese characters patterns
-        # text = re.sub(r'[ẤẬẦẨẪĂẮẶẰẲẴÂẤẬẦẨẪÉẾỆỀỂỄÊẾỆỀỂỄÍỊÌỈĨÓỘÒỎÕÔỐỘỒỔỖƠỚỢỜỞỠÚỤÙỦŨƯỨỰỪỬỮÝỴỲỶỸĐ]+(?=[^aăâeêiouôơưy\s])', '', text)
-        
         encoding_fixes = {
             'â€™': "'",
             'â€œ': '"', 
@@ -333,7 +422,7 @@ Cảm ơn {personal_address} đã kiên nhẫn! 😊"""
         return text.strip()
     
     def _get_safe_fallback_response(self, user_message=''):
-        """Safe fallback response with proper UTF-8"""
+        """Safe fallback response with proper UTF-8 (unchanged from original)"""
         return f"""Xin chào! Tôi đã nhận được câu hỏi của bạn. 
 
 Hiện tại hệ thống đang được cải thiện để phục vụ bạn tốt hơn. Trong thời gian này, bạn có thể:
@@ -348,7 +437,7 @@ class PersonalizedChatContextView(APIView):
     """Lấy context cá nhân hóa cho chat"""
     
     def get(self, request):
-        """GET method - Lấy personalized context"""
+        """GET method - Enhanced personalized context"""
         try:
             if not request.user.is_authenticated:
                 return Response({
@@ -359,74 +448,131 @@ class PersonalizedChatContextView(APIView):
             user = request.user
             user_context = user.get_chatbot_context()
             
-            # Thêm thông tin hữu ích cho frontend
+            # ✅ ENHANCED: More comprehensive context info
+            current_style = user.chatbot_preferences.get('response_style', 'professional')
+            user_memory = user.chatbot_preferences.get('user_memory_prompt', '').strip()
+            
             context_info = {
                 'personalization_enabled': True,
                 'user_context': user_context,
                 'personalized_greeting': f"Chào {user_context.get('position_name', 'giảng viên')} {user.full_name}!",
                 'department_focus': user_context.get('department_name', 'BDU'),
-                'suggested_topics': _get_suggested_topics_for_department(user.department),
-                'quick_actions': _get_quick_actions_for_position(user.position),
-                'chatbot_tips': [
+                
+                # ✅ NEW: Enhanced style information
+                'style_info': {
+                    'current_style': current_style,
+                    'style_name': dict(user.RESPONSE_STYLE_CHOICES).get(current_style),
+                    'style_description': _get_style_description_for_context(current_style),
+                    'available_styles': [
+                        {
+                            'code': choice[0],
+                            'name': choice[1],
+                            'description': _get_style_description_for_context(choice[0])
+                        }
+                        for choice in user.RESPONSE_STYLE_CHOICES
+                    ]
+                },
+                
+                # ✅ NEW: Memory information
+                'memory_info': {
+                    'has_custom_memory': bool(user_memory),
+                    'memory_length': len(user_memory),
+                    'memory_preview': user_memory[:100] + '...' if len(user_memory) > 100 else user_memory,
+                    'using_default_memory': not bool(user_memory)
+                },
+                
+                # ✅ ENHANCED: Better suggested topics
+                'suggested_topics': _get_enhanced_suggested_topics_for_department(user.department, current_style),
+                'quick_actions': _get_style_aware_quick_actions_for_position(user.position, current_style),
+                
+                # ✅ NEW: Personalization tips
+                'personalization_tips': [
+                    f"Sử dụng phong cách '{dict(user.RESPONSE_STYLE_CHOICES).get(current_style)}' cho câu trả lời phù hợp",
                     f"Hỏi về thông tin chuyên ngành {user_context.get('department_name')}",
-                    f"Tìm hiểu quy định dành cho {user_context.get('position_name')}",
-                    "Hỏi về cơ sở vật chất và thiết bị",
-                    "Tư vấn về nghiên cứu và hợp tác"
-                ]
+                    f"Tùy chỉnh memory prompt để ChatBDU hiểu bạn hơn",
+                    "Bật/tắt ưu tiên chuyên ngành theo nhu cầu"
+                ],
+                
+                # ✅ NEW: Settings summary
+                'current_settings': {
+                    'response_style': current_style,
+                    'department_priority': user.chatbot_preferences.get('department_priority', True),
+                    'has_custom_memory': bool(user_memory),
+                    'total_preferences': len(user.chatbot_preferences)
+                }
             }
             
             return Response(context_info, status=status.HTTP_200_OK)
             
         except Exception as e:
-            logger.error(f"Personalized context error: {str(e)}")
+            logger.error(f"Enhanced personalized context error: {str(e)}")
             return Response({
                 'personalization_enabled': False,
-                'error': 'Could not load personalized context',
+                'error': 'Could not load enhanced personalized context',
                 'message': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class PersonalizedSystemStatusView(APIView):
     """System status với thông tin personalization"""
     
     def get(self, request):
-        """GET method - System status với personalization"""
+        """GET method - Enhanced system status với personalization"""
         try:
-            # Lấy system status cơ bản
+            # Base system status
             status_data = chatbot_ai.get_system_status()
             speech_status = speech_service.get_system_status()
             
-            # Thêm thông tin personalization
+            # ✅ ENHANCED: Comprehensive personalization status
             personalization_status = {
                 'personalization_enabled': True,
-                'total_faculty': 0,
-                'departments_available': [],
-                'positions_available': []
+                'version': '4.0.0',
+                'features': {
+                    'response_style_support': True,
+                    'user_memory_prompts': True,
+                    'department_priority': True,
+                    'style_aware_generation': True,
+                    'personalized_addressing': True,
+                    'dynamic_style_configs': True
+                },
+                'statistics': {
+                    'total_faculty': 0,
+                    'active_personalized_sessions': len(chatbot_ai.response_generator._user_context_cache),
+                    'supported_styles': len(chatbot_ai.response_generator.style_generation_configs),
+                    'departments_available': len(Faculty.DEPARTMENT_CHOICES) if 'Faculty' in globals() else 0,
+                    'positions_available': len(Faculty.POSITION_CHOICES) if 'Faculty' in globals() else 0
+                }
             }
             
+            # Add current user info if authenticated
             if request.user.is_authenticated:
-                user_context = request.user.get_chatbot_context()
-                personalization_status.update({
-                    'user_department': user_context.get('department_name', 'Unknown'),
-                    'user_position': user_context.get('position_name', 'Unknown'),
-                    'has_preferences': bool(request.user.chatbot_preferences),
-                    'personalized_prompts_available': True
-                })
+                personalization_status['current_user'] = {
+                    'faculty_code': request.user.faculty_code,
+                    'department': request.user.get_department_display(),
+                    'position': request.user.get_position_display(),
+                    'current_style': request.user.chatbot_preferences.get('response_style', 'professional'),
+                    'has_custom_memory': bool(request.user.chatbot_preferences.get('user_memory_prompt', '').strip()),
+                    'department_priority': request.user.chatbot_preferences.get('department_priority', True),
+                    'preferences_configured': bool(request.user.chatbot_preferences)
+                }
             
-            # Lấy thống kê từ database
+            # Get statistics from database
             try:
                 from authentication.models import Faculty
-                personalization_status['total_faculty'] = Faculty.objects.count()
-                personalization_status['departments_available'] = [
-                    choice[1] for choice in Faculty.DEPARTMENT_CHOICES
-                ]
-                personalization_status['positions_available'] = [
-                    choice[1] for choice in Faculty.POSITION_CHOICES
-                ]
-            except:
-                pass
+                personalization_status['statistics']['total_faculty'] = Faculty.objects.count()
+                personalization_status['statistics']['active_faculty'] = Faculty.objects.filter(is_active_faculty=True).count()
+                personalization_status['statistics']['with_personalization'] = Faculty.objects.exclude(chatbot_preferences={}).count()
+                
+                # Style distribution
+                style_distribution = {}
+                for faculty in Faculty.objects.exclude(chatbot_preferences={}):
+                    style = faculty.chatbot_preferences.get('response_style', 'professional')
+                    style_distribution[style] = style_distribution.get(style, 0) + 1
+                personalization_status['statistics']['style_distribution'] = style_distribution
+                
+            except Exception as e:
+                personalization_status['statistics']['database_error'] = str(e)
             
-            # Merge với system status
+            # Merge with system status
             status_data.update({
                 'personalization': personalization_status,
                 'speech_status': speech_status
@@ -435,9 +581,9 @@ class PersonalizedSystemStatusView(APIView):
             return Response(status_data, status=status.HTTP_200_OK)
             
         except Exception as e:
-            logger.error(f"System status error: {str(e)}")
+            logger.error(f"Enhanced system status error: {str(e)}")
             return Response({
-                'error': 'Could not retrieve system status',
+                'error': 'Could not retrieve enhanced system status',
                 'message': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -465,6 +611,60 @@ def _get_quick_actions_for_position(position):
         'tro_giang': ['Hỗ trợ giảng dạy', 'Chuẩn bị bài giảng', 'Chấm bài tập', 'Tương tác sinh viên']
     }
     return actions_map.get(position, ['Thông tin chung', 'Hỗ trợ kỹ thuật', 'Liên hệ phòng ban'])
+
+# ✅ HELPER FUNCTIONS
+
+def _get_style_description_for_context(style_code):
+    """Get style description for context API"""
+    descriptions = {
+        'professional': 'Trang trọng, lịch sự, chuẩn mực - phù hợp cho công việc chính thức',
+        'friendly': 'Gần gũi, ấm áp, vui vẻ - tạo không khí thoải mái',
+        'technical': 'Chi tiết, chuyên môn, kỹ thuật - phù hợp cho giải thích phức tạp',
+        'brief': 'Ngắn gọn, súc tích, đi thẳng vào vấn đề - tiết kiệm thời gian',
+        'detailed': 'Đầy đủ, toàn diện, nhiều ví dụ - hiểu sâu vấn đề'
+    }
+    return descriptions.get(style_code, 'Mô tả không có sẵn')
+
+def _get_enhanced_suggested_topics_for_department(department, response_style):
+    """Enhanced suggested topics based on department and style"""
+    base_topics = {
+        'cntt': ['Chương trình đào tạo CNTT', 'Phòng lab tin học', 'Thiết bị máy tính', 'Hợp tác doanh nghiệp IT'],
+        'duoc': ['Chương trình đào tạo Dược', 'Phòng thí nghiệm Dược', 'Thiết bị phân tích', 'Thực tập bệnh viện'],
+        'dien_tu': ['Chương trình Điện tử', 'Lab vi xử lý', 'Thiết bị đo lường', 'Dự án IoT'],
+        'co_khi': ['Chương trình Cơ khí', 'Phòng CAD/CAM', 'Máy gia công CNC', 'Thực tập nhà máy'],
+        'y_khoa': ['Chương trình Y khoa', 'Phòng giải phẫu', 'Thực hành lâm sàng', 'Bệnh viện liên kết'],
+        'kinh_te': ['Chương trình Kinh tế', 'Phần mềm phân tích', 'Thực tập ngân hàng', 'Nghiên cứu thị trường'],
+        'luat': ['Chương trình Luật', 'Phiên tòa giả định', 'Thực tập tòa án', 'Văn phòng luật sư']
+    }
+    
+    topics = base_topics.get(department, ['Thông tin chung về trường', 'Quy định đào tạo', 'Cơ sở vật chất'])
+    
+    # Add style-specific suffix
+    if response_style == 'technical':
+        topics = [f"{topic} (chi tiết kỹ thuật)" for topic in topics]
+    elif response_style == 'brief':
+        topics = [f"{topic} (tóm tắt)" for topic in topics]
+    
+    return topics
+
+def _get_style_aware_quick_actions_for_position(position, response_style):
+    """Style-aware quick actions based on position"""
+    base_actions = {
+        'giang_vien': ['Xem lịch giảng dạy', 'Quản lý điểm sinh viên', 'Tài liệu giảng dạy', 'Nghiên cứu khoa học'],
+        'truong_khoa': ['Quản lý khoa', 'Kế hoạch đào tạo', 'Báo cáo hoạt động', 'Nhân sự khoa'],
+        'truong_bo_mon': ['Quản lý bộ môn', 'Phân công giảng dạy', 'Tài liệu chuyên ngành', 'Hoạt động chuyên môn'],
+        'tro_giang': ['Hỗ trợ giảng dạy', 'Chuẩn bị bài giảng', 'Chấm bài tập', 'Tương tác sinh viên']
+    }
+    
+    actions = base_actions.get(position, ['Thông tin chung', 'Hỗ trợ kỹ thuật', 'Liên hệ phòng ban'])
+    
+    # Add style context
+    if response_style == 'detailed':
+        actions.append('Hướng dẫn chi tiết các quy trình')
+    elif response_style == 'friendly':
+        actions.append('Chat thân thiện về công việc')
+    
+    return actions
 
 
 # ✅ Speech-to-Text Views
@@ -704,6 +904,215 @@ class ChatHistoryView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+# 1. THÊM VÀO chat/views.py - 2 views mới
+
+import time
+import uuid
+from django.utils import timezone
+from django.db import models
+import json
+
+class ChatSessionsView(APIView):
+    """Quản lý chat sessions của user"""
+    
+    def get(self, request):
+        """Lấy danh sách sessions của user"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, 
+                          status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            # Lấy các sessions duy nhất của user
+            sessions = ChatHistory.objects.filter(user=request.user) \
+                .values('session_id', 'session_title') \
+                .annotate(
+                    last_message_time=models.Max('timestamp'),
+                    message_count=models.Count('id')
+                ) \
+                .order_by('-last_message_time')[:20]  # Giới hạn 20 sessions gần nhất
+            
+            sessions_list = []
+            for session in sessions:
+                # Lấy tin nhắn cuối cùng để làm preview
+                last_chat = ChatHistory.objects.filter(
+                    user=request.user,
+                    session_id=session['session_id']
+                ).order_by('-timestamp').first()
+                
+                sessions_list.append({
+                    'session_id': session['session_id'],
+                    'title': session['session_title'] or f"Chat {session['session_id'][-8:]}",
+                    'last_message_time': session['last_message_time'],
+                    'message_count': session['message_count'],
+                    'preview': last_chat.user_message[:50] + '...' if last_chat and len(last_chat.user_message) > 50 else last_chat.user_message if last_chat else '',
+                    'active': False  # Frontend sẽ set active
+                })
+            
+            return Response({
+                'success': True,
+                'sessions': sessions_list,
+                'total_sessions': len(sessions_list)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error loading chat sessions: {str(e)}")
+            return Response({
+                'success': False,
+                'error': 'Could not load chat sessions'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request):
+        """Tạo session mới"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, 
+                          status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            session_title = request.data.get('title', '')
+            new_session_id = f"session_{request.user.faculty_code}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+            
+            return Response({
+                'success': True,
+                'session_id': new_session_id,
+                'title': session_title or f"Chat mới - {timezone.now().strftime('%H:%M')}"
+            })
+            
+        except Exception as e:
+            logger.error(f"Error creating new session: {str(e)}")
+            return Response({
+                'success': False,
+                'error': 'Could not create new session'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ChatSessionDetailView(APIView):
+    """Chi tiết một chat session"""
+    
+    def get(self, request, session_id):
+        """Lấy toàn bộ chat history của session"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, 
+                          status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            chat_history = ChatHistory.objects.filter(
+                user=request.user,
+                session_id=session_id
+            ).order_by('timestamp')
+            
+            messages = []
+            for chat in chat_history:
+                # User message
+                messages.append({
+                    'type': 'user',
+                    'content': chat.user_message,
+                    'timestamp': chat.timestamp.isoformat()
+                })
+                # Bot message
+                messages.append({
+                    'type': 'bot',
+                    'content': chat.bot_response,
+                    'timestamp': chat.timestamp.isoformat(),
+                    'confidence': chat.confidence_score,
+                    'response_time': chat.response_time,
+                    'sources': [],
+                    'reference_links': [],
+                    'chat_id': chat.id
+                })
+            
+            return Response({
+                'success': True,
+                'session_id': session_id,
+                'messages': messages,
+                'total_messages': len(messages)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error loading session detail: {str(e)}")
+            return Response({
+                'success': False,
+                'error': 'Could not load session messages'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def patch(self, request, session_id):
+        """✅ THÊM METHOD MỚI: Cập nhật thông tin session (rename)"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, 
+                          status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            new_title = request.data.get('title', '').strip()
+            
+            if not new_title:
+                return Response({
+                    'success': False,
+                    'error': 'Title không được để trống'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if len(new_title) > 200:
+                return Response({
+                    'success': False,
+                    'error': 'Title quá dài (tối đa 200 ký tự)'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Tìm một chat record bất kỳ của session này để cập nhật session_title
+            chat_record = ChatHistory.objects.filter(
+                user=request.user,
+                session_id=session_id
+            ).first()
+            
+            if not chat_record:
+                return Response({
+                    'success': False,
+                    'error': 'Session không tồn tại hoặc không thuộc về bạn'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Cập nhật session_title cho tất cả chat records của session này
+            updated_count = ChatHistory.objects.filter(
+                user=request.user,
+                session_id=session_id
+            ).update(session_title=new_title)
+            
+            logger.info(f"Updated session title for {updated_count} records: {session_id} -> '{new_title}'")
+            
+            return Response({
+                'success': True,
+                'session_id': session_id,
+                'new_title': new_title,
+                'updated_records': updated_count,
+                'message': 'Đã đổi tên đoạn chat thành công'
+            })
+            
+        except Exception as e:
+            logger.error(f"Error updating session title: {str(e)}")
+            return Response({
+                'success': False,
+                'error': 'Không thể cập nhật tên session'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, session_id):
+        """Xóa session"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, 
+                          status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            deleted_count = ChatHistory.objects.filter(
+                user=request.user,
+                session_id=session_id
+            ).delete()[0]
+            
+            return Response({
+                'success': True,
+                'deleted_messages': deleted_count
+            })
+            
+        except Exception as e:
+            logger.error(f"Error deleting session: {str(e)}")
+            return Response({
+                'success': False,
+                'error': 'Could not delete session'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class FeedbackView(APIView):
     def post(self, request):
         try:
@@ -747,16 +1156,17 @@ class HealthCheckView(APIView):
     def get(self, request):
         try:
             system_status = chatbot_ai.get_system_status()
-            speech_status = speech_service.get_system_status()  # ← THÊM
+            speech_status = speech_service.get_system_status()
             
             return Response({
                 'status': 'healthy',
-                'message': 'Natural Language Chatbot with Speech-to-Text is running! 🚀',
+                'message': 'Enhanced Personalized Chatbot is running! 🚀',
                 'database': 'connected',
                 'encoding': 'utf-8',
                 'system_status': system_status,
-                'speech_status': speech_status,  # ← THÊM
-                'version': '3.1.0'  # ← Tăng version
+                'speech_status': speech_status,
+                'personalization': 'enabled',  # ✅ NEW
+                'version': '4.0.0'  # ✅ Updated version
             })
         except Exception as e:
             return Response({

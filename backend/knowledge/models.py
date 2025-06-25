@@ -32,17 +32,46 @@ class ChatHistory(models.Model):
     strategy = models.CharField(max_length=50, blank=True, null=True, help_text="Response strategy used")
     entities = models.JSONField(blank=True, null=True, help_text="Extracted entities")
     
+    user = models.ForeignKey(
+        'authentication.Faculty',  # Tham chiếu đến Faculty model
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='chat_history',
+        verbose_name="Người dùng"
+    )
+    session_title = models.CharField(
+        max_length=200, 
+        blank=True, 
+        null=True,
+        verbose_name="Tiêu đề phiên chat"
+    )
+    
     class Meta:
         db_table = 'chat_history'
         ordering = ['-timestamp']
         verbose_name = "Lịch sử chat"
         verbose_name_plural = "Lịch sử chat"
         ordering = ['-timestamp']
-        
+        indexes = [
+            models.Index(fields=['user', 'session_id'], name='idx_user_session'),
+            models.Index(fields=['user', '-timestamp'], name='idx_user_timestamp'),
+            models.Index(fields=['session_id', '-timestamp'], name='idx_session_timestamp'),
+        ]
     
     def __str__(self):
-        return f"Session {self.session_id} - {self.timestamp}"
+        user_info = f"{self.user.faculty_code} - " if self.user else "Anonymous - "
+        return f"{user_info}Session {self.session_id} - {self.timestamp}"
 
+    def get_session_summary(self):
+        """Lấy summary của session này"""
+        return {
+            'session_id': self.session_id,
+            'session_title': self.session_title,
+            'user_message_preview': self.user_message[:50] + '...' if len(self.user_message) > 50 else self.user_message,
+            'timestamp': self.timestamp,
+            'user': self.user.faculty_code if self.user else 'Anonymous'
+        }
 class UserFeedback(models.Model):
     FEEDBACK_CHOICES = [
         ('like', 'Thích'),
