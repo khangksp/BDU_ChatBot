@@ -72,6 +72,56 @@ class PhoBERTIntentClassifier:
                 'response_style': 'friendly'
             },
             
+            # ✅ NEW: Personal information and schedule intents
+            'personal_schedule': {
+                'keywords': [
+                    # Personal schedule keywords
+                    'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
+                    'lịch giảng của tôi', 'lich giang cua toi', 'lịch dạy của tôi', 'lich day cua toi',
+                    'tôi giảng', 'toi giang', 'tôi dạy', 'toi day', 'môn của tôi', 'mon cua toi',
+                    'lớp của tôi', 'lop cua toi', 'phòng của tôi', 'phong cua toi',
+                    'hôm nay tôi', 'hom nay toi', 'ngày mai tôi', 'ngay mai toi',
+                    'tuần này tôi', 'tuan nay toi', 'tuần tới tôi', 'tuan toi toi',
+                    'lịch tuần', 'lich tuan', 'lịch ngày', 'lich ngay',
+                    # Schedule-related with time context
+                    'lịch giảng dạy hôm nay', 'lich giang day hom nay',
+                    'thời khóa biểu ngày mai', 'thoi khoa bieu ngay mai',
+                    'lịch dạy tuần này', 'lich day tuan nay'
+                ],
+                'confidence_threshold': 0.3,  # Lower threshold for better detection
+                'description': 'Lịch giảng dạy cá nhân',
+                'response_style': 'detailed'
+            },
+            
+            'personal_info': {
+                'keywords': [
+                    # Identity questions
+                    'tôi là ai', 'toi la ai', 'thông tin của tôi', 'thong tin cua toi',
+                    'tôi làm gì', 'toi lam gi', 'công việc của tôi', 'cong viec cua toi',
+                    'chức danh của tôi', 'chuc danh cua toi', 'vị trí của tôi', 'vi tri cua toi',
+                    'email của tôi', 'gmail của tôi', 'số điện thoại của tôi',
+                    'mã giảng viên của tôi', 'ma giang vien cua toi',
+                    'thông tin cá nhân', 'thong tin ca nhan',
+                    'hồ sơ của tôi', 'ho so cua toi', 'profile của tôi'
+                ],
+                'confidence_threshold': 0.4,
+                'description': 'Thông tin cá nhân giảng viên',
+                'response_style': 'informative'
+            },
+            
+            'schedule_general': {
+                'keywords': [
+                    # General schedule queries (might need external API)
+                    'lịch giảng dạy', 'lich giang day', 'thời khóa biểu', 'thoi khoa bieu',
+                    'lịch học', 'lich hoc', 'lịch dạy', 'lich day', 'tkb', 'schedule',
+                    'lịch tuần', 'lich tuan', 'lịch ngày', 'lich ngay', 'lịch tháng', 'lich thang',
+                    'giờ dạy', 'gio day', 'giờ giảng', 'gio giang', 'ca dạy', 'ca day'
+                ],
+                'confidence_threshold': 0.4,
+                'description': 'Lịch giảng dạy chung',
+                'response_style': 'informative'
+            },
+            
             # ✅ LECTURER-SPECIFIC INTENTS based on QA.csv analysis
             'bank_exam_questions': {
                 'keywords': ['ngân hàng đề thi', 'ngan hang de thi', 'đề thi', 'de thi', 'báo cáo đề thi', 'bao cao de thi', 'kế hoạch đề thi', 'ke hoach de thi', 'file mềm', 'file mem'],
@@ -165,7 +215,7 @@ class PhoBERTIntentClassifier:
             
             'general': {
                 'keywords': ['thông tin', 'thong tin', 'hỗ trợ', 'ho tro', 'giúp', 'giup', 'hướng dẫn', 'huong dan', 'bdu', 'đại học bình dương', 'dai hoc binh duong'],
-                'confidence_threshold': 0.2,
+                'confidence_threshold': 0.15,
                 'description': 'Câu hỏi chung',
                 'response_style': 'neutral'
             }
@@ -191,9 +241,20 @@ class PhoBERTIntentClassifier:
                 'bao cao', 'ke hoach', 'thong bao', 'quyet dinh', 'file mem',
                 'văn bản', 'hồ sơ', 'tài liệu', 'van ban', 'ho so', 'tai lieu'
             ],
+            # ✅ NEW: Personal context entities
+            'personal_pronouns': [
+                'tôi', 'toi', 'của tôi', 'cua toi', 'cho tôi', 'cho toi',
+                'với tôi', 'voi toi', 'về tôi', 've toi', 'tôi có', 'toi co'
+            ],
+            # ✅ NEW:
+            'schedule_contexts': [
+                'hôm nay', 'hom nay', 'ngày mai', 'ngay mai', 'tuần này', 'tuan nay',
+                'tuần tới', 'tuan toi', 'tháng này', 'thang nay', 'tháng tới', 'thang toi',
+                'today', 'tomorrow', 'this week', 'next week', 'this month', 'next month'
+            ],
             'time_expressions': [
-                'năm học 2023-2024', 'học kỳ I', 'học kỳ II', 'kỳ hè',
-                'nam hoc 2023-2024', 'hoc ky I', 'hoc ky II', 'ky he',
+                'năm học 2023-2024', 'học kỳ I', 'học kỳ II', 'học kỳ III', 'kỳ hè',
+                'nam hoc 2023-2024', 'hoc ky I', 'hoc ky II', 'hoc ky II', 'ky he',
                 'trước ngày', 'hạn cuối', 'deadline', 'truoc ngay', 'han cuoi'
             ],
             'lecturer_activities': [
@@ -241,7 +302,7 @@ class PhoBERTIntentClassifier:
             self.fallback_mode = True  # Ensure fallback mode is set
     
     def classify_intent(self, query):
-        """Enhanced intent classification with normalization for lecturers"""
+        """Enhanced intent classification with personal context detection for lecturers"""
         if not query or not query.strip():
             return {
                 'intent': 'general',
@@ -250,7 +311,7 @@ class PhoBERTIntentClassifier:
                 'response_style': 'neutral'
             }
         
-        # ✅ CRITICAL: Check if normalizer exists
+        # Check if normalizer exists
         if not self.normalizer:
             print("❌ NORMALIZER ERROR: Normalizer not available")
             query_variants = [query, query.lower()]
@@ -276,8 +337,10 @@ class PhoBERTIntentClassifier:
                 
                 for keyword in config['keywords']:
                     if keyword in variant_lower:
-                        # ✅ ENHANCED: Boost score for lecturer-specific terms
-                        if intent.startswith(('bank_exam', 'annual_task', 'academic_journal', 'competition_awards')):
+                        # ✅ ENHANCED: Boost score for personal/schedule intents
+                        if intent in ['personal_schedule', 'personal_info', 'schedule_general']:
+                            score += 3.0  # High weight for personal intents
+                        elif intent.startswith(('bank_exam', 'annual_task', 'academic_journal', 'competition_awards')):
                             score += 2.5  # Higher weight for lecturer-specific intents
                         elif keyword == variant_lower:
                             score += 2
@@ -302,9 +365,12 @@ class PhoBERTIntentClassifier:
         # Method 2: Context-based boosting with normalized query for lecturers
         self._boost_lecturer_contextual_intents(normalized_query.lower(), intent_scores)
         
-        print(f"🔍 LECTURER INTENT DEBUG: After lecturer boosting = {intent_scores}")
+        # ✅ NEW: Method 3: Personal context detection
+        self._boost_personal_context_intents(normalized_query.lower(), intent_scores)
         
-        # Method 3: PhoBERT similarity (if available)
+        print(f"🔍 LECTURER INTENT DEBUG: After all boosting = {intent_scores}")
+        
+        # Method 4: PhoBERT similarity (if available)
         if not self.fallback_mode and self.model and self.tokenizer:
             try:
                 # Use normalized query for semantic similarity
@@ -336,7 +402,8 @@ class PhoBERTIntentClassifier:
                     'description': self.intent_categories[intent_name]['description'],
                     'response_style': self.intent_categories[intent_name]['response_style'],
                     'normalized_query': normalized_query,
-                    'lecturer_optimized': True
+                    'lecturer_optimized': True,
+                    'personal_context_detected': intent_name in ['personal_schedule', 'personal_info', 'schedule_general']  # ✅ NEW field
                 }
         
         print(f"🔍 LECTURER INTENT DEBUG: NO INTENT MATCHED - using general")
@@ -346,11 +413,45 @@ class PhoBERTIntentClassifier:
             'description': 'Câu hỏi chung',
             'response_style': 'neutral',
             'normalized_query': normalized_query,
-            'lecturer_optimized': True
+            'lecturer_optimized': True,
+            'personal_context_detected': False  # ✅ NEW field
         }
     
+    # ✅ NEW: Boost personal context intents
+    def _boost_personal_context_intents(self, query_lower, intent_scores):
+        """Boost intent scores based on personal context indicators"""
+        
+        # Check for personal pronouns
+        personal_indicators = ['tôi', 'toi', 'của tôi', 'cua toi', 'cho tôi', 'cho toi']
+        has_personal_pronoun = any(pronoun in query_lower for pronoun in personal_indicators)
+        
+        # Check for schedule time context
+        time_indicators = ['hôm nay', 'hom nay', 'ngày mai', 'ngay mai', 'tuần này', 'tuan nay', 'tuần tới', 'tuan toi']
+        has_time_context = any(time in query_lower for time in time_indicators)
+        
+        # Check for schedule-related words
+        schedule_words = ['lịch', 'lich', 'thời khóa biểu', 'thoi khoa bieu', 'giảng', 'giang', 'dạy', 'day']
+        has_schedule_words = any(word in query_lower for word in schedule_words)
+        
+        # ✅ Boost personal schedule if has personal pronoun + schedule context
+        if has_personal_pronoun and (has_schedule_words or has_time_context):
+            intent_scores['personal_schedule'] = intent_scores.get('personal_schedule', 0) + 0.6
+            logger.info(f"🎯 PERSONAL SCHEDULE BOOST: personal_pronoun={has_personal_pronoun}, schedule_words={has_schedule_words}, time_context={has_time_context}")
+        
+        # ✅ Boost personal info for identity questions
+        identity_words = ['là ai', 'la ai', 'thông tin của', 'thong tin cua', 'làm gì', 'lam gi']
+        if has_personal_pronoun and any(word in query_lower for word in identity_words):
+            intent_scores['personal_info'] = intent_scores.get('personal_info', 0) + 0.5
+            logger.info("🎯 PERSONAL INFO BOOST: identity question detected")
+        
+        # ✅ Boost general schedule for schedule queries without personal pronouns
+        if has_schedule_words and not has_personal_pronoun:
+            intent_scores['schedule_general'] = intent_scores.get('schedule_general', 0) + 0.3
+            logger.info("🎯 GENERAL SCHEDULE BOOST: schedule query without personal context")
+
+    
     def _boost_lecturer_contextual_intents(self, query_lower, intent_scores):
-        """Boost intent scores based on lecturer-specific context"""
+        """Boost intent scores based on lecturer-specific context WITH PERSONAL ENHANCEMENTS"""
         
         # ✅ LECTURER-SPECIFIC: Department context
         if any(phrase in query_lower for phrase in ['phòng đảm bảo', 'phòng khảo thí', 'phong dam bao', 'phong khao thi']):
@@ -369,9 +470,13 @@ class PhoBERTIntentClassifier:
         if any(word in query_lower for word in ['nghiên cứu', 'bài viết', 'tạp chí', 'nghien cuu', 'bai viet', 'tap chi']):
             intent_scores['academic_journal'] = intent_scores.get('academic_journal', 0) + 0.4
         
-        # ✅ LECTURER-SPECIFIC: Teaching context
+        # ✅ ENHANCED: Teaching context - could be personal or general
         if any(word in query_lower for word in ['giảng dạy', 'lịch học', 'thời khóa biểu', 'giang day', 'lich hoc', 'thoi khoa bieu']):
-            intent_scores['teaching_schedule'] = intent_scores.get('teaching_schedule', 0) + 0.4
+            # Check if it's personal context
+            if any(pronoun in query_lower for pronoun in ['tôi', 'toi', 'của tôi', 'cua toi']):
+                intent_scores['personal_schedule'] = intent_scores.get('personal_schedule', 0) + 0.5
+            else:
+                intent_scores['teaching_schedule'] = intent_scores.get('teaching_schedule', 0) + 0.4
         
         # ✅ LECTURER-SPECIFIC: Awards context
         if any(word in query_lower for word in ['thi đua', 'khen thưởng', 'danh hiệu', 'thi dua', 'khen thuong', 'danh hieu']):
@@ -380,7 +485,7 @@ class PhoBERTIntentClassifier:
         # Question patterns (enhanced for lecturers)
         if query_lower.endswith('?'):
             # Questions from lecturers tend to be more specific
-            for intent in ['bank_exam_questions', 'annual_task_declaration', 'academic_journal', 'reports_deadlines']:
+            for intent in ['bank_exam_questions', 'annual_task_declaration', 'academic_journal', 'reports_deadlines', 'personal_schedule', 'personal_info']:
                 if intent in intent_scores:
                     intent_scores[intent] += 0.2
         
@@ -388,6 +493,7 @@ class PhoBERTIntentClassifier:
         vague_indicators = ['gì', 'sao', 'nào', 'như thế nào', 'gi', 'nao', 'nhu the nao']
         if any(word in query_lower for word in vague_indicators) and len(query_lower.split()) <= 5:
             intent_scores['clarification_needed'] = intent_scores.get('clarification_needed', 0) + 0.3
+
     
     def _add_semantic_similarity(self, query, intent_scores):
         """Add PhoBERT semantic similarity scores"""
@@ -406,7 +512,7 @@ class PhoBERTIntentClassifier:
                         similarity = cosine_similarity(query_embedding, intent_embedding)[0][0]
                         # Blend with keyword score
                         current_score = intent_scores.get(intent, 0)
-                        blended_score = (current_score * 0.7) + (similarity * 0.3)  # Favor keywords more
+                        blended_score = (current_score * 0.6) + (similarity * 0.4)  # Ưu tiên ngữ cảnh của câu hỏi
                         intent_scores[intent] = blended_score
                         
         except Exception as e:
@@ -432,12 +538,33 @@ class PhoBERTIntentClassifier:
             return None
     
     def extract_entities(self, query):
-        """Enhanced entity extraction for lecturers"""
+        """Enhanced entity extraction for lecturers WITH PERSONAL CONTEXT"""
         if not query:
             return {}
             
         query_lower = query.lower()
         entities = {}
+        
+        # ✅ NEW: Extract personal context indicators
+        personal_pronouns_found = []
+        for pronoun in self.entity_patterns['personal_pronouns']:
+            if pronoun in query_lower:
+                personal_pronouns_found.append(pronoun)
+        
+        if personal_pronouns_found:
+            entities['personal_context'] = personal_pronouns_found
+            entities['has_personal_context'] = True
+            entities['personal_context_confidence'] = 0.9
+        
+        # ✅ NEW: Extract schedule context
+        schedule_contexts_found = []
+        for context in self.entity_patterns['schedule_contexts']:
+            if context in query_lower:
+                schedule_contexts_found.append(context)
+        
+        if schedule_contexts_found:
+            entities['schedule_context'] = schedule_contexts_found
+            entities['schedule_context_confidence'] = 0.8
         
         # ✅ LECTURER-SPECIFIC: Extract departments with confidence
         for dept in self.entity_patterns['lecturer_departments']:
@@ -472,10 +599,13 @@ class PhoBERTIntentClassifier:
                 entities['major_confidence'] = 1.0 if major == query_lower else 0.8
                 break
         
-        # Extract time expressions
+        # ✅ ENHANCED: Extract time expressions with personal context
         for time_expr in self.entity_patterns['time_expressions']:
             if time_expr in query_lower:
                 entities['time'] = time_expr
+                # Check if time expression is combined with personal context
+                if entities.get('has_personal_context'):
+                    entities['personal_time_context'] = True
                 break
         
         # ✅ ENHANCED: Extract emotions with lecturer-specific intensity
@@ -627,7 +757,7 @@ class PhoBERTIntentClassifier:
 
     # COMPATIBILITY METHODS - Enhanced for lecturers
     def get_system_status(self):
-        """Get PhoBERT system status for lecturers"""
+        """Get PhoBERT system status for lecturers WITH PERSONAL INTENT support"""
         return {
             'model_loaded': bool(self.model),
             'fallback_mode': self.fallback_mode,
@@ -639,12 +769,19 @@ class PhoBERTIntentClassifier:
                 'competition_awards', 'reports_deadlines', 'teaching_schedule',
                 'quality_assurance', 'departments_contacts'
             ],
+            'personal_intents': [  # ✅ NEW
+                'personal_schedule', 'personal_info', 'schedule_general'
+            ],
             'lecturer_optimized': True,
             'features': [
                 'lecturer_specific_intents',
                 'department_entity_extraction',
                 'urgency_detection',
                 'clarification_detection',
-                'vietnamese_normalization'
+                'vietnamese_normalization',
+                'personal_context_detection',  # ✅ NEW feature
+                'schedule_context_extraction',  # ✅ NEW feature
+                'personal_pronoun_recognition',  # ✅ NEW feature
+                'time_context_analysis'  # ✅ NEW feature
             ]
         }

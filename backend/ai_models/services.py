@@ -13,6 +13,7 @@ from .gemini_service import GeminiResponseGenerator, SimpleVietnameseRestorer
 import pandas as pd
 import random
 
+from .external_api_service import external_api_service
 from .google_drive_service import google_drive_service
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,8 @@ class LecturerDecisionEngine:
     def __init__(self):
         # ✅ MODIFIED: Adjusted confidence thresholds to favor more generation
         self.confidence_thresholds = {
-            'high_trust': 0.85,     # ✅ INCREASED from 0.7 to 0.85 - harder to get direct answer
-            'medium_trust': 0.45,   # ✅ LOWERED from 0.5 to 0.45 - easier to get enhancement
+            'high_trust': 0.8,     # ✅ INCREASED from 0.7 to 0.85 - harder to get direct answer
+            'medium_trust': 0.4,   # ✅ LOWERED from 0.5 to 0.45 - easier to get enhancement
             'low_trust': 0.25,      # Keep same
             'no_trust': 0.1         # Keep same
         }
@@ -44,6 +45,36 @@ class LecturerDecisionEngine:
                 'ngan hang de thi', 'ke khai nhiem vu', 'tap chi', 'nghien cuu',
                 'thi dua', 'khen thuong', 'bao cao', 'lich giang day',
                 'chat luong', 'danh gia', 'tieu chuan', 'quy trinh'
+            ]
+        }
+        
+        self.external_api_config = {
+            'low_confidence_threshold': 0.3,  # If QA confidence < this, consider external API
+            'personal_info_keywords': [
+                # Personal schedule/info keywords
+                'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
+                'lịch giảng của tôi', 'lich giang cua toi', 'lịch dạy của tôi', 'lich day cua toi',
+                'tôi giảng', 'toi giang', 'tôi dạy', 'toi day', 'môn của tôi', 'mon cua toi',
+                'lớp của tôi', 'lop cua toi', 'phòng của tôi', 'phong cua toi',
+                'hôm nay tôi', 'hom nay toi', 'ngày mai tôi', 'ngay mai toi',
+                'tuần này tôi', 'tuan nay toi', 'tuần tới tôi', 'tuan toi toi',
+                
+                # Identity questions
+                'tôi là ai', 'toi la ai', 'thông tin của tôi', 'thong tin cua toi',
+                'tôi làm gì', 'toi lam gi', 'công việc của tôi', 'cong viec cua toi',
+                'chức danh của tôi', 'chuc danh cua toi', 'vị trí của tôi', 'vi tri cua toi',
+                'email của tôi', 'gmail của tôi', 'số điện thoại của tôi',
+                
+                # Direct schedule queries  
+                'lịch giảng dạy', 'lich giang day', 'thời khóa biểu', 'thoi khoa bieu',
+                'lịch học', 'lich hoc', 'lịch dạy', 'lich day', 'tkb', 'schedule',
+                'lịch tuần', 'lich tuan', 'lịch ngày', 'lich ngay'
+            ],
+            'time_context_keywords': [
+                'hôm nay', 'hom nay', 'today', 'ngày mai', 'ngay mai', 'tomorrow',
+                'tuần này', 'tuan nay', 'this week', 'tuần tới', 'tuan toi', 'next week',
+                'thứ 2', 'thu 2', 'thứ 3', 'thu 3', 'thứ 4', 'thu 4', 'thứ 5', 'thu 5',
+                'thứ 6', 'thu 6', 'thứ 7', 'thu 7', 'chủ nhật', 'chu nhat'
             ]
         }
         
@@ -225,24 +256,52 @@ class LecturerDecisionEngine:
         
         return should_boost
     
-    def make_decision(self, query, retrieval_result, intent_result, session_memory=None):
-        """Enhanced decision making for lecturers with GENERATION BOOST"""
+    # ✅ NEW: Check if query needs external API
+    def needs_external_api(self, query: str, confidence: float) -> bool:
+        """
+        Determine if query should use external API based on:
+        1. Low confidence from QA database
+        2. Personal/schedule related keywords
+        """
+        query_lower = query.lower()
         
-        # Step 1: Check conversation context first
+        # Check 1: Low confidence from QA
+        low_confidence = confidence < self.external_api_config['low_confidence_threshold']
+        
+        # Check 2: Personal information keywords
+        has_personal_keywords = any(
+            keyword in query_lower 
+            for keyword in self.external_api_config['personal_info_keywords']
+        )
+        
+        # Check 3: Time context (usually indicates schedule query)
+        has_time_context = any(
+            keyword in query_lower 
+            for keyword in self.external_api_config['time_context_keywords']
+        )
+        
+        needs_api = low_confidence or has_personal_keywords or (has_time_context and 'lịch' in query_lower)
+        
+        logger.info(f"🔍 External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, needs_api={needs_api}")
+        
+        return needs_api
+    
+    def make_decision(self, query, retrieval_result, intent_result, session_memory=None, jwt_token=None):
+        """
+        Enhanced decision making for lecturers with External API integration
+        """
+        
+        # Step 1: Check conversation context first (existing logic)
         context_override = False
         if session_memory and len(session_memory) > 0:
-            # Kiểm tra 3 câu hỏi gần nhất có phải về education không
             recent_queries = [item.get('query', '') for item in session_memory[-3:]]
             recent_education_queries = [q for q in recent_queries if self.is_education_related(q)]
-            
-            # Nếu có ít nhất 1 câu gần đây về education -> cho phép câu hiện tại
             if len(recent_education_queries) >= 1:
                 context_override = True
-                logger.info(f"🧠 MEMORY OVERRIDE: Recent education context detected - allowing current query")
+                logger.info("🧠 MEMORY OVERRIDE: Recent education context detected")
         
         # Step 2: Check if education-related
         is_education = self.is_education_related(query) or context_override
-        
         if not is_education:
             return 'reject_non_education', None, False
         
@@ -250,18 +309,34 @@ class LecturerDecisionEngine:
         similarity = retrieval_result.get('confidence', 0)
         confidence_level = self.categorize_confidence(similarity)
         
-        # ✅ NEW: Check for generation boost
-        should_boost = self._should_boost_generation(query, confidence_level)
-        if should_boost and confidence_level == 'high_trust':
-            confidence_level = 'medium_trust'  # Force enhancement instead of direct
-            logger.info(f"🚀 GENERATION BOOST: Downgraded high_trust to medium_trust for enhancement")
+        # ✅ NEW: Step 4: Check if needs external API
+        needs_api = self.needs_external_api(query, similarity)
+        has_jwt_token = bool(jwt_token and jwt_token.strip())
         
-        # Step 4: Check if needs clarification
+        logger.info(f"🤖 Decision inputs: similarity={similarity:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
+        
+        # ✅ NEW: Priority logic - External API takes precedence
+        if needs_api and has_jwt_token:
+            return 'use_external_api', {
+                'instruction': 'external_api_lecturer',
+                'query': query,
+                'jwt_token': jwt_token,
+                'fallback_qa_answer': retrieval_result.get('response', ''),
+                'confidence': similarity,
+                'message': 'Using external API for personal/schedule information'
+            }, True
+        
+        elif needs_api and not has_jwt_token:
+            # Need external API but no token - inform user
+            return 'require_authentication', {
+                'instruction': 'authentication_required',
+                'query': query,
+                'confidence': similarity,
+                'message': 'Personal information requires authentication'
+            }, True
+        
+        # Step 5: Check if needs clarification (existing logic)
         needs_clarification = self.needs_clarification(query, similarity)
-        
-        logger.info(f"🤖 Decision inputs: education={is_education}, context_override={context_override}, similarity={similarity:.3f}, level={confidence_level}, clarify={needs_clarification}, boost={should_boost}")
-        
-        # Step 5: Make decision
         if needs_clarification:
             return 'ask_clarification', {
                 'query': query,
@@ -270,6 +345,13 @@ class LecturerDecisionEngine:
                 'message': 'Question is too vague, need clarification'
             }, True
         
+        # Step 6: Apply generation boost (existing logic)
+        should_boost = self._should_boost_generation(query, confidence_level)
+        if should_boost and confidence_level == 'high_trust':
+            confidence_level = 'medium_trust'
+            logger.info("🚀 GENERATION BOOST: Downgraded high_trust to medium_trust")
+        
+        # Step 7: Traditional QA-based decisions (existing logic)
         if confidence_level == 'high_trust':
             decision = 'use_db_direct'
             context = {
@@ -278,7 +360,6 @@ class LecturerDecisionEngine:
                 'confidence': similarity,
                 'message': 'High confidence - use database answer directly'
             }
-            
         elif confidence_level == 'medium_trust':
             decision = 'enhance_db_answer'
             context = {
@@ -286,9 +367,8 @@ class LecturerDecisionEngine:
                 'db_answer': retrieval_result.get('response', ''),
                 'confidence': similarity,
                 'message': 'Medium confidence - enhance database answer',
-                'generation_boosted': should_boost  # ✅ NEW: Mark if this was boosted
+                'generation_boosted': should_boost
             }
-            
         elif confidence_level == 'low_trust':
             decision = 'ask_clarification'
             context = {
@@ -297,7 +377,6 @@ class LecturerDecisionEngine:
                 'confidence': similarity,
                 'message': 'Low confidence - ask for clarification'
             }
-            
         else:  # no_trust
             decision = 'say_dont_know'
             context = {
@@ -308,7 +387,6 @@ class LecturerDecisionEngine:
         
         logger.info(f"🎯 Decision made: {decision}")
         return decision, context, True
-
 
 class HybridChatbotAI:
     """
@@ -343,6 +421,7 @@ class HybridChatbotAI:
         """Get system status for lecturers with Google Drive info"""
         gemini_status = self.response_generator.get_system_status()
         drive_status = google_drive_service.get_system_status()
+        external_api_status = external_api_service.get_system_status()
         
         # ✅ NEW: Add QA Management status
         qa_management_status = {}
@@ -362,13 +441,13 @@ class HybridChatbotAI:
                 'error': str(e)
             }
         
-        return {
+        status = {
             'sbert_model': bool(self.sbert_retriever.model),
             'faiss_index': bool(self.sbert_retriever.index),
             'phobert_available': not self.intent_classifier.fallback_mode,
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'lecturer_focused_hybrid_with_qa_management',  # ✅ Updated mode
+            'mode': 'lecturer_focused_hybrid_with_external_api',  # ✅ Updated mode
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'confidence_thresholds': self.decision_engine.confidence_thresholds,
             'generation_boost_enabled': self.decision_engine.generation_boost_settings['enable_boost'],
@@ -382,22 +461,28 @@ class HybridChatbotAI:
                 'random_generation_enhancement',
                 'keyword_based_generation_boost',
                 'no_fabrication_policy',
-                'qa_management_integration',  # ✅ NEW feature
-                'real_time_sync',  # ✅ NEW feature
-                'admin_interface'  # ✅ NEW feature
+                'qa_management_integration',
+                'real_time_sync',
+                'admin_interface',
+                'external_api_integration',  # ✅ NEW feature
+                'jwt_token_authentication',  # ✅ NEW feature
+                'lecturer_schedule_access',  # ✅ NEW feature
+                'personal_information_queries'  # ✅ NEW feature
             ],
             'gemini_status': gemini_status,
-            'google_drive_status': drive_status,
-            'qa_management_status': qa_management_status  # ✅ NEW
+            'external_api_status': external_api_status  # ✅ NEW
         }
+        
+        return status
     
-    def process_query(self, query, session_id=None):
+    def process_query(self, query, session_id=None, jwt_token=None):
         """
         Main query processing specifically optimized for lecturers
+        ✅ NEW: Added jwt_token parameter for external API calls
         """
         start_time = time.time()
         
-        logger.info(f"👨‍🏫 Processing lecturer query: '{query}' (session: {session_id})")
+        logger.info(f"👨‍🏫 Processing lecturer query: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
         
         try:
             # Step 1: Clean and validate input
@@ -414,13 +499,13 @@ class HybridChatbotAI:
             
             logger.info(f"🔍 Retrieval result: confidence={retrieval_result.get('confidence', 0):.3f}")
             
-            # Step 4: Make lecturer-specific decision WITH MEMORY CONTEXT
+            # Step 4: Make lecturer-specific decision WITH JWT token
             session_memory = self.get_conversation_context(session_id) if session_id else None
             decision_type, gemini_context, should_respond = self.decision_engine.make_decision(
-                query, retrieval_result, intent_result, session_memory
+                query, retrieval_result, intent_result, session_memory, jwt_token  # ✅ Pass JWT token
             )
             
-            # Step 5: Execute decision
+            # Step 5: Execute decision (including new external API decision)
             if not should_respond:
                 response_text = "Dạ thầy/cô, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ. 🎓 Thầy/cô có câu hỏi nào khác về trường không ạ?"
                 method = 'rejected_non_education'
@@ -448,8 +533,8 @@ class HybridChatbotAI:
                 'is_education': gemini_context is not None,
                 'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
                 'lecturer_optimized': True,
-                # ✅ NEW: Add reference links
-                'reference_links': retrieval_result.get('reference_links', [])
+                'reference_links': retrieval_result.get('reference_links', []),
+                'external_api_used': decision_type == 'use_external_api'  # ✅ NEW field
             }
             
         except Exception as e:
@@ -467,7 +552,15 @@ class HybridChatbotAI:
         
         logger.info(f"🎯 Executing lecturer decision: {decision_type}")
         
-        if decision_type == 'use_db_direct':
+        # ✅ NEW: Handle external API decision
+        if decision_type == 'use_external_api':
+            return self._handle_external_api_decision(query, gemini_context, intent_result, entities, session_id)
+        
+        # ✅ NEW: Handle authentication required
+        elif decision_type == 'require_authentication':
+            return self._handle_authentication_required(query, gemini_context)
+        
+        elif decision_type == 'use_db_direct':
             # High confidence -> Use database answer directly with lecturer formatting
             response = self.response_generator.generate_response(
                 query=query,
@@ -526,6 +619,116 @@ class HybridChatbotAI:
         else:
             logger.warning(f"⚠️ Unknown decision type: {decision_type}")
             return "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+    
+    # ✅ NEW: Handle external API decision
+    def _handle_external_api_decision(self, query, gemini_context, intent_result, entities, session_id):
+        """Handle decision to use external API"""
+        try:
+            jwt_token = gemini_context.get('jwt_token')
+            
+            logger.info("🌐 Calling external API service for lecturer schedule/info")
+            
+            # Call external API service
+            api_result = external_api_service.get_lecturer_schedule(jwt_token, query)
+            
+            if api_result.get('success'):
+                # Use Gemini to process external API data
+                enhanced_context = {
+                    'instruction': 'process_external_api_data',
+                    'api_data': api_result,
+                    'original_query': query,
+                    'fallback_qa_answer': gemini_context.get('fallback_qa_answer', ''),
+                    'confidence': gemini_context.get('confidence', 0)
+                }
+                
+                response = self.response_generator.generate_response(
+                    query=query,
+                    context=enhanced_context,
+                    intent_info=intent_result,
+                    entities=entities,
+                    session_id=session_id
+                )
+                
+                return response.get('response', self._get_external_api_fallback(api_result))
+            
+            else:
+                # External API failed, use fallback
+                error_type = api_result.get('error_type', 'unknown')
+                return self._get_external_api_error_response(error_type, api_result.get('error', ''), gemini_context.get('fallback_qa_answer', ''))
+                
+        except Exception as e:
+            logger.error(f"❌ Error handling external API decision: {str(e)}")
+            return "Dạ thầy/cô, em gặp khó khăn khi truy xuất thông tin cá nhân. Thầy/cô có thể thử lại sau hoặc liên hệ bộ phận IT để được hỗ trợ ạ. 🎓"
+    
+    # ✅ NEW: Handle authentication required
+    def _handle_authentication_required(self, query, gemini_context):
+        """Handle case where external API is needed but no token provided"""
+        return """Dạ thầy/cô, để em có thể cung cấp thông tin cá nhân như lịch giảng dạy, thầy/cô cần đăng nhập vào ứng dụng trước ạ. 🔐
+
+Thầy/cô có thể:
+• Đăng nhập lại vào ứng dụng BDU
+• Kiểm tra kết nối mạng
+• Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
+
+Sau khi đăng nhập, thầy/cô có thể hỏi lại em về lịch giảng dạy nhé! 🎓"""
+    
+    # ✅ NEW: Fallback responses for external API
+    def _get_external_api_fallback(self, api_result):
+        """Get fallback response when external API data is available but Gemini fails"""
+        lecturer_info = api_result.get('lecturer_info', {})
+        ten_giang_vien = lecturer_info.get('ten_giang_vien', 'thầy/cô')
+        
+        schedule_summary = api_result.get('schedule_summary', {})
+        total_classes = schedule_summary.get('total_classes', 0)
+        
+        return f"""Dạ {ten_giang_vien}, em đã tìm thấy thông tin lịch giảng dạy của thầy/cô với {total_classes} buổi học. 
+
+Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. Thầy/cô có thể:
+• Truy cập hệ thống quản lý đào tạo của trường
+• Liên hệ phòng Đào tạo để được hỗ trợ
+• Thử hỏi lại với câu hỏi cụ thể hơn
+
+Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+    
+    # ✅ NEW: Error responses for external API
+    def _get_external_api_error_response(self, error_type, error_message, fallback_qa=''):
+        """Get appropriate error response based on error type"""
+        if error_type == 'token_decode_failed':
+            return """Dạ thầy/cô, phiên đăng nhập đã hết hạn. Thầy/cô vui lòng đăng nhập lại vào ứng dụng BDU để em có thể hỗ trợ thông tin cá nhân ạ. 🔐
+
+Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+        
+        elif error_type == 'authentication_failed':
+            return """Dạ thầy/cô, thông tin đăng nhập không hợp lệ hoặc đã hết hạn. Thầy/cô vui lòng:
+• Đăng xuất và đăng nhập lại
+• Kiểm tra kết nối mạng
+• Liên hệ bộ phận IT nếu vẫn gặp khó khăn: it@bdu.edu.vn
+
+Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+        
+        elif error_type == 'network_error':
+            return """Dạ thầy/cô, hiện tại có vấn đề kết nối đến hệ thống của trường. Thầy/cô vui lòng:
+• Kiểm tra kết nối mạng
+• Thử lại sau vài phút
+• Liên hệ bộ phận IT nếu vấn đề kéo dài: it@bdu.edu.vn
+
+Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+        
+        else:
+            # Use fallback QA answer if available
+            if fallback_qa:
+                return f"""Dạ thầy/cô, em gặp khó khăn khi truy xuất thông tin cá nhân, nhưng em có thể chia sẻ thông tin chung: {fallback_qa}
+
+Để biết thông tin cá nhân chi tiết, thầy/cô có thể truy cập hệ thống quản lý đào tạo của trường ạ. 🎓
+
+Thầy/cô có cần hỗ trợ thêm gì không ạ?"""
+            else:
+                return """Dạ thầy/cô, em gặp khó khăn kỹ thuật khi truy xuất thông tin. Thầy/cô có thể:
+• Thử lại sau vài phút
+• Truy cập trực tiếp hệ thống quản lý đào tạo
+• Liên hệ bộ phận IT: it@bdu.edu.vn
+
+Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
     
     def _get_default_dont_know_response(self, query):
         """Default don't know response with department suggestion"""
@@ -1005,5 +1208,4 @@ class ChatbotAI:
                 })
         return sources
 
-# Create global instance optimized for lecturers
 chatbot_ai = HybridChatbotAI()

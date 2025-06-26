@@ -233,7 +233,7 @@ CORS_ALLOWED_ORIGINS = [
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
-    "https://2823-14-161-210-24.ngrok-free.app"
+    "https://3558-113-161-163-160.ngrok-free.app",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -278,12 +278,12 @@ CSRF_TRUSTED_ORIGINS = [
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
     "https://*.ngrok.io",
     "https://*.ngrok-free.app",
-    "https://2823-14-161-210-24.ngrok-free.app",
+    "https://3558-113-161-163-160.ngrok-free.app",
 ]
 
 # =============================================================================
 # CẤU HÌNH LOGGING (SỬA LỖI CHO WINDOWS)
-# =============================================================================
+# ============================================================================= 
 
 LOGGING = {
     'version': 1,
@@ -388,6 +388,8 @@ CHATBOT_PERSONALIZATION = {
     'DEPARTMENT_CONFIDENCE_BOOST': 1.2,
     'FACULTY_SESSION_TIMEOUT': 3600,  # 1 hour
 }
+
+APPEND_SLASH = False
 
 # Department specific configurations
 DEPARTMENT_CONFIGS = {
@@ -620,3 +622,37 @@ FILE_UPLOAD_SETTINGS = {
     'SCAN_FOR_VIRUSES': False,  # Enable virus scanning (future)
     'AUTO_CLEANUP_DAYS': 7,  # Auto-delete uploaded files after 7 days
 }
+
+# =============================================================================
+# 🌐 EXTERNAL API INTEGRATION - MINIMAL CONFIG
+# =============================================================================
+
+# External API Settings - Chỉ cần những cái cơ bản nhất
+SCHOOL_API_BASE_URL = 'https://cds.bdu.edu.vn'
+JWT_SECRET_KEY = None  # None = test mode, không cần verify signature
+JWT_ALGORITHM = 'HS256'
+
+# External API Configuration
+EXTERNAL_API_SETTINGS = {
+    'ENABLE_EXTERNAL_API': True,
+    'CACHE_DURATION_SECONDS': 300,  # 5 phút
+    'REQUEST_TIMEOUT_SECONDS': 30,
+    'LECTURER_SCHEDULE_ENDPOINT': '/app_cbgv/odp/vien_chuc/thoi_khoa_bieu',
+    'LOW_CONFIDENCE_THRESHOLD': 0.3,
+}
+
+# Feature Flags
+FEATURE_FLAGS = {
+    'EXTERNAL_API_ENABLED': True,
+    'JWT_AUTHENTICATION_ENABLED': True,
+    'PERSONAL_SCHEDULE_ACCESS_ENABLED': True,
+}
+
+# Tạo thư mục logs nếu chưa có
+os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+
+# Debug info
+if DEBUG:
+    print("🚀 External API Integration: ✅ ENABLED")
+    print(f"📡 School API URL: {SCHOOL_API_BASE_URL}")
+    print(f"🔑 JWT Test Mode: ✅ ENABLED (No signature verification)")

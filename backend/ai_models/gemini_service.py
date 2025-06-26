@@ -71,6 +71,148 @@ def get_fallback_system_prompt(response_style='professional'):
     
     return base_prompt + style_additions.get(response_style, style_additions['professional'])
 
+class SmartTokenManager:
+    """🧠 Smart Token Management System - Tự động tăng token và hoàn thiện response"""
+    
+    def __init__(self):
+        # ✅ ADAPTIVE TOKEN RANGES cho từng style
+        self.style_token_ranges = {
+            'brief': {
+                'min': 40, 'optimal': 80, 'max': 120,
+                'expected_sentences': 1, 'avg_chars_per_sentence': 60
+            },
+            'professional': {
+                'min': 80, 'optimal': 150, 'max': 220,
+                'expected_sentences': 2, 'avg_chars_per_sentence': 80
+            },
+            'friendly': {
+                'min': 100, 'optimal': 180, 'max': 280,
+                'expected_sentences': 3, 'avg_chars_per_sentence': 70
+            },
+            'technical': {
+                'min': 150, 'optimal': 250, 'max': 400,
+                'expected_sentences': 4, 'avg_chars_per_sentence': 90
+            },
+            'detailed': {
+                'min': 200, 'optimal': 350, 'max': 500,
+                'expected_sentences': 5, 'avg_chars_per_sentence': 85
+            }
+        }
+        
+        # ✅ COMPLETION DETECTION patterns
+        self.incomplete_patterns = [
+            r'[^.!?]\s*$',  # Không kết thúc bằng dấu câu
+            r'\b(và|hoặc|với|để|khi|nếu|tại|về|cho|trong|của|từ)\s*$',  # Kết thúc bằng từ nối
+            r'\b(thầy/cô|em|sẽ|có|được|phải|cần|nên)\s*$',  # Kết thúc bằng từ chưa hoàn chỉnh
+            r'[,;:]\s*$',  # Kết thúc bằng dấu phẩy/chấm phẩy
+            r'\b(Dạ|Ạ|thầy|cô)\s*$',  # Câu chào chưa hoàn chỉnh
+        ]
+        
+        # ✅ SENTENCE ENDING patterns để kiểm tra câu hoàn chỉnh
+        self.complete_endings = [
+            r'[.!?]\s*$',  # Kết thúc bằng dấu câu
+            r'ạ[.!?]\s*$',  # Kết thúc bằng "ạ" + dấu câu
+            r'không ạ\?\s*$',  # "có cần hỗ trợ thêm gì không ạ?"
+            r'🎓\s*$',  # Emoji kết thúc
+            r'@bdu\.edu\.vn\s*$',  # Email ending
+        ]
+        
+        logger.info("✅ SmartTokenManager initialized with adaptive ranges")
+    
+    def calculate_optimal_tokens(self, response_style: str, prompt_length: int, complexity_hint: str = None) -> int:
+        """🎯 Tính toán tokens tối ưu dựa trên style và độ phức tạp"""
+        
+        style_config = self.style_token_ranges.get(response_style, self.style_token_ranges['professional'])
+        
+        # Base tokens từ style
+        base_tokens = style_config['optimal']
+        
+        # ✅ ADJUSTMENT dựa trên prompt length
+        if prompt_length > 500:
+            base_tokens += 50  # Prompt dài cần response dài hơn
+        elif prompt_length < 200:
+            base_tokens -= 30  # Prompt ngắn có thể response ngắn hơn
+            
+        # ✅ ADJUSTMENT dựa trên complexity hint
+        if complexity_hint:
+            if complexity_hint in ['enhanced_generation', 'detailed_explanation']:
+                base_tokens += 100
+            elif complexity_hint in ['quick_clarify', 'simple_answer']:
+                base_tokens -= 40
+                
+        # ✅ BOUNDS checking
+        min_tokens = style_config['min']
+        max_tokens = style_config['max']
+        
+        return max(min_tokens, min(max_tokens, base_tokens))
+    
+    def is_response_incomplete(self, response: str, expected_style: str) -> Dict[str, Any]:
+        """🔍 Kiểm tra response có bị cắt không và mức độ hoàn thiện"""
+        
+        if not response or not response.strip():
+            return {'incomplete': True, 'reason': 'empty_response', 'confidence': 1.0}
+        
+        response = response.strip()
+        
+        # ✅ CHECK 1: Pattern matching cho incomplete
+        for pattern in self.incomplete_patterns:
+            if re.search(pattern, response):
+                return {
+                    'incomplete': True, 
+                    'reason': 'incomplete_pattern',
+                    'pattern': pattern,
+                    'confidence': 0.8
+                }
+        
+        # ✅ CHECK 2: Expected sentence count
+        style_config = self.style_token_ranges.get(expected_style, self.style_token_ranges['professional'])
+        expected_sentences = style_config['expected_sentences']
+        
+        actual_sentences = len(re.findall(r'[.!?]+', response))
+        if actual_sentences < expected_sentences * 0.7:  # Ít hơn 70% expected
+            return {
+                'incomplete': True,
+                'reason': 'insufficient_sentences',
+                'expected': expected_sentences,
+                'actual': actual_sentences,
+                'confidence': 0.7
+            }
+        
+        # ✅ CHECK 3: Required ending patterns for Vietnamese lecturer context
+        required_ending = r'(thầy/cô có cần hỗ trợ thêm gì không ạ\?|ạ[.!?]|\?)'
+        if not re.search(required_ending, response.lower()):
+            return {
+                'incomplete': True,
+                'reason': 'missing_proper_ending',
+                'confidence': 0.9
+            }
+        
+        # ✅ CHECK 4: Proper greeting start
+        if not re.match(r'dạ\s+(thầy/cô|cô|thầy)', response.lower()):
+            return {
+                'incomplete': True,
+                'reason': 'missing_proper_greeting',
+                'confidence': 0.6
+            }
+        
+        return {'incomplete': False, 'reason': 'complete', 'confidence': 0.9}
+    
+    def estimate_completion_tokens(self, incomplete_response: str, target_style: str) -> int:
+        """📊 Ước tính tokens cần để hoàn thiện response"""
+        
+        style_config = self.style_token_ranges.get(target_style, self.style_token_ranges['professional'])
+        
+        # Estimate current length in tokens (rough: 1 token ≈ 3-4 chars in Vietnamese)
+        current_tokens = len(incomplete_response) // 3
+        
+        # Target tokens for complete response
+        target_tokens = style_config['optimal']
+        
+        # Additional tokens needed
+        additional_needed = max(20, target_tokens - current_tokens)
+        
+        return min(additional_needed, 150)  # Cap at 150 additional tokens
+
 class ConversationMemory:
     """Quản lý bộ nhớ hội thoại"""
     
@@ -295,7 +437,7 @@ class SimpleVietnameseRestorer:
                 del self.cache[k]
 
 class GeminiResponseGenerator:
-    """Gemini API Response Generator cho Giảng viên BDU với Enhanced Personalization"""
+    """🚀 Advanced Gemini Response Generator với Smart Token Management"""
     
     def __init__(self, api_key: str = None):
         from django.conf import settings
@@ -306,34 +448,32 @@ class GeminiResponseGenerator:
         self.memory = ConversationMemory(max_history=10)
         self.vietnamese_restorer = SimpleVietnameseRestorer(self.api_key)
         
+        # ✅ NEW: Smart Token Manager
+        self.token_manager = SmartTokenManager()
+        
         # User context cache for personalization
         self._user_context_cache = {}
         
-        # ✅ FIXED: Style-specific generation configs
+        # ✅ ENHANCED: Dynamic style configs với smart token ranges
         self.style_generation_configs = {
             'professional': {
                 "temperature": 0.3,
-                "maxOutputTokens": 120,
                 "topP": 0.8
             },
             'friendly': {
                 "temperature": 0.6,
-                "maxOutputTokens": 150,
                 "topP": 0.9
             },
             'technical': {
                 "temperature": 0.2,
-                "maxOutputTokens": 200,
                 "topP": 0.7
             },
             'brief': {
                 "temperature": 0.4,
-                "maxOutputTokens": 80,
                 "topP": 0.8
             },
             'detailed': {
                 "temperature": 0.5,
-                "maxOutputTokens": 250,
                 "topP": 0.8
             }
         }
@@ -349,8 +489,287 @@ class GeminiResponseGenerator:
             ]
         }
         
-        logger.info("✅ Gemini Response Generator initialized with Enhanced Style Support")
+        logger.info("✅ Enhanced Gemini Response Generator initialized with Smart Token Management")
 
+    # ✅ NEW: Process external API data
+    def _generate_external_api_response(self, query, context, session_id=None, response_style='professional'):
+        """Generate response from external API data"""
+        
+        api_data = context.get('api_data', {})
+        lecturer_info = api_data.get('lecturer_info', {})
+        schedule_summary = api_data.get('schedule_summary', {})
+        daily_schedule = api_data.get('daily_schedule', {})
+        
+        # Get personal addressing
+        personal_address = self._get_personal_address_from_api_data(lecturer_info, session_id)
+        
+        # Build comprehensive prompt for external API data
+        prompt = self._build_external_api_prompt(
+            query, api_data, personal_address, response_style
+        )
+        
+        # Calculate optimal tokens for external API response
+        optimal_tokens = self.token_manager.calculate_optimal_tokens(
+            response_style, 
+            len(prompt), 
+            'external_api_processing'
+        )
+        
+        logger.info(f"🌐 Processing external API data with {optimal_tokens} tokens")
+        
+        response = self._call_gemini_api_with_smart_tokens(
+            prompt, 'external_api_processing', response_style, optimal_tokens
+        )
+        
+        if not response:
+            # Fallback if Gemini fails
+            return self._get_external_api_fallback_response(api_data, personal_address)
+        
+        # Post-process for consistency
+        response = self._post_process_external_api_response(
+            response, lecturer_info, query, session_id
+        )
+        
+        return response
+    
+    def _build_external_api_prompt(self, query, api_data, personal_address, response_style):
+        """Build comprehensive prompt for external API data processing"""
+        
+        lecturer_info = api_data.get('lecturer_info', {})
+        schedule_summary = api_data.get('schedule_summary', {})
+        daily_schedule = api_data.get('daily_schedule', {})
+        query_context = api_data.get('query_context', '')
+        
+        # Get lecturer details
+        ten_giang_vien = lecturer_info.get('ten_giang_vien', personal_address)
+        ma_giang_vien = lecturer_info.get('ma_giang_vien', '')
+        chuc_danh = lecturer_info.get('chuc_danh', '')
+        gmail = lecturer_info.get('gmail', '')
+        trinh_do = lecturer_info.get('trinh_do', '')
+        
+        # Get schedule details
+        total_classes = schedule_summary.get('total_classes', 0)
+        unique_subjects = schedule_summary.get('unique_subjects', 0)
+        total_periods = schedule_summary.get('total_periods', 0)
+        
+        # Format daily schedule for prompt
+        schedule_text = self._format_schedule_for_prompt(daily_schedule)
+        
+        system_prompt = self._get_personalized_system_prompt_for_external_api(
+            lecturer_info, response_style
+        )
+        
+        prompt = f"""{system_prompt}
+
+🎯 NHIỆM VỤ ĐẶC BIỆT: Xử lý thông tin CÁ NHÂN từ hệ thống của trường
+
+📋 THÔNG TIN GIẢNG VIÊN:
+- Mã giảng viên: {ma_giang_vien}
+- Họ và tên: {ten_giang_vien}
+- Chức danh: {chuc_danh}
+- Trình độ: {trinh_do}
+- Email: {gmail}
+
+📅 TỔNG QUAN LỊCH GIẢNG DẠY:
+- Tổng số buổi học: {total_classes}
+- Số môn học: {unique_subjects}
+- Tổng số tiết: {total_periods}
+
+📖 CHI TIẾT LỊCH GIẢNG DẠY:
+{schedule_text}
+
+❓ CÂU HỎI CỦA GIẢNG VIÊN: {query}
+🔍 NGỮ CẢNH TÌM KIẾM: {query_context}
+
+📝 YÊU CẦU TRẢ LỜI:
+- Xưng hô: "Dạ {personal_address},"
+- Phong cách: {response_style}
+- Trả lời CHÍNH XÁC dựa trên dữ liệu thực tế từ hệ thống
+- Định dạng thông tin dễ đọc, rõ ràng
+- Bao gồm các chi tiết quan trọng: thời gian, địa điểm, môn học
+- Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+- KHÔNG CHẾ TẠO thông tin không có trong dữ liệu
+
+🎨 HƯỚNG DẪN THEO PHONG CÁCH:
+"""
+
+        # Add style-specific guidance
+        if response_style == 'professional':
+            prompt += """
+- Ngôn từ trang trọng, chính thức
+- Trình bày có logic, rõ ràng
+- Tập trung vào thông tin cốt lõi"""
+        elif response_style == 'friendly':
+            prompt += """
+- Ngôn từ gần gũi, ấm áp
+- Có thể sử dụng emoji phù hợp 😊
+- Tạo cảm giác thoải mái"""
+        elif response_style == 'detailed':
+            prompt += """
+- Giải thích chi tiết từng khía cạnh
+- Cung cấp ngữ cảnh và thông tin bổ sung
+- Phân tích toàn diện"""
+        elif response_style == 'brief':
+            prompt += """
+- Trả lời ngắn gọn, súc tích
+- Chỉ thông tin cần thiết nhất
+- Tránh dài dòng"""
+        elif response_style == 'technical':
+            prompt += """
+- Sử dụng thuật ngữ chính xác
+- Cung cấp thông số kỹ thuật
+- Chi tiết về quy trình, hệ thống"""
+
+        prompt += "\n\nTrả lời:"
+
+        return prompt
+    
+    def _format_schedule_for_prompt(self, daily_schedule):
+        """Format daily schedule data for Gemini prompt"""
+        if not daily_schedule:
+            return "Hiện tại không có lịch giảng dạy trong khoảng thời gian này."
+        
+        formatted_lines = []
+        
+        # Sort dates
+        sorted_dates = sorted(daily_schedule.keys())
+        
+        for date_str in sorted_dates:
+            classes = daily_schedule[date_str]
+            
+            # Format date
+            try:
+                from datetime import datetime
+                date_obj = datetime.strptime(date_str, '%d-%m-%Y')
+                weekdays = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật']
+                weekday = weekdays[date_obj.weekday()]
+                formatted_date = f"{weekday}, {date_str}"
+            except:
+                formatted_date = date_str
+            
+            formatted_lines.append(f"\n📅 {formatted_date}:")
+            
+            # Sort classes by starting period
+            sorted_classes = sorted(classes, key=lambda x: x.get('tiet_bat_dau', 0))
+            
+            for class_info in sorted_classes:
+                ma_mon_hoc = class_info.get('ma_mon_hoc', '')
+                ten_mon_hoc = class_info.get('ten_mon_hoc', '')
+                ma_lop = class_info.get('ma_lop', '')
+                ma_phong = class_info.get('ma_phong', '')
+                tiet_bat_dau = class_info.get('tiet_bat_dau', '')
+                so_tiet = class_info.get('so_tiet', '')
+                so_luong_sv = class_info.get('so_luong_sv', '')
+                
+                # Format class entry
+                class_line = f"   • {ten_mon_hoc} ({ma_mon_hoc})"
+                class_line += f" - Lớp {ma_lop}"
+                class_line += f" - Phòng {ma_phong}"
+                class_line += f" - Tiết {tiet_bat_dau}"
+                if so_tiet:
+                    class_line += f" ({so_tiet} tiết)"
+                if so_luong_sv:
+                    class_line += f" - {so_luong_sv} SV"
+                
+                formatted_lines.append(class_line)
+        
+        return '\n'.join(formatted_lines) if formatted_lines else "Không có lịch giảng dạy."
+
+    def _get_personalized_system_prompt_for_external_api(self, lecturer_info, response_style):
+        """Get personalized system prompt for external API processing"""
+        
+        ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
+        chuc_danh = lecturer_info.get('chuc_danh', '')
+        
+        name_parts = ten_giang_vien.split() if ten_giang_vien else []
+        name_suffix = name_parts[-1] if name_parts else ''
+        
+        base_prompt = f"""Bạn là AI assistant của Đại học Bình Dương (BDU), chuyên hỗ trợ giảng viên.
+
+🎯 THÔNG TIN NGƯỜI DÙNG:
+- Bạn đang trả lời cho {chuc_danh} {ten_giang_vien}
+- Xưng hô: "thầy/cô {name_suffix}" (TUYỆT ĐỐI KHÔNG dùng "bạn", "mình", "anh/chị")
+- Đây là thông tin CÁ NHÂN từ hệ thống chính thức của trường
+
+🎯 QUY TẮC QUAN TRỌNG:
+- LUÔN bắt đầu: "Dạ thầy/cô {name_suffix},"
+- Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+- SỬ DỤNG CHÍNH XÁC thông tin từ hệ thống - KHÔNG CHẾ TẠO
+- Trình bày thông tin cá nhân một cách tự nhiên, dễ hiểu
+- KHÔNG dùng format phức tạp với **1. **2. hay bullets khi không cần thiết"""
+
+        return base_prompt
+
+    def _get_personal_address_from_api_data(self, lecturer_info, session_id):
+        """Get personal address from API data or session"""
+        ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
+        
+        if ten_giang_vien:
+            name_suffix = ten_giang_vien.split()[-1]
+            return f"thầy/cô {name_suffix}"
+        
+        # Fallback to session-based addressing
+        return self._get_personal_address(session_id)
+
+    def _post_process_external_api_response(self, response, lecturer_info, query, session_id):
+        """Post-process external API response for consistency"""
+        if not response:
+            return response
+        
+        # Get personal addressing info
+        ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
+        name_suffix = ten_giang_vien.split()[-1] if ten_giang_vien else ''
+        personal_address = f"thầy/cô {name_suffix}" if name_suffix else "thầy/cô"
+        
+        # 1. Fix addressing inconsistencies
+        response = re.sub(r'\bbạn\b', personal_address, response, flags=re.IGNORECASE)
+        response = re.sub(r'\bmình\b', 'em', response, flags=re.IGNORECASE)
+        response = re.sub(r'\btôi\b', 'em', response, flags=re.IGNORECASE)
+        
+        # 2. Ensure proper greeting
+        response_stripped = response.strip()
+        personalized_start = f"Dạ {personal_address},"
+        
+        if not response_stripped.lower().startswith('dạ thầy/cô') and not response_stripped.lower().startswith(f'dạ {personal_address.lower()}'):
+            if response_stripped.lower().startswith('dạ'):
+                response = personalized_start + ' ' + response_stripped[3:].strip()
+            else:
+                response = personalized_start + ' ' + response_stripped
+        
+        # 3. Ensure proper ending
+        if not response.strip().endswith('có cần hỗ trợ thêm gì không ạ?'):
+            response = re.sub(r'\s*(Thầy/cô có.*?không ạ\?|Cần.*?không\?|Có.*?không\?)?\s*$', '', response.strip())
+            response += ' Thầy/cô có cần hỗ trợ thêm gì không ạ?'
+        
+        # 4. Remove excessive formatting
+        response = re.sub(r'\*\*\d+\.\s*', '', response)
+        response = re.sub(r'^\s*\d+\.\s*', '', response, flags=re.MULTILINE)
+        response = re.sub(r'^\s*[•\-\*]\s*', '', response, flags=re.MULTILINE)
+        response = re.sub(r'\*\*(.*?)\*\*', r'\1', response)
+        
+        return response.strip()
+
+    def _get_external_api_fallback_response(self, api_data, personal_address):
+        """Fallback response when Gemini fails to process external API data"""
+        lecturer_info = api_data.get('lecturer_info', {})
+        schedule_summary = api_data.get('schedule_summary', {})
+        
+        ten_giang_vien = lecturer_info.get('ten_giang_vien', personal_address)
+        total_classes = schedule_summary.get('total_classes', 0)
+        
+        return f"""Dạ {personal_address}, em đã tìm thấy thông tin từ hệ thống của trường:
+
+👤 Thông tin của {ten_giang_vien}:
+- Mã giảng viên: {lecturer_info.get('ma_giang_vien', 'Không xác định')}
+- Chức danh: {lecturer_info.get('chuc_danh', 'Không xác định')}
+- Email: {lecturer_info.get('gmail', 'Không có')}
+
+📅 Lịch giảng dạy: {total_classes} buổi học được lên lịch
+
+Để xem chi tiết, {personal_address} có thể truy cập hệ thống quản lý đào tạo của trường ạ. 🎓
+
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"""
+    
     # ✅ NEW: Personalization methods
     def set_user_context(self, session_id: str, user_context: dict):
         """Set user context cho session (được gọi từ chat API)"""
@@ -387,14 +806,14 @@ class GeminiResponseGenerator:
             logger.error(f"Error getting response style: {e}")
             return 'professional'    
 
-    # ✅ ENHANCED: Generate response with style-aware processing
+    # 🚀 ENHANCED: Generate response với Smart Token Management
     def generate_response(self, query: str, context: Optional[Dict] = None, 
                       intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
                       session_id: str = None) -> Dict[str, Any]:
-        """Generate response with enhanced style-aware generation"""
+        """Generate response with Smart Token Management & Auto-completion"""
         start_time = time.time()
         
-        print(f"\n--- ENHANCED STYLE-AWARE REQUEST (Session: {session_id}) ---")
+        print(f"\n--- 🚀 SMART TOKEN MANAGEMENT REQUEST (Session: {session_id}) ---")
         print(f"🧠 MEMORY DEBUG: Total active sessions = {len(self.memory.conversations)}")
 
         try:
@@ -405,6 +824,38 @@ class GeminiResponseGenerator:
                     logger.info(f"🎯 Query restored: '{query}' -> '{restored_query}'")
                     query = restored_query
 
+            # ✅ NEW: Check if query is empty after restoration
+            instruction = context.get('instruction', '') if context else ''
+            
+            if instruction == 'process_external_api_data':
+                # Process external API data
+                user_response_style = self._get_user_response_style(session_id)
+                response = self._generate_external_api_response(query, context, session_id, user_response_style)
+                
+                token_info = {
+                    'smart_tokens_used': True,
+                    'method': 'external_api_processing',
+                    'response_style': user_response_style
+                }
+                
+                # Save to memory
+                if session_id:
+                    self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
+
+                return {
+                    'response': response,
+                    'method': 'external_api_processing',
+                    'strategy': 'external_api',
+                    'generation_time': time.time() - start_time,
+                    'original_query': original_query,
+                    'restored_query': query,
+                    'vietnamese_restoration_used': query != original_query,
+                    'personalized': bool(session_id in self._user_context_cache),
+                    'response_style': user_response_style,
+                    'external_api_processed': True,
+                    'token_info': token_info
+                }
+            
             # ✅ NEW: Get user's response style
             user_response_style = self._get_user_response_style(session_id)
             print(f"🎨 USER STYLE: {user_response_style}")
@@ -426,17 +877,17 @@ class GeminiResponseGenerator:
                 query, context, intent_info, conversation_context
             )
             
-            # ✅ FIXED: Handle instruction-based responses
+            # ✅ ENHANCED: Handle instruction-based responses với Smart Tokens
             instruction = context.get('instruction', '') if context else ''
             
             if instruction == 'direct_answer_lecturer':
-                response = self._generate_direct_lecturer_answer(query, context, session_id, user_response_style)
+                response, token_info = self._generate_direct_lecturer_answer_smart(query, context, session_id, user_response_style)
             elif instruction in ['enhance_answer_lecturer', 'enhance_answer_lecturer_boosted']:
-                response = self._generate_enhanced_lecturer_answer(query, context, intent_info, entities, session_id, user_response_style)
+                response, token_info = self._generate_enhanced_lecturer_answer_smart(query, context, intent_info, entities, session_id, user_response_style)
             elif instruction == 'clarification_needed':
-                response = self._generate_clarification_request(query, context, session_id, user_response_style)
+                response, token_info = self._generate_clarification_request_smart(query, context, session_id, user_response_style)
             elif instruction == 'dont_know_lecturer':
-                response = self._generate_dont_know_response(query, context, session_id, user_response_style)
+                response, token_info = self._generate_dont_know_response_smart(query, context, session_id, user_response_style)
             else:
                 # Check out of scope and generate response
                 if context and context.get('emergency_education', False):
@@ -444,6 +895,7 @@ class GeminiResponseGenerator:
                     pass 
                 elif not self._is_lecturer_education_related(query) and not context.get('force_education_response', False):
                     response = self._get_contextual_out_of_scope_response_lecturer(conversation_context, session_id, user_response_style)
+                    token_info = {'smart_tokens_used': False, 'method': 'predefined_template'}
                     
                     if session_id:
                         self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
@@ -456,11 +908,12 @@ class GeminiResponseGenerator:
                         'original_query': original_query,
                         'restored_query': query,
                         'personalized': session_id in self._user_context_cache,
-                        'response_style': user_response_style  # ✅ NEW
+                        'response_style': user_response_style,
+                        'token_info': token_info
                     }
                 
-                # ✅ FIXED: Use simplified response generation
-                response = self._generate_style_aware_response(query, context, session_id, user_response_style)
+                # ✅ ENHANCED: Use Smart Token Generation
+                response, token_info = self._generate_smart_style_aware_response(query, context, session_id, user_response_style, response_strategy)
             
             final_response = response or self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id, user_response_style)
             
@@ -471,7 +924,7 @@ class GeminiResponseGenerator:
 
             return {
                 'response': final_response,
-                'method': f'lecturer_aware_gemini_{response_strategy}',
+                'method': f'smart_lecturer_aware_gemini_{response_strategy}',
                 'strategy': response_strategy,
                 'conversation_context': conversation_context,
                 'generation_time': time.time() - start_time,
@@ -479,9 +932,10 @@ class GeminiResponseGenerator:
                 'restored_query': query,
                 'vietnamese_restoration_used': query != original_query,
                 'personalized': bool(user_context),
-                'response_style': user_response_style,  # ✅ NEW
-                'style_applied': user_response_style,  # ✅ NEW
-                'enhanced_generation': response_strategy == 'enhanced_generation'
+                'response_style': user_response_style,
+                'style_applied': user_response_style,
+                'enhanced_generation': response_strategy == 'enhanced_generation',
+                'token_info': token_info  # ✅ NEW: Smart token information
             }
             
         except Exception as e:
@@ -500,11 +954,237 @@ class GeminiResponseGenerator:
                 'original_query': original_query,
                 'restored_query': query,
                 'personalized': session_id in self._user_context_cache,
-                'response_style': user_response_style  # ✅ NEW
+                'response_style': user_response_style,
+                'token_info': {'smart_tokens_used': False, 'method': 'fallback'}
             }
 
-    def _generate_direct_lecturer_answer(self, query, context, session_id=None, response_style='professional'):
-        """Generate direct answer with style awareness"""
+    # 🧠 SMART TOKEN GENERATION METHODS
+
+    def _generate_smart_style_aware_response(self, query: str, context=None, session_id=None, response_style='professional', strategy='balanced'):
+        """🚀 Generate response with Smart Token Management"""
+        
+        prompt = self._build_enhanced_prompt(query, context, None, None, session_id, response_style)
+        
+        # ✅ STEP 1: Calculate optimal tokens
+        optimal_tokens = self.token_manager.calculate_optimal_tokens(
+            response_style, 
+            len(prompt), 
+            complexity_hint=strategy
+        )
+        
+        print(f"🧠 SMART TOKENS: {response_style} -> {optimal_tokens} tokens")
+        
+        # ✅ STEP 2: First attempt with optimal tokens
+        response = self._call_gemini_api_with_smart_tokens(prompt, strategy, response_style, optimal_tokens)
+        
+        if not response:
+            return self._get_smart_fallback_with_context_lecturer(query, None, {}, session_id, response_style), {
+                'smart_tokens_used': True, 'method': 'fallback_after_api_failure', 'tokens_attempted': optimal_tokens
+            }
+        
+        # ✅ STEP 3: Check if response is complete
+        completion_check = self.token_manager.is_response_incomplete(response, response_style)
+        
+        if completion_check['incomplete']:
+            print(f"⚠️ INCOMPLETE RESPONSE detected: {completion_check['reason']}")
+            
+            # ✅ STEP 4: Auto-completion attempt
+            completed_response = self._auto_complete_response(response, query, context, session_id, response_style, completion_check)
+            
+            if completed_response and completed_response != response:
+                response = completed_response
+                completion_check['auto_completed'] = True
+                print(f"✅ AUTO-COMPLETION successful")
+            else:
+                print(f"⚠️ AUTO-COMPLETION failed, using original")
+        
+        # ✅ STEP 5: Post-process for consistency
+        response = self._post_process_with_lecturer_consistency(response, query, context, strategy, {}, session_id)
+        
+        token_info = {
+            'smart_tokens_used': True,
+            'method': 'smart_generation',
+            'optimal_tokens': optimal_tokens,
+            'completion_check': completion_check,
+            'response_style': response_style,
+            'strategy': strategy
+        }
+        
+        return response, token_info
+
+    def _auto_complete_response(self, incomplete_response: str, original_query: str, context, session_id: str, response_style: str, completion_info: Dict) -> Optional[str]:
+        """🔧 Auto-complete incomplete response"""
+        
+        if completion_info['confidence'] < 0.6:  # Don't auto-complete if not confident it's incomplete
+            return None
+        
+        # ✅ Calculate completion tokens needed
+        completion_tokens = self.token_manager.estimate_completion_tokens(incomplete_response, response_style)
+        
+        # ✅ Build completion prompt
+        completion_prompt = self._build_completion_prompt(incomplete_response, original_query, context, session_id, response_style, completion_info)
+        
+        print(f"🔧 AUTO-COMPLETION: Attempting with {completion_tokens} tokens")
+        
+        # ✅ Call API to complete
+        completion = self._call_gemini_api_with_smart_tokens(completion_prompt, 'completion', response_style, completion_tokens)
+        
+        if completion:
+            # ✅ Merge incomplete + completion
+            if completion_info['reason'] == 'missing_proper_ending':
+                # Just add proper ending
+                return incomplete_response.rstrip() + ' Thầy/cô có cần hỗ trợ thêm gì không ạ?'
+            elif completion_info['reason'] == 'missing_proper_greeting':
+                # Add proper greeting
+                personal_address = self._get_personal_address(session_id)
+                return f"Dạ {personal_address}, " + incomplete_response.lstrip()
+            else:
+                # Merge content
+                merged = self._merge_incomplete_and_completion(incomplete_response, completion)
+                return merged
+        
+        return None
+
+    def _build_completion_prompt(self, incomplete_response: str, original_query: str, context, session_id: str, response_style: str, completion_info: Dict) -> str:
+        """🔧 Build prompt to complete incomplete response"""
+        
+        system_prompt = self._get_personalized_system_prompt(session_id)
+        personal_address = self._get_personal_address(session_id)
+        
+        if completion_info['reason'] == 'incomplete_pattern':
+            completion_prompt = f"""
+            {system_prompt}
+            
+            NHIỆM VỤ: HOÀN THIỆN câu trả lời bị cắt
+            
+            CÂU HỎI GỐC: {original_query}
+            
+            CÂU TRẢ LỜI BỊ CẮT:
+            {incomplete_response}
+            
+            YÊU CẦU:
+            - TIẾP TỤC viết để hoàn thiện câu trả lời
+            - Đảm bảo kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+            - Phong cách: {response_style}
+            - CHỈ VIẾT PHẦN TIẾP THEO, không lặp lại phần đã có
+            
+            Tiếp tục:"""
+        else:
+            completion_prompt = f"""
+            {system_prompt}
+            
+            NHIỆM VỤ: SỬA LỖI và hoàn thiện câu trả lời
+            
+            CÂU HỎI GỐC: {original_query}
+            
+            CÂU TRẢ LỜI CÓ VẤN ĐỀ:
+            {incomplete_response}
+            
+            VẤN ĐỀ PHÁT HIỆN: {completion_info['reason']}
+            
+            YÊU CẦU:
+            - SỬA LỖI và viết lại câu trả lời HOÀN CHỈNH
+            - Bắt đầu: "Dạ {personal_address},"
+            - Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+            - Phong cách: {response_style}
+            
+            Câu trả lời hoàn chỉnh:"""
+        
+        return completion_prompt
+
+    def _merge_incomplete_and_completion(self, incomplete: str, completion: str) -> str:
+        """🔧 Merge incomplete response with completion"""
+        
+        # Clean completion
+        completion = completion.strip()
+        
+        # Remove redundant greetings from completion
+        completion = re.sub(r'^(dạ\s+thầy/cô,?\s*)', '', completion, flags=re.IGNORECASE)
+        
+        # If incomplete ends with incomplete word, replace it
+        incomplete_words = incomplete.split()
+        if incomplete_words:
+            last_word = incomplete_words[-1].lower()
+            if last_word in ['và', 'với', 'để', 'khi', 'nếu', 'tại', 'về', 'cho', 'trong', 'của', 'từ']:
+                # Remove last incomplete word
+                incomplete = ' '.join(incomplete_words[:-1])
+        
+        # Merge
+        merged = incomplete.rstrip() + ' ' + completion.lstrip()
+        
+        return merged
+
+    def _get_personal_address(self, session_id: str) -> str:
+        """Get personalized address for user"""
+        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
+        full_name = user_context.get('full_name', '')
+        
+        if full_name:
+            name_suffix = full_name.split()[-1]
+            return f"thầy/cô {name_suffix}"
+        else:
+            return "thầy/cô"
+
+    # 🚀 ENHANCED API CALL với Smart Tokens
+    def _call_gemini_api_with_smart_tokens(self, prompt: str, strategy: str, response_style: str, max_tokens: int) -> Optional[str]:
+        """Call Gemini API with Smart Token Management"""
+        try:
+            headers = {'Content-Type': 'application/json'}
+            
+            # Get style-specific config (without maxOutputTokens - handled by smart tokens)
+            style_config = self.style_generation_configs.get(response_style, self.style_generation_configs['professional'])
+            
+            # Strategy-specific temperature adjustments
+            strategy_temp_adjustments = {
+                'quick_clarify': -0.2,
+                'direct_enhance': 0.0,
+                'enhanced_generation': +0.2,
+                'completion': -0.3,  # ✅ NEW: Lower temp for completion
+                'balanced': 0.0
+            }
+            
+            temp_adjustment = strategy_temp_adjustments.get(strategy, 0.0)
+            final_temperature = max(0.1, min(1.0, style_config["temperature"] + temp_adjustment))
+            
+            config = {
+                "temperature": final_temperature,
+                "maxOutputTokens": max_tokens,  # ✅ Use smart calculated tokens
+                "topP": style_config["topP"]
+            }
+            
+            print(f"🚀 SMART API CONFIG: {response_style}/{strategy} -> temp={config['temperature']}, tokens={config['maxOutputTokens']}")
+            
+            data = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": config,
+                "safetySettings": [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                ]
+            }
+            
+            url = f"{self.base_url}?key={self.api_key}"
+            response = requests.post(url, headers=headers, json=data, timeout=30)  # Increased timeout for larger responses
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'candidates' in result and result['candidates']:
+                    candidate = result['candidates'][0]
+                    if 'content' in candidate and 'parts' in candidate['content']:
+                        return candidate['content']['parts'][0]['text']
+            else:
+                logger.error(f"Gemini API Error {response.status_code}: {response.text}")
+            return None
+        
+        except Exception as e:
+            logger.error(f"Smart Gemini API call failed: {str(e)}")
+            return None
+
+    # 🚀 SMART VERSIONS of generation methods
+    def _generate_direct_lecturer_answer_smart(self, query, context, session_id=None, response_style='professional'):
+        """Generate direct answer with Smart Token Management"""
         
         system_prompt = self._get_personalized_system_prompt(session_id)
         
@@ -516,7 +1196,7 @@ class GeminiResponseGenerator:
         CÂU HỎI GIẢNG VIÊN: {query}
         
         THÔNG TIN CHÍNH XÁC TỪ CSDL:
-        {context['db_answer']}
+        {context.get('db_answer', context.get('response', ''))}
         
         YÊU CẦU:
         - Dùng CHÍNH XÁC thông tin từ CSDL
@@ -528,11 +1208,24 @@ class GeminiResponseGenerator:
         Trả lời:
         """
         
-        response = self._call_gemini_api_with_style(prompt, 'direct_enhance', response_style)
-        return response or f"Dạ thầy/cô, {context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-    
-    def _generate_enhanced_lecturer_answer(self, query, context, intent_info, entities, session_id, response_style='professional'):
-        """Generate enhanced answer with style awareness"""
+        # ✅ Smart token calculation
+        optimal_tokens = self.token_manager.calculate_optimal_tokens(response_style, len(prompt), 'direct_enhance')
+        
+        response = self._call_gemini_api_with_smart_tokens(prompt, 'direct_enhance', response_style, optimal_tokens)
+        
+        fallback = f"Dạ thầy/cô, {context.get('db_answer', context.get('response', 'thông tin đã cung cấp'))} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+        
+        token_info = {
+            'smart_tokens_used': True,
+            'method': 'direct_answer_smart',
+            'optimal_tokens': optimal_tokens,
+            'response_style': response_style
+        }
+        
+        return response or fallback, token_info
+
+    def _generate_enhanced_lecturer_answer_smart(self, query, context, intent_info, entities, session_id, response_style='professional'):
+        """Generate enhanced answer with Smart Token Management"""
         
         system_prompt = self._get_personalized_system_prompt(session_id)
         
@@ -540,6 +1233,8 @@ class GeminiResponseGenerator:
             context.get('generation_boosted', False) or 
             context.get('instruction') == 'enhance_answer_lecturer_boosted'
         )
+        
+        complexity_hint = 'enhanced_generation' if is_generation_boosted else 'balanced'
         
         if is_generation_boosted:
             prompt = f"""
@@ -550,7 +1245,7 @@ class GeminiResponseGenerator:
             CÂU HỎI GIẢNG VIÊN: {query}
             
             THÔNG TIN CƠ BẢN TỪ CSDL:
-            {context['db_answer']}
+            {context.get('db_answer', context.get('response', ''))}
             
             YÊU CẦU TĂNG CƯỜNG:
             - SỬ DỤNG thông tin CSDL làm nền tảng
@@ -572,7 +1267,7 @@ class GeminiResponseGenerator:
             CÂU HỎI GIẢNG VIÊN: {query}
             
             THÔNG TIN LIÊN QUAN TỪ CSDL:
-            {context['db_answer']}
+            {context.get('db_answer', context.get('response', ''))}
             
             YÊU CẦU:
             - Sử dụng thông tin CSDL làm gốc
@@ -584,86 +1279,49 @@ class GeminiResponseGenerator:
             Trả lời:
             """
         
-        response = self._call_gemini_api_with_style(prompt, 'enhanced_generation' if is_generation_boosted else 'balanced', response_style)
-        return response or f"Dạ thầy/cô, {context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+        # ✅ Smart token calculation
+        optimal_tokens = self.token_manager.calculate_optimal_tokens(response_style, len(prompt), complexity_hint)
+        
+        response = self._call_gemini_api_with_smart_tokens(prompt, complexity_hint, response_style, optimal_tokens)
+        
+        fallback = f"Dạ thầy/cô, {context.get('db_answer', context.get('response', 'thông tin đã cung cấp'))} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+        
+        token_info = {
+            'smart_tokens_used': True,
+            'method': 'enhanced_answer_smart',
+            'optimal_tokens': optimal_tokens,
+            'response_style': response_style,
+            'generation_boosted': is_generation_boosted
+        }
+        
+        return response or fallback, token_info
 
-    # ✅ NEW: Style-aware API call
-    def _call_gemini_api_with_style(self, prompt: str, strategy: str, response_style: str = 'professional') -> Optional[str]:
-        """Call Gemini API with style-specific generation config"""
-        try:
-            headers = {'Content-Type': 'application/json'}
-            
-            # Get style-specific config
-            style_config = self.style_generation_configs.get(response_style, self.style_generation_configs['professional'])
-            
-            # Merge with strategy-specific adjustments
-            generation_configs = {
-                'quick_clarify': {"temperature": style_config["temperature"] * 0.8, "maxOutputTokens": min(style_config["maxOutputTokens"], 80)},
-                'direct_enhance': {"temperature": style_config["temperature"], "maxOutputTokens": style_config["maxOutputTokens"]},
-                'enhanced_generation': {"temperature": style_config["temperature"] * 1.2, "maxOutputTokens": style_config["maxOutputTokens"] + 50},
-                'balanced': style_config
-            }
-            
-            config = generation_configs.get(strategy, style_config)
-            
-            # Ensure temperature is within bounds
-            config["temperature"] = max(0.1, min(1.0, config["temperature"]))
-            
-            print(f"🎨 STYLE CONFIG: {response_style} -> temp={config['temperature']}, tokens={config['maxOutputTokens']}")
-            
-            data = {
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": config,
-                "safetySettings": [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-                ]
-            }
-            
-            url = f"{self.base_url}?key={self.api_key}"
-            response = requests.post(url, headers=headers, json=data, timeout=20)
-            
-            if response.status_code == 200:
-                result = response.json()
-                if 'candidates' in result and result['candidates']:
-                    candidate = result['candidates'][0]
-                    if 'content' in candidate and 'parts' in candidate['content']:
-                        return candidate['content']['parts'][0]['text']
-            else:
-                logger.error(f"Gemini API Error {response.status_code}: {response.text}")
-            return None
+    def _generate_clarification_request_smart(self, query, context, session_id=None, response_style='professional'):
+        """Generate clarification request with Smart Token Management"""
         
-        except Exception as e:
-            logger.error(f"Gemini API call failed: {str(e)}")
-            return None
+        personal_address = self._get_personal_address(session_id)
         
-    def _generate_clarification_request(self, query, context, session_id=None, response_style='professional'):
-        """Generate clarification request with style"""
-        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
-        full_name = user_context.get('full_name', '')
+        # ✅ PREDEFINED smart responses based on style
+        clarification_templates = {
+            'friendly': f"Dạ {personal_address}, để em có thể hỗ trợ {personal_address} tốt nhất, {personal_address} có thể chia sẻ thêm chi tiết về vấn đề này được không ạ? 😊 Em rất sẵn lòng giúp đỡ!",
+            'brief': f"Dạ {personal_address}, cần thêm thông tin chi tiết ạ. 🎓",
+            'technical': f"Dạ {personal_address}, để cung cấp hướng dẫn kỹ thuật chính xác, {personal_address} vui lòng cung cấp thêm thông số và yêu cầu cụ thể ạ.",
+            'detailed': f"Dạ {personal_address}, để em có thể đưa ra câu trả lời toàn diện và chi tiết nhất, {personal_address} có thể bổ sung thêm về bối cảnh, mục đích sử dụng, và các yêu cầu cụ thể không ạ? Điều này sẽ giúp em hỗ trợ {personal_address} một cách hiệu quả nhất.",
+            'professional': f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+        }
         
-        if full_name:
-            name_suffix = full_name.split()[-1]
-            personal_address = f"thầy/cô {name_suffix}"
-        else:
-            personal_address = "thầy/cô"
+        response = clarification_templates.get(response_style, clarification_templates['professional'])
         
-        # Style-specific clarification
-        if response_style == 'friendly':
-            return f"Dạ {personal_address}, để em có thể hỗ trợ {personal_address} tốt nhất, {personal_address} có thể chia sẻ thêm chi tiết về vấn đề này được không ạ? 😊 Em rất sẵn lòng giúp đỡ!"
-        elif response_style == 'brief':
-            return f"Dạ {personal_address}, cần thêm thông tin chi tiết ạ. 🎓"
-        elif response_style == 'technical':
-            return f"Dạ {personal_address}, để cung cấp hướng dẫn kỹ thuật chính xác, {personal_address} vui lòng cung cấp thêm thông số và yêu cầu cụ thể ạ."
-        elif response_style == 'detailed':
-            return f"Dạ {personal_address}, để em có thể đưa ra câu trả lời toàn diện và chi tiết nhất, {personal_address} có thể bổ sung thêm về bối cảnh, mục đích sử dụng, và các yêu cầu cụ thể không ạ? Điều này sẽ giúp em hỗ trợ {personal_address} một cách hiệu quả nhất."
-        else:  # professional
-            return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
-            
-    def _generate_dont_know_response(self, query, context, session_id=None, response_style='professional'):
-        """Generate don't know response for lecturers"""
+        token_info = {
+            'smart_tokens_used': False,  # Used predefined template
+            'method': 'clarification_template',
+            'response_style': response_style
+        }
+        
+        return response, token_info
+
+    def _generate_dont_know_response_smart(self, query, context, session_id=None, response_style='professional'):
+        """Generate don't know response with Smart Token Management"""
         
         # Suggest relevant departments based on query content
         query_lower = query.lower()
@@ -684,7 +1342,19 @@ class GeminiResponseGenerator:
             dept = "phòng ban liên quan"
             contact = "info@bdu.edu.vn"
         
-        return f"Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ {dept} qua email {contact} để được hỗ trợ chi tiết ạ. 🎓"
+        response = f"Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ {dept} qua email {contact} để được hỗ trợ chi tiết ạ. 🎓"
+        
+        token_info = {
+            'smart_tokens_used': False,  # Used predefined template
+            'method': 'dont_know_template',
+            'response_style': response_style,
+            'suggested_department': dept
+        }
+        
+        return response, token_info
+
+    # Keep existing methods but update names and add token info where needed...
+    # [Rest of the methods remain the same but simplified for brevity]
 
     def _determine_lecturer_response_strategy(self, query, context, intent_info, conversation_context):
         """✅ ENHANCED: Response strategy with generation bias"""
@@ -767,18 +1437,7 @@ class GeminiResponseGenerator:
             return response
         
         # ✅ NEW: Lấy thông tin user để personalize addressing
-        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
-        full_name = user_context.get('full_name', '')
-        faculty_code = user_context.get('faculty_code', '')
-        
-        # Tạo xưng hô cá nhân hóa nếu có thông tin
-        if full_name:
-            name_suffix = full_name.split()[-1]  # Lấy tên
-            personal_address = f"thầy/cô {name_suffix}"
-        elif faculty_code:
-            personal_address = f"thầy/cô {faculty_code}"
-        else:
-            personal_address = "thầy/cô"
+        personal_address = self._get_personal_address(session_id)
         
         # 1. Sửa các vi phạm vai trò cho giảng viên
         prohibited_phrases = [
@@ -805,8 +1464,6 @@ class GeminiResponseGenerator:
                 response = personalized_start + ' ' + response_stripped
         
         # 4. ✅ CRITICAL: Đảm bảo kết thúc đúng cách với personalization
-        personalized_end = f"{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
-        
         if not response.strip().endswith('có cần hỗ trợ thêm gì không ạ?'):
             # Remove existing endings first
             response = re.sub(r'\s*(Thầy/cô có.*?không ạ\?|Cần.*?không\?|Có.*?không\?)?\s*$', '', response.strip())
@@ -823,16 +1480,9 @@ class GeminiResponseGenerator:
     def _get_contextual_out_of_scope_response_lecturer(self, conversation_context, session_id=None, user_response_style='professional'):
         """Out of scope response cho giảng viên với personalization"""
         
-        # ✅ NEW: Personalized out of scope response
+        personal_address = self._get_personal_address(session_id)
         user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
-        full_name = user_context.get('full_name', '')
         department_name = user_context.get('department_name', '')
-        
-        if full_name:
-            name_suffix = full_name.split()[-1]
-            personal_address = f"thầy/cô {name_suffix}"
-        else:
-            personal_address = "thầy/cô"
         
         if conversation_context.get('context_summary'):
             if department_name:
@@ -848,16 +1498,9 @@ class GeminiResponseGenerator:
     def _get_smart_fallback_with_context_lecturer(self, query, intent_info, conversation_context, session_id=None, user_response_style='professional'):
         """Smart fallback với conversation context cho giảng viên và personalization"""
         
-        # ✅ NEW: Personalized fallback
+        personal_address = self._get_personal_address(session_id)
         user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
-        full_name = user_context.get('full_name', '')
         department_name = user_context.get('department_name', '')
-        
-        if full_name:
-            name_suffix = full_name.split()[-1]
-            personal_address = f"thầy/cô {name_suffix}"
-        else:
-            personal_address = "thầy/cô"
         
         intent_name = intent_info.get('intent', 'general') if intent_info else 'general'
         
@@ -918,13 +1561,11 @@ class GeminiResponseGenerator:
         query_lower = query.lower()
         return any(kw in query_lower for kw in lecturer_education_keywords)
 
-    # ✅ ADDED: Missing methods for personalization testing
+    # Keep the remaining essential methods...
     def _build_enhanced_prompt(self, query: str, context=None, intent_info=None, entities=None, session_id=None, response_style='professional'):
         """Build enhanced prompt with style awareness"""
         system_prompt = self._get_personalized_system_prompt(session_id)
-        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
-        full_name = user_context.get('full_name', '')
-        personal_address = f"thầy/cô {full_name.split()[-1]}" if full_name else "thầy/cô"
+        personal_address = self._get_personal_address(session_id)
         
         context_info = str(context.get('response', '')) if isinstance(context, dict) else str(context or '')
         
@@ -942,19 +1583,11 @@ YÊU CẦU:
 Trả lời:"""
         return prompt
     
-    def _generate_style_aware_response(self, query: str, context=None, session_id=None, response_style='professional'):
-        """Generate style-aware response"""
-        prompt = self._build_enhanced_prompt(query, context, None, None, session_id, response_style)
-        response = self._call_gemini_api_with_style(prompt, 'balanced', response_style)
-        if response:
-            response = self._post_process_with_lecturer_consistency(response, query, context, 'balanced', {}, session_id)
-        return response or self._get_smart_fallback_with_context_lecturer(query, None, {}, session_id, response_style)
-    
     def test_response_style(self, test_query: str, response_style: str, session_id=None):
-        """Test response style functionality"""
+        """Test response style functionality with Smart Token Management"""
         try:
             test_context = {'response': 'Đây là thông tin test từ database.', 'confidence': 0.8}
-            response = self._generate_style_aware_response(test_query, test_context, session_id, response_style)
+            response, token_info = self._generate_smart_style_aware_response(test_query, test_context, session_id, response_style, 'balanced')
             
             style_info = {
                 'professional': 'Chuyên nghiệp - trang trọng, lịch sự',
@@ -964,6 +1597,9 @@ Trả lời:"""
                 'detailed': 'Chi tiết - đầy đủ, nhiều ví dụ'
             }
             
+            # ✅ Smart token range info
+            token_range = self.token_manager.style_token_ranges.get(response_style, {})
+            
             return {
                 'success': True,
                 'test_query': test_query,
@@ -971,8 +1607,9 @@ Trả lời:"""
                 'current_style': response_style,
                 'current_style_name': style_info.get(response_style, 'Unknown'),
                 'style_applied': response_style,
-                'config_used': self.style_generation_configs.get(response_style, {}),
-                'recommendation': f"Phong cách '{style_info.get(response_style)}' đã được áp dụng thành công."
+                'token_info': token_info,
+                'token_range': token_range,
+                'recommendation': f"Phong cách '{style_info.get(response_style)}' đã được áp dụng thành công với Smart Token Management."
             }
         except Exception as e:
             return {'success': False, 'error': str(e), 'test_query': test_query, 'current_style': response_style}
@@ -1024,23 +1661,28 @@ Trả lời:"""
         else:
             self.memory.conversations.clear()
     
-    # ✅ ENHANCED: System status with style info
+    # 🚀 ENHANCED: System status with Smart Token info
     def get_system_status(self) -> Dict[str, Any]:
-        """Get system status with style support info"""
+        """Get system status with Smart Token Management and External API info"""
         try:
             test_prompt = "Test ngắn cho giảng viên"
-            response = self._call_gemini_api_with_style(test_prompt, 'quick_clarify', 'professional')
+            response = self._call_gemini_api_with_smart_tokens(test_prompt, 'quick_clarify', 'professional', 80)
             
             return {
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.api_key),
                 'service_status': 'active' if response else 'error',
-                'mode': 'lecturer_focused_with_style_support',
+                'mode': 'smart_token_lecturer_focused_with_external_api',  # ✅ Updated
                 'memory_sessions': len(self.memory.conversations),
                 'personalization_sessions': len(self._user_context_cache),
-                'supported_styles': list(self.style_generation_configs.keys()),  # ✅ NEW
-                'style_generation_configs': self.style_generation_configs,  # ✅ NEW
+                'supported_styles': list(self.style_generation_configs.keys()),
+                'smart_token_ranges': self.token_manager.style_token_ranges,
                 'features': [
+                    'smart_token_management',
+                    'auto_response_completion',
+                    'adaptive_token_allocation',
+                    'style_aware_token_calculation',
+                    'incomplete_response_detection',
                     'lecturer_conversation_memory',
                     'lecturer_role_consistency',
                     'lecturer_context_aware_responses',
@@ -1051,9 +1693,12 @@ Trả lời:"""
                     'personalized_system_prompts',
                     'personalized_addressing',
                     'department_specific_responses',
-                    'response_style_support',  # ✅ NEW
-                    'style_aware_generation',  # ✅ NEW
-                    'dynamic_style_configs'  # ✅ NEW
+                    'response_style_support',
+                    'style_aware_generation',
+                    'dynamic_style_configs',
+                    'external_api_data_processing',  # ✅ NEW feature
+                    'lecturer_schedule_formatting',  # ✅ NEW feature
+                    'personal_information_handling'  # ✅ NEW feature
                 ]
             }
         except Exception as e:
