@@ -3,7 +3,9 @@ import numpy as np
 import logging
 import re
 from sklearn.metrics.pairwise import cosine_similarity
+from collections import defaultdict, Counter
 import time
+from typing import Dict, List, Tuple, Optional
 
 # Try to import transformers, fallback if not available
 try:
@@ -16,7 +18,17 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class PhoBERTIntentClassifier:
-    """Enhanced PhoBERT-based Intent Classification for BDU Lecturers - COMPLETE VERSION"""
+    """
+    🚀 Enhanced PhoBERT-based Intent Classification for BDU Lecturers - PRODUCTION VERSION
+    
+    Features:
+    - Ensemble methods (PhoBERT + Keyword + Pattern + Context)
+    - 15 intent categories (7 existing + 8 new from QA analysis)
+    - Multi-intent detection
+    - Context-aware classification
+    - Confidence calibration
+    - Vietnamese normalization support
+    """
     
     def __init__(self):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if TRANSFORMERS_AVAILABLE else None
@@ -26,18 +38,35 @@ class PhoBERTIntentClassifier:
         # ESSENTIAL: Set fallback_mode FIRST
         self.fallback_mode = True  # Default to fallback mode
         
-        # Initialize components
-        self.intent_categories = self._initialize_lecturer_intents()
-        self.entity_patterns = self._initialize_lecturer_entities()
+        # 🆕 Enhanced components
+        self.ensemble_weights = {
+            'phobert_semantic': 0.4,
+            'keyword_matching': 0.3,
+            'pattern_matching': 0.2,
+            'context_analysis': 0.1
+        }
         
-        # ✅ THÊM: Initialize normalizer BEFORE model loading
+        # 🆕 Multi-intent detection patterns
+        self.multi_intent_patterns = self._initialize_multi_intent_patterns()
+        
+        # 🆕 Context-aware intent boosting
+        self.context_boosting_rules = self._initialize_context_boosting()
+        
+        # 🆕 Intent confidence calibration
+        self.confidence_calibration = self._initialize_confidence_calibration()
+        
+        # Initialize components
+        self.intent_categories = self._initialize_enhanced_lecturer_intents()
+        self.entity_patterns = self._initialize_enhanced_lecturer_entities()
+        
+        # ✅ Initialize normalizer
         self.normalizer = None
         try:
             from .vietnamese_normalizer import VietnameseNormalizer
             self.normalizer = VietnameseNormalizer()
-            print("✅ Vietnamese Normalizer initialized successfully")
+            logger.info("✅ Vietnamese Normalizer initialized successfully")
         except ImportError as e:
-            print(f"❌ Failed to import VietnameseNormalizer: {e}")
+            logger.warning(f"❌ Failed to import VietnameseNormalizer: {e}")
             # Create dummy normalizer
             self.normalizer = self._create_dummy_normalizer()
         
@@ -62,218 +91,273 @@ class PhoBERTIntentClassifier:
         
         return DummyNormalizer()
     
-    def _initialize_lecturer_intents(self):
-        """Comprehensive intent categories specifically for BDU lecturers"""
+    def _initialize_multi_intent_patterns(self):
+        """🆕 Patterns để detect multi-intent queries"""
         return {
+            'sequential_intents': [
+                # "Tôi muốn xem lịch dạy và nộp báo cáo đề thi"
+                r'(?P<intent1>\w+)\s+(?:và|rồi|sau đó)\s+(?P<intent2>\w+)',
+                r'(?P<intent1>\w+)\s*,\s*(?P<intent2>\w+)',
+            ],
+            'conditional_intents': [
+                # "Nếu tôi nộp báo cáo đề thi thì có được khen thưởng không?"
+                r'(?:nếu|khi)\s+(?P<condition>\w+).*(?:thì|sẽ)\s+(?P<result>\w+)',
+            ],
+            'comparison_intents': [
+                # "So sánh quy trình báo cáo đề thi và báo cáo nghiên cứu"
+                r'(?:so sánh|khác biệt)\s+(?P<intent1>\w+)\s+(?:và|với)\s+(?P<intent2>\w+)',
+            ]
+        }
+    
+    def _initialize_context_boosting(self):
+        """🆕 Context-aware intent boosting rules"""
+        return {
+            'time_sensitive_boost': {
+                'deadline_keywords': ['hạn cuối', 'deadline', 'trước', 'sau'],
+                'boost_intents': ['deadline_temporal', 'bank_exam_questions'],
+                'boost_factor': 1.3
+            },
+            'personal_context_boost': {
+                'personal_keywords': ['tôi', 'của tôi', 'cho tôi', 'với tôi'],
+                'boost_intents': ['personal_schedule', 'personal_info'],
+                'boost_factor': 1.5
+            },
+            'urgency_boost': {
+                'urgency_keywords': ['gấp', 'khẩn cấp', 'urgent', 'cần ngay'],
+                'boost_intents': ['deadline_temporal', 'clarification_needed'],
+                'boost_factor': 1.4
+            },
+            'recent_conversation_boost': {
+                # Boost intents that appeared in recent conversation
+                'decay_factor': 0.8,  # Each turn back reduces boost by 20%
+                'max_history': 3
+            }
+        }
+    
+    def _initialize_confidence_calibration(self):
+        """🆕 Confidence calibration parameters"""
+        return {
+            'base_thresholds': {
+                'very_high': 0.9,
+                'high': 0.7,
+                'medium': 0.5,
+                'low': 0.3,
+                'very_low': 0.1
+            },
+            'calibration_factors': {
+                'single_keyword_match': 0.8,     # Reduce confidence for single keyword
+                'multiple_keyword_match': 1.2,   # Boost for multiple keywords
+                'exact_phrase_match': 1.5,       # Strong boost for exact phrases
+                'semantic_similarity_high': 1.3, # Boost for high semantic similarity
+                'context_continuity': 1.2,       # Boost for context continuity
+                'multi_intent_detected': 0.9     # Slight reduction for multi-intent
+            }
+        }
+    
+    def _initialize_enhanced_lecturer_intents(self):
+        """🚀 Enhanced intent categories với tất cả 15 intents (7 + 8 new)"""
+        return {
+            # ===== EXISTING INTENTS (7) =====
             'greeting': {
                 'keywords': ['xin chào', 'hello', 'hi', 'chào thầy', 'chào cô', 'halo', 'chào', 'hey'],
                 'confidence_threshold': 0.6,
                 'description': 'Chào hỏi',
-                'response_style': 'friendly'
+                'response_style': 'friendly',
+                'patterns': [r'(?:xin\s+)?chào\s+(?:thầy|cô)', r'hello|hi|hey'],
+                'context_indicators': {'greeting_markers': ['chào', 'hello']},
+                'boosters': {'polite_terms': ['xin chào', 'chào thầy'], 'boost_factor': 1.2}
             },
             
-            # ✅ NEW: Personal information and schedule intents
-            'personal_schedule': {
-                'keywords': [
-                    # Personal schedule keywords
-                    'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
-                    'lịch giảng của tôi', 'lich giang cua toi', 'lịch dạy của tôi', 'lich day cua toi',
-                    'tôi giảng', 'toi giang', 'tôi dạy', 'toi day', 'môn của tôi', 'mon cua toi',
-                    'lớp của tôi', 'lop cua toi', 'phòng của tôi', 'phong cua toi',
-                    'hôm nay tôi', 'hom nay toi', 'ngày mai tôi', 'ngay mai toi',
-                    'tuần này tôi', 'tuan nay toi', 'tuần tới tôi', 'tuan toi toi',
-                    'lịch tuần', 'lich tuan', 'lịch ngày', 'lich ngay',
-                    # Schedule-related with time context
-                    'lịch giảng dạy hôm nay', 'lich giang day hom nay',
-                    'thời khóa biểu ngày mai', 'thoi khoa bieu ngay mai',
-                    'lịch dạy tuần này', 'lich day tuan nay'
-                ],
-                'confidence_threshold': 0.3,  # Lower threshold for better detection
-                'description': 'Lịch giảng dạy cá nhân',
-                'response_style': 'detailed'
-            },
-            
-            'personal_info': {
-                'keywords': [
-                    # Identity questions
-                    'tôi là ai', 'toi la ai', 'thông tin của tôi', 'thong tin cua toi',
-                    'tôi làm gì', 'toi lam gi', 'công việc của tôi', 'cong viec cua toi',
-                    'chức danh của tôi', 'chuc danh cua toi', 'vị trí của tôi', 'vi tri cua toi',
-                    'email của tôi', 'gmail của tôi', 'số điện thoại của tôi',
-                    'mã giảng viên của tôi', 'ma giang vien cua toi',
-                    'thông tin cá nhân', 'thong tin ca nhan',
-                    'hồ sơ của tôi', 'ho so cua toi', 'profile của tôi'
-                ],
-                'confidence_threshold': 0.4,
-                'description': 'Thông tin cá nhân giảng viên',
-                'response_style': 'informative'
-            },
-            
-            'schedule_general': {
-                'keywords': [
-                    # General schedule queries (might need external API)
-                    'lịch giảng dạy', 'lich giang day', 'thời khóa biểu', 'thoi khoa bieu',
-                    'lịch học', 'lich hoc', 'lịch dạy', 'lich day', 'tkb', 'schedule',
-                    'lịch tuần', 'lich tuan', 'lịch ngày', 'lich ngay', 'lịch tháng', 'lich thang',
-                    'giờ dạy', 'gio day', 'giờ giảng', 'gio giang', 'ca dạy', 'ca day'
-                ],
-                'confidence_threshold': 0.4,
-                'description': 'Lịch giảng dạy chung',
-                'response_style': 'informative'
-            },
-            
-            # ✅ LECTURER-SPECIFIC INTENTS based on QA.csv analysis
             'bank_exam_questions': {
-                'keywords': ['ngân hàng đề thi', 'ngan hang de thi', 'đề thi', 'de thi', 'báo cáo đề thi', 'bao cao de thi', 'kế hoạch đề thi', 'ke hoach de thi', 'file mềm', 'file mem'],
+                'keywords': ['ngân hàng đề thi', 'ngan hang de thi', 'đề thi', 'de thi', 'báo cáo đề thi', 'file mềm'],
                 'confidence_threshold': 0.4,
                 'description': 'Ngân hàng đề thi',
-                'response_style': 'detailed'
+                'response_style': 'detailed',
+                'patterns': [r'(?:báo cáo|nộp|gửi).*(?:ngân hàng|đề thi)', r'file\s+mềm.*đề\s+thi'],
+                'context_indicators': {'document_markers': ['báo cáo', 'file'], 'exam_markers': ['đề thi', 'ngân hàng']},
+                'boosters': {'document_refs': ['TB_1252'], 'specific_terms': ['ldkham@bdu.edu.vn'], 'boost_factor': 1.4}
             },
             
             'annual_task_declaration': {
-                'keywords': ['kê khai nhiệm vụ', 'ke khai nhiem vu', 'nhiệm vụ năm học', 'nhiem vu nam hoc', 'kê khai', 'ke khai', 'giờ chuẩn', 'gio chuan', 'giảng viên cơ hữu', 'giang vien co huu', 'thỉnh giảng', 'thinh giang'],
+                'keywords': ['kê khai nhiệm vụ', 'ke khai nhiem vu', 'nhiệm vụ năm học', 'giờ chuẩn', 'gio chuan', 'thỉnh giảng'],
                 'confidence_threshold': 0.4,
                 'description': 'Kê khai nhiệm vụ năm học',
-                'response_style': 'informative'
+                'response_style': 'informative',
+                'patterns': [r'kê\s+khai.*nhiệm\s+vụ', r'giờ\s+chuẩn.*năm\s+học'],
+                'context_indicators': {'task_markers': ['kê khai', 'nhiệm vụ'], 'time_markers': ['năm học']},
+                'boosters': {'document_refs': ['TB_746'], 'specific_terms': ['daotao@bdu.edu.vn'], 'boost_factor': 1.4}
             },
             
             'academic_journal': {
-                'keywords': ['tạp chí', 'tap chi', 'tạp chí khoa học', 'tap chi khoa hoc', 'bài viết', 'bai viet', 'nghiên cứu', 'nghien cuu', 'khoa học công nghệ', 'khoa hoc cong nghe', 'gửi bài', 'gui bai'],
+                'keywords': ['tạp chí', 'tap chi', 'tạp chí khoa học', 'bài viết', 'bai viet', 'nghiên cứu', 'gửi bài'],
                 'confidence_threshold': 0.4,
                 'description': 'Tạp chí khoa học',
-                'response_style': 'detailed'
+                'response_style': 'detailed',
+                'patterns': [r'(?:gửi|nộp).*(?:bài viết|tạp chí)', r'tạp\s+chí.*khoa\s+học'],
+                'context_indicators': {'research_markers': ['nghiên cứu', 'bài viết'], 'journal_markers': ['tạp chí']},
+                'boosters': {'document_refs': ['TB_676'], 'specific_terms': ['jst@bdu.edu.vn'], 'boost_factor': 1.4}
             },
             
             'competition_awards': {
-                'keywords': ['thi đua', 'thi dua', 'khen thưởng', 'khen thuong', 'danh hiệu', 'danh hieu', 'bằng khen', 'bang khen', 'lễ khen thưởng', 'le khen thuong', 'chiến sĩ thi đua', 'chien si thi dua', 'lao động tiên tiến', 'lao dong tien tien'],
+                'keywords': ['thi đua', 'thi dua', 'khen thưởng', 'khen thuong', 'danh hiệu', 'bằng khen', 'lễ khen thưởng'],
                 'confidence_threshold': 0.4,
                 'description': 'Thi đua khen thưởng',
-                'response_style': 'encouraging'
+                'response_style': 'encouraging',
+                'patterns': [r'thi\s+đua.*khen\s+thưởng', r'(?:danh hiệu|bằng khen)'],
+                'context_indicators': {'award_markers': ['thi đua', 'khen thưởng'], 'recognition_markers': ['danh hiệu']},
+                'boosters': {'award_terms': ['chiến sĩ thi đua', 'lao động tiên tiến'], 'boost_factor': 1.3}
             },
             
-            'reports_deadlines': {
-                'keywords': ['báo cáo', 'bao cao', 'nộp', 'nop', 'hạn cuối', 'han cuoi', 'deadline', 'thời hạn', 'thoi han', 'gửi về', 'gui ve', 'phòng đảm bảo chất lượng', 'phong dam bao chat luong'],
+            'personal_schedule': {
+                'keywords': ['lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi', 'tôi giảng', 'tôi dạy'],
+                'confidence_threshold': 0.3,
+                'description': 'Lịch giảng dạy cá nhân',
+                'response_style': 'detailed',
+                'patterns': [r'(?:lịch|tkb|thời khóa biểu).*(?:tôi|của tôi)', r'(?:tôi|mình).*(?:dạy|giảng)'],
+                'context_indicators': {'personal_markers': ['tôi', 'của tôi'], 'schedule_markers': ['lịch', 'tkb']},
+                'boosters': {'time_contexts': ['hôm nay', 'ngày mai'], 'boost_factor': 1.5}
+            },
+            
+            'personal_info': {
+                'keywords': ['tôi là ai', 'toi la ai', 'thông tin của tôi', 'email của tôi', 'chức danh của tôi'],
                 'confidence_threshold': 0.4,
-                'description': 'Báo cáo và thủ tục',
-                'response_style': 'urgent'
+                'description': 'Thông tin cá nhân giảng viên',
+                'response_style': 'informative',
+                'patterns': [r'(?:tôi|mình)\s+là\s+ai', r'(?:thông tin|email).*của\s+tôi'],
+                'context_indicators': {'identity_markers': ['tôi là', 'thông tin'], 'info_markers': ['email', 'chức danh']},
+                'boosters': {'identity_terms': ['hồ sơ', 'profile'], 'boost_factor': 1.2}
             },
             
-            'teaching_schedule': {
-                'keywords': ['lịch giảng dạy', 'lich giang day', 'thời khóa biểu', 'thoi khoa bieu', 'lịch học', 'lich hoc', 'cập nhật dữ liệu', 'cap nhat du lieu', 'phần mềm quản lý', 'phan mem quan ly', 'đào tạo', 'dao tao'],
+            # ===== NEW INTENTS FROM QA ANALYSIS (8) =====
+            'document_reference': {
+                'keywords': ['thông báo số', 'TB_', 'quyết định số', 'QĐ_', 'theo thông báo', 'TB_1252', 'TB_746', 'TB_676'],
+                'confidence_threshold': 0.3,
+                'description': 'Hỏi về văn bản, thông báo cụ thể',
+                'response_style': 'authoritative',
+                'patterns': [r'(?:theo|căn cứ)\s+(?:thông báo|TB|quyết định|QĐ)\s+số\s*\d+', r'TB_\d+'],
+                'context_indicators': {'authority_markers': ['theo', 'căn cứ'], 'document_numbers': ['số', 'TB_']},
+                'boosters': {'document_refs': ['TB_1252', 'TB_746'], 'boost_factor': 1.6}
+            },
+            
+            'deadline_temporal': {
+                'keywords': ['hạn cuối', 'han cuoi', 'deadline', 'trước ngày', 'hết ngày', 'chậm nhất', '15/01/2024'],
                 'confidence_threshold': 0.4,
-                'description': 'Lịch giảng dạy',
-                'response_style': 'informative'
+                'description': 'Hỏi về thời hạn, deadline',
+                'response_style': 'urgent',
+                'patterns': [r'(?:hạn|deadline)\s*(?:cuối|chót|nào)', r'\d{1,2}[/]\d{1,2}[/]\d{4}'],
+                'context_indicators': {'time_markers': ['ngày', 'tháng'], 'deadline_urgency': ['hạn', 'deadline']},
+                'boosters': {'urgent_terms': ['gấp', 'khẩn cấp'], 'boost_factor': 1.4}
             },
             
-            'quality_assurance': {
-                'keywords': ['đảm bảo chất lượng', 'dam bao chat luong', 'kiểm tra', 'kiem tra', 'giám sát', 'giam sat', 'đánh giá', 'danh gia', 'chuẩn đầu ra', 'chuan dau ra', 'tiêu chuẩn', 'tieu chuan'],
+            'contact_responsibility': {
+                'keywords': ['gửi cho ai', 'phụ trách', 'địa chỉ email', '@bdu.edu.vn', 'ldkham@bdu.edu.vn', 'ai ký'],
+                'confidence_threshold': 0.4,
+                'description': 'Hỏi về liên hệ, người phụ trách',
+                'response_style': 'informative',
+                'patterns': [r'(?:gửi|liên hệ)\s+(?:cho\s+)?ai', r'\w+@bdu\.edu\.vn'],
+                'context_indicators': {'contact_markers': ['email', 'liên hệ'], 'responsibility_markers': ['phụ trách', 'ký']},
+                'boosters': {'specific_emails': ['ldkham@bdu.edu.vn'], 'boost_factor': 1.3}
+            },
+            
+            'technical_specification': {
+                'keywords': ['định dạng', 'file mềm', 'cách gửi', 'thể lệ', 'bản điện tử', 'yêu cầu kỹ thuật'],
                 'confidence_threshold': 0.5,
-                'description': 'Đảm bảo chất lượng',
-                'response_style': 'detailed'
+                'description': 'Hỏi về yêu cầu kỹ thuật, định dạng',
+                'response_style': 'detailed',
+                'patterns': [r'(?:định dạng|format)\s+(?:file|gì|nào)', r'(?:cách|thế nào)\s+(?:gửi|nộp)'],
+                'context_indicators': {'format_markers': ['định dạng', 'file'], 'submission_markers': ['gửi', 'nộp']},
+                'boosters': {'technical_terms': ['định dạng', 'yêu cầu kỹ thuật'], 'boost_factor': 1.2}
             },
             
-            'departments_contacts': {
-                'keywords': ['phòng ban', 'phong ban', 'liên hệ', 'lien he', 'email', 'phone', 'contact', 'phòng tổ chức', 'phong to chuc', 'phòng nghiên cứu', 'phong nghien cuu', 'phòng khảo thí', 'phong khao thi'],
-                'confidence_threshold': 0.4,
-                'description': 'Thông tin phòng ban',
-                'response_style': 'helpful'
-            },
-            
-            # ✅ GENERAL EDUCATION INTENTS (kept from original)
-            'admission_general': {
-                'keywords': ['tuyển sinh', 'tuyen sinh', 'nhập học', 'đăng ký học', 'vào trường', 'điều kiện tuyển sinh', 'xét tuyển'],
+            'compliance_consequence': {
+                'keywords': ['nếu không', 'xử lý như thế nào', 'hậu quả', 'vi phạm', 'bị xem là', 'thiếu giờ nghĩa vụ'],
                 'confidence_threshold': 0.5,
-                'description': 'Thông tin tuyển sinh chung',
-                'response_style': 'informative'
-            },
-            'tuition_general': {
-                'keywords': ['học phí', 'hoc phi', 'hp', 'chi phí', 'chi phi', 'tiền học', 'tien hoc', 'mức phí', 'muc phi', 'phí học tập', 'phi hoc tap'],
-                'confidence_threshold': 0.4,
-                'description': 'Học phí chung',
-                'response_style': 'informative'
-            },
-            'programs': {
-                'keywords': ['ngành', 'nganh', 'chuyên ngành', 'chuyen nganh', 'đào tạo', 'dao tao', 'chương trình học', 'chuong trinh hoc'],
-                'confidence_threshold': 0.5,
-                'description': 'Chương trình đào tạo',
-                'response_style': 'informative'
-            },
-            'facilities': {
-                'keywords': ['cơ sở vật chất', 'co so vat chat', 'phòng học', 'phong hoc', 'thư viện', 'thu vien', 'lab', 'ký túc xá', 'ky tuc xa', 'tiện ích', 'tien ich'],
-                'confidence_threshold': 0.6,
-                'description': 'Cơ sở vật chất',
-                'response_style': 'descriptive'
+                'description': 'Hỏi về tuân thủ và hậu quả vi phạm',
+                'response_style': 'warning',
+                'patterns': [r'(?:nếu|nếu như)\s+(?:không|chậm|vi phạm)', r'(?:xử lý|hậu quả)\s+(?:như thế nào|gì)'],
+                'context_indicators': {'condition_markers': ['nếu'], 'consequence_markers': ['bị', 'hậu quả']},
+                'boosters': {'violation_terms': ['vi phạm quy định'], 'boost_factor': 1.3}
             },
             
-            # ✅ CLARIFICATION AND VAGUE INTENTS
+            'process_sequence': {
+                'keywords': ['quy trình', 'thủ tục', 'các bước', 'thứ tự', 'từng bước', 'làm thế nào', 'cách thức'],
+                'confidence_threshold': 0.4,
+                'description': 'Hỏi về quy trình, thủ tục',
+                'response_style': 'procedural',
+                'patterns': [r'(?:quy trình|thủ tục)\s+(?:gì|nào|như thế nào)', r'(?:các bước|thứ tự)\s+(?:thực hiện|làm)'],
+                'context_indicators': {'process_markers': ['quy trình', 'thủ tục'], 'sequence_markers': ['bước', 'thứ tự']},
+                'boosters': {'process_terms': ['quy trình chi tiết'], 'boost_factor': 1.2}
+            },
+            
+            'authorization_approval': {
+                'keywords': ['phê duyệt', 'ai duyệt', 'cho phép', 'thẩm quyền', 'hiệu trưởng', 'phó hiệu trưởng'],
+                'confidence_threshold': 0.4,
+                'description': 'Hỏi về phê duyệt, ủy quyền',
+                'response_style': 'authoritative',
+                'patterns': [r'(?:ai|đơn vị nào)\s+(?:duyệt|phê duyệt)', r'(?:có được|được)\s+(?:phép|quyền)'],
+                'context_indicators': {'authority_markers': ['duyệt', 'phê duyệt'], 'hierarchy_markers': ['hiệu trưởng']},
+                'boosters': {'authority_titles': ['hiệu trưởng'], 'boost_factor': 1.3}
+            },
+            
+            'document_comparison': {
+                'keywords': ['so sánh', 'khác biệt', 'TB_1252 và TB_746', 'các thông báo', 'giống nhau', 'khác với'],
+                'confidence_threshold': 0.5,
+                'description': 'So sánh giữa các văn bản',
+                'response_style': 'analytical',
+                'patterns': [r'(?:so sánh|khác biệt)\s+(?:giữa|với)', r'TB_\d+\s+(?:và|với)\s+TB_\d+'],
+                'context_indicators': {'comparison_markers': ['so sánh', 'khác'], 'conjunction_markers': ['và', 'với']},
+                'boosters': {'multi_doc_refs': ['TB_1252 và TB_746'], 'boost_factor': 1.4}
+            },
+            
+            # ===== UTILITY INTENTS =====
             'clarification_needed': {
-                'keywords': ['gì', 'gi', 'sao', 'nào', 'nao', 'như thế nào', 'nhu the nao', 'làm sao', 'lam sao', 'cách nào', 'cach nao', 'thế nào', 'the nao'],
+                'keywords': ['gì', 'gi', 'sao', 'nào', 'nao', 'như thế nào', 'làm sao', 'cách nào'],
                 'confidence_threshold': 0.2,
                 'description': 'Cần làm rõ',
-                'response_style': 'clarifying'
+                'response_style': 'clarifying',
+                'patterns': [r'(?:gì|sao|nào|như thế nào)\s*\?*$'],
+                'context_indicators': {'vague_markers': ['gì', 'sao', 'nào']},
+                'boosters': {'question_markers': ['?'], 'boost_factor': 1.1}
             },
             
             'general': {
-                'keywords': ['thông tin', 'thong tin', 'hỗ trợ', 'ho tro', 'giúp', 'giup', 'hướng dẫn', 'huong dan', 'bdu', 'đại học bình dương', 'dai hoc binh duong'],
+                'keywords': ['thông tin', 'hỗ trợ', 'giúp', 'hướng dẫn', 'bdu', 'đại học bình dương'],
                 'confidence_threshold': 0.15,
                 'description': 'Câu hỏi chung',
-                'response_style': 'neutral'
+                'response_style': 'neutral',
+                'patterns': [r'(?:thông tin|hỗ trợ|giúp).*(?:bdu|đại học)'],
+                'context_indicators': {'general_markers': ['thông tin', 'hỗ trợ']},
+                'boosters': {'school_terms': ['bdu', 'đại học bình dương'], 'boost_factor': 1.0}
             }
         }
     
-    def _initialize_lecturer_entities(self):
+    def _initialize_enhanced_lecturer_entities(self):
         """Enhanced entity patterns for lecturers"""
         return {
             'lecturer_departments': [
                 'phòng đảm bảo chất lượng', 'phòng khảo thí', 'phòng tổ chức cán bộ',
-                'phòng nghiên cứu hợp tác', 'phòng đào tạo', 'phòng công tác sinh viên',
-                'phong dam bao chat luong', 'phong khao thi', 'phong to chuc can bo',
-                'phong nghien cuu hop tac', 'phong dao tao', 'phong cong tac sinh vien'
+                'phòng nghiên cứu hợp tác', 'phòng đào tạo', 'phòng công tác sinh viên'
             ],
             'lecturer_positions': [
-                'giảng viên', 'giảng viên cơ hữu', 'giảng viên thỉnh giảng',
-                'phó giáo sư', 'tiến sĩ', 'thạc sĩ', 'trưởng khoa', 'phó khoa',
-                'giang vien', 'giang vien co huu', 'giang vien thinh giang',
-                'pho giao su', 'tien si', 'thac si', 'truong khoa', 'pho khoa'
+                'giảng viên', 'phó giáo sư', 'tiến sĩ', 'thạc sĩ', 'trưởng khoa', 'phó khoa'
             ],
             'document_types': [
-                'báo cáo', 'kế hoạch', 'thông báo', 'quyết định', 'file mềm',
-                'bao cao', 'ke hoach', 'thong bao', 'quyet dinh', 'file mem',
-                'văn bản', 'hồ sơ', 'tài liệu', 'van ban', 'ho so', 'tai lieu'
+                'báo cáo', 'kế hoạch', 'thông báo', 'quyết định', 'file mềm', 'văn bản'
             ],
-            # ✅ NEW: Personal context entities
             'personal_pronouns': [
-                'tôi', 'toi', 'của tôi', 'cua toi', 'cho tôi', 'cho toi',
-                'với tôi', 'voi toi', 'về tôi', 've toi', 'tôi có', 'toi co'
+                'tôi', 'toi', 'của tôi', 'cua toi', 'cho tôi', 'cho toi'
             ],
-            # ✅ NEW:
             'schedule_contexts': [
-                'hôm nay', 'hom nay', 'ngày mai', 'ngay mai', 'tuần này', 'tuan nay',
-                'tuần tới', 'tuan toi', 'tháng này', 'thang nay', 'tháng tới', 'thang toi',
-                'today', 'tomorrow', 'this week', 'next week', 'this month', 'next month'
+                'hôm nay', 'hom nay', 'ngày mai', 'ngay mai', 'tuần này', 'tuan nay'
             ],
             'time_expressions': [
-                'năm học 2023-2024', 'học kỳ I', 'học kỳ II', 'học kỳ III', 'kỳ hè',
-                'nam hoc 2023-2024', 'hoc ky I', 'hoc ky II', 'hoc ky II', 'ky he',
-                'trước ngày', 'hạn cuối', 'deadline', 'truoc ngay', 'han cuoi'
+                'năm học 2023-2024', 'học kỳ I', 'học kỳ II', 'trước ngày', 'hạn cuối'
             ],
             'lecturer_activities': [
-                'giảng dạy', 'nghiên cứu khoa học', 'phục vụ cộng đồng',
-                'giang day', 'nghien cuu khoa hoc', 'phuc vu cong dong',
-                'thi đua', 'khen thưởng', 'đánh giá', 'thi dua', 'khen thuong', 'danh gia'
-            ],
-            'majors': [
-                'công nghệ thông tin', 'cntt', 'it', 'khoa học máy tính', 'tin học',
-                'kinh tế', 'quản trị kinh doanh', 'marketing', 'tài chính ngân hàng', 'kế toán',
-                'luật', 'luật học', 'pháp lý', 'luật kinh tế',
-                'y khoa', 'y học', 'bác sĩ', 'điều dưỡng', 'dược', 'y tế',
-                'kỹ thuật', 'xây dựng', 'cơ khí', 'điện', 'điện tử', 'oto'
+                'giảng dạy', 'nghiên cứu khoa học', 'phục vụ cộng đồng', 'thi đua', 'khen thưởng'
             ],
             'emotions': [
-                'cần gấp', 'khẩn cấp', 'urgent', 'quan trọng', 'ưu tiên',
-                'can gap', 'khan cap', 'quan trong', 'uu tien',
-                'lo lắng', 'khó khăn', 'căng thẳng', 'stress',
-                'lo lang', 'kho khan', 'cang thang'
+                'cần gấp', 'khẩn cấp', 'urgent', 'quan trọng', 'lo lắng', 'khó khăn'
             ]
         }
     
@@ -302,221 +386,294 @@ class PhoBERTIntentClassifier:
             self.fallback_mode = True  # Ensure fallback mode is set
     
     def classify_intent(self, query):
-        """Enhanced intent classification with personal context detection for lecturers"""
+        """🚀 Main classify method - Enhanced intent classification với ensemble methods"""
+        return self.enhanced_classify_intent(query)
+    
+    def enhanced_classify_intent(self, query, conversation_context=None):
+        """🚀 Enhanced intent classification với ensemble methods"""
         if not query or not query.strip():
-            return {
-                'intent': 'general',
-                'confidence': 0.3,
-                'description': 'Câu hỏi chung',
-                'response_style': 'neutral'
-            }
+            return self._get_default_intent()
         
-        # Check if normalizer exists
+        # Normalize query
         if not self.normalizer:
-            print("❌ NORMALIZER ERROR: Normalizer not available")
             query_variants = [query, query.lower()]
             normalized_query = query.lower()
         else:
-            # NORMALIZE QUERY FIRST
             normalized_query = self.normalizer.normalize_query(query)
             query_variants = self.normalizer.create_search_variants(query)
         
-        print(f"🔍 LECTURER INTENT DEBUG: Original = '{query}'")
-        print(f"🔍 LECTURER INTENT DEBUG: Normalized = '{normalized_query}'")
-        print(f"🔍 LECTURER INTENT DEBUG: Variants = {query_variants}")
+        logger.info(f"🧠 Enhanced Intent Classification: '{query}' -> normalized: '{normalized_query}'")
         
-        intent_scores = {}
+        # 🎯 Ensemble Classification
+        ensemble_results = {}
         
-        # Method 1: Enhanced keyword matching with variants for lecturers
+        # Method 1: Enhanced Keyword Matching
+        keyword_results = self._enhanced_keyword_classification(query_variants)
+        ensemble_results['keyword_matching'] = keyword_results
+        
+        # Method 2: Pattern Matching
+        pattern_results = self._pattern_based_classification(normalized_query)
+        ensemble_results['pattern_matching'] = pattern_results
+        
+        # Method 3: Context Analysis
+        context_results = self._context_aware_classification(normalized_query, conversation_context)
+        ensemble_results['context_analysis'] = context_results
+        
+        # Method 4: PhoBERT Semantic (if available)
+        if not self.fallback_mode and self.model:
+            semantic_results = self._semantic_classification(normalized_query)
+            ensemble_results['phobert_semantic'] = semantic_results
+        
+        # 🎯 Ensemble Fusion
+        final_result = self._fuse_ensemble_results(ensemble_results, query, conversation_context)
+        
+        # 🎯 Multi-Intent Detection
+        multi_intent_result = self._detect_multi_intent(query, final_result)
+        
+        # 🎯 Confidence Calibration
+        calibrated_result = self._calibrate_intent_confidence(final_result, query, conversation_context)
+        
+        logger.info(f"🎯 Final Intent: {calibrated_result['intent']} (confidence: {calibrated_result['confidence']:.3f})")
+        
+        return calibrated_result
+    
+    def _enhanced_keyword_classification(self, query_variants):
+        """🚀 Enhanced keyword matching với multiple variants"""
+        intent_scores = defaultdict(float)
+        
         for variant in query_variants:
             variant_lower = variant.lower().strip()
             
-            for intent, config in self.intent_categories.items():
-                score = 0
-                keyword_matches = 0
+            for intent_name, config in self.intent_categories.items():
+                # Regular keywords
+                keyword_score = self._calculate_keyword_score(variant_lower, config['keywords'])
                 
-                for keyword in config['keywords']:
-                    if keyword in variant_lower:
-                        # ✅ ENHANCED: Boost score for personal/schedule intents
-                        if intent in ['personal_schedule', 'personal_info', 'schedule_general']:
-                            score += 3.0  # High weight for personal intents
-                        elif intent.startswith(('bank_exam', 'annual_task', 'academic_journal', 'competition_awards')):
-                            score += 2.5  # Higher weight for lecturer-specific intents
-                        elif keyword == variant_lower:
-                            score += 2
-                        elif variant_lower.startswith(keyword) or variant_lower.endswith(keyword):
-                            score += 1.5
-                        else:
-                            score += 1
-                        keyword_matches += 1
+                # Boosters
+                booster_score = self._calculate_booster_score(variant_lower, config.get('boosters', {}))
                 
-                # Normalize and boost for multiple keyword matches
-                if len(config['keywords']) > 0:
-                    base_score = score / len(config['keywords'])
-                    # Bonus for multiple keyword matches
-                    if keyword_matches > 1:
-                        base_score *= (1 + (keyword_matches - 1) * 0.3)  # Increased bonus
-                    
-                    # Update intent score with max from all variants
-                    intent_scores[intent] = max(intent_scores.get(intent, 0), min(base_score, 1.0))
+                total_score = keyword_score + booster_score
+                intent_scores[intent_name] = max(intent_scores[intent_name], total_score)
         
-        print(f"🔍 LECTURER INTENT DEBUG: Intent scores = {intent_scores}")
+        return dict(intent_scores)
+    
+    def _pattern_based_classification(self, query):
+        """🆕 Pattern-based classification"""
+        intent_scores = defaultdict(float)
         
-        # Method 2: Context-based boosting with normalized query for lecturers
-        self._boost_lecturer_contextual_intents(normalized_query.lower(), intent_scores)
+        for intent_name, config in self.intent_categories.items():
+            patterns = config.get('patterns', [])
+            
+            for pattern in patterns:
+                try:
+                    if re.search(pattern, query, re.IGNORECASE):
+                        intent_scores[intent_name] += 0.8  # High score for pattern match
+                        logger.debug(f"🎯 Pattern match: {intent_name} -> '{pattern}'")
+                except re.error as e:
+                    logger.warning(f"Invalid regex pattern: {pattern} - {e}")
         
-        # ✅ NEW: Method 3: Personal context detection
-        self._boost_personal_context_intents(normalized_query.lower(), intent_scores)
+        return dict(intent_scores)
+    
+    def _context_aware_classification(self, query, conversation_context):
+        """🆕 Context-aware classification"""
+        intent_scores = defaultdict(float)
         
-        print(f"🔍 LECTURER INTENT DEBUG: After all boosting = {intent_scores}")
+        if not conversation_context:
+            return dict(intent_scores)
         
-        # Method 4: PhoBERT similarity (if available)
-        if not self.fallback_mode and self.model and self.tokenizer:
-            try:
-                # Use normalized query for semantic similarity
-                self._add_semantic_similarity(normalized_query, intent_scores)
-            except Exception as e:
-                logger.warning(f"Semantic similarity failed, using fallback: {str(e)}")
+        # Recent conversation boost
+        recent_intents = [
+            item.get('intent_info', {}).get('intent', '') 
+            for item in conversation_context[-3:]
+        ]
+        
+        intent_counter = Counter(recent_intents)
+        for intent, count in intent_counter.items():
+            if intent in self.intent_categories:
+                # Boost score based on frequency and recency
+                boost_score = count * 0.3 * (0.8 ** (len(recent_intents) - recent_intents[::-1].index(intent)))
+                intent_scores[intent] += boost_score
+        
+        # Context indicators boost
+        for intent_name, config in self.intent_categories.items():
+            context_indicators = config.get('context_indicators', {})
+            context_score = self._calculate_context_score(query, context_indicators)
+            intent_scores[intent_name] += context_score
+        
+        return dict(intent_scores)
+    
+    def _semantic_classification(self, query):
+        """🆕 PhoBERT semantic classification"""
+        intent_scores = defaultdict(float)
+        
+        try:
+            query_embedding = self.encode_text(query)
+            if query_embedding is None:
+                return dict(intent_scores)
+            
+            for intent_name, config in self.intent_categories.items():
+                # Create intent representation from description and keywords
+                intent_text = f"{config['description']} {' '.join(config['keywords'][:5])}"
+                intent_embedding = self.encode_text(intent_text)
+                
+                if intent_embedding is not None:
+                    similarity = cosine_similarity(query_embedding, intent_embedding)[0][0]
+                    intent_scores[intent_name] = float(similarity)
+        
+        except Exception as e:
+            logger.warning(f"Semantic classification failed: {e}")
+        
+        return dict(intent_scores)
+    
+    def _fuse_ensemble_results(self, ensemble_results, query, conversation_context):
+        """🚀 Fuse ensemble results với weighted voting"""
+        final_scores = defaultdict(float)
+        
+        # Weighted combination
+        for method, weight in self.ensemble_weights.items():
+            if method in ensemble_results:
+                method_scores = ensemble_results[method]
+                for intent, score in method_scores.items():
+                    final_scores[intent] += score * weight
         
         # Find best intent
-        if intent_scores:
-            best_intent = max(intent_scores.items(), key=lambda x: x[1])
+        if final_scores:
+            best_intent = max(final_scores.items(), key=lambda x: x[1])
             intent_name, confidence = best_intent
             
-            print(f"🔍 LECTURER INTENT DEBUG: Best intent = {intent_name}, confidence = {confidence}")
+            # Get intent config
+            intent_config = self.intent_categories.get(intent_name, {})
             
-            # ✅ Dynamic threshold based on query complexity for lecturers
-            base_threshold = self.intent_categories[intent_name]['confidence_threshold']
-            if self.fallback_mode:
-                threshold = base_threshold * 0.3  # ✅ VERY LOW for lecturer fallback
-            else:
-                threshold = base_threshold * 0.5  # ✅ LOWER with normalization
+            return {
+                'intent': intent_name,
+                'confidence': confidence,
+                'description': intent_config.get('description', 'Unknown'),
+                'response_style': intent_config.get('response_style', 'neutral'),
+                'normalized_query': query,
+                'ensemble_scores': dict(final_scores),
+                'method_breakdown': ensemble_results,
+                'lecturer_optimized': True
+            }
+        
+        return self._get_default_intent()
+    
+    def _detect_multi_intent(self, query, primary_intent_result):
+        """🆕 Detect multiple intents in single query"""
+        multi_intents = []
+        
+        for pattern_type, patterns in self.multi_intent_patterns.items():
+            for pattern in patterns:
+                match = re.search(pattern, query, re.IGNORECASE)
+                if match:
+                    multi_intents.append({
+                        'type': pattern_type,
+                        'pattern': pattern,
+                        'groups': match.groupdict()
+                    })
+        
+        if multi_intents:
+            primary_intent_result['multi_intent_detected'] = True
+            primary_intent_result['multi_intent_details'] = multi_intents
+            # Slightly reduce confidence for multi-intent queries
+            primary_intent_result['confidence'] *= 0.9
+        
+        return primary_intent_result
+    
+    def _calibrate_intent_confidence(self, intent_result, query, conversation_context):
+        """🆕 Calibrate confidence based on various factors"""
+        base_confidence = intent_result['confidence']
+        calibration_factor = 1.0
+        
+        # Apply calibration rules
+        for factor_name, factor_value in self.confidence_calibration['calibration_factors'].items():
+            if self._check_calibration_condition(factor_name, intent_result, query, conversation_context):
+                calibration_factor *= factor_value
+                logger.debug(f"🎯 Confidence calibration: {factor_name} -> {factor_value}")
+        
+        calibrated_confidence = min(1.0, base_confidence * calibration_factor)
+        intent_result['confidence'] = calibrated_confidence
+        intent_result['calibration_factor'] = calibration_factor
+        
+        return intent_result
+    
+    def _check_calibration_condition(self, factor_name, intent_result, query, conversation_context):
+        """Check if calibration condition is met"""
+        if factor_name == 'multiple_keyword_match':
+            # Check if multiple keywords matched
+            return len([kw for kw in self.intent_categories[intent_result['intent']]['keywords'] 
+                       if kw in query.lower()]) > 1
+        
+        elif factor_name == 'exact_phrase_match':
+            # Check for exact phrase matches
+            return any(kw == query.lower().strip() 
+                      for kw in self.intent_categories[intent_result['intent']]['keywords'])
+        
+        elif factor_name == 'context_continuity':
+            # Check if intent continues from recent conversation
+            if conversation_context:
+                recent_intents = [item.get('intent_info', {}).get('intent', '') 
+                                for item in conversation_context[-2:]]
+                return intent_result['intent'] in recent_intents
+        
+        return False
+    
+    def _calculate_keyword_score(self, query, keywords):
+        """Enhanced keyword scoring"""
+        if not keywords:
+            return 0
+        
+        score = 0
+        matched_keywords = 0
+        
+        for keyword in keywords:
+            if keyword in query:
+                matched_keywords += 1
+                if keyword == query:  # Exact match
+                    score += 2.0
+                elif query.startswith(keyword) or query.endswith(keyword):
+                    score += 1.5
+                else:
+                    score += 1.0
+        
+        # Normalize score and apply bonus for multiple matches
+        normalized_score = score / len(keywords)
+        if matched_keywords > 1:
+            normalized_score *= 1.2  # Bonus for multiple keyword matches
+        
+        return min(1.0, normalized_score)
+    
+    def _calculate_booster_score(self, query, boosters):
+        """Calculate booster score"""
+        if not boosters:
+            return 0
+        
+        booster_score = 0
+        boost_factor = boosters.get('boost_factor', 1.0)
+        
+        for booster_type, booster_values in boosters.items():
+            if booster_type == 'boost_factor':
+                continue
             
-            print(f"🔍 LECTURER INTENT DEBUG: Threshold = {threshold}, base = {base_threshold}")
-            
-            if confidence >= threshold:
-                print(f"🔍 LECTURER INTENT DEBUG: INTENT MATCHED!")
-                return {
-                    'intent': intent_name,
-                    'confidence': confidence,
-                    'description': self.intent_categories[intent_name]['description'],
-                    'response_style': self.intent_categories[intent_name]['response_style'],
-                    'normalized_query': normalized_query,
-                    'lecturer_optimized': True,
-                    'personal_context_detected': intent_name in ['personal_schedule', 'personal_info', 'schedule_general']  # ✅ NEW field
-                }
+            if isinstance(booster_values, list):
+                for booster_value in booster_values:
+                    if booster_value in query:
+                        booster_score += 0.2 * boost_factor
         
-        print(f"🔍 LECTURER INTENT DEBUG: NO INTENT MATCHED - using general")
-        return {
-            'intent': 'general',
-            'confidence': 0.3,
-            'description': 'Câu hỏi chung',
-            'response_style': 'neutral',
-            'normalized_query': normalized_query,
-            'lecturer_optimized': True,
-            'personal_context_detected': False  # ✅ NEW field
-        }
+        return min(0.5, booster_score)  # Cap booster contribution
     
-    # ✅ NEW: Boost personal context intents
-    def _boost_personal_context_intents(self, query_lower, intent_scores):
-        """Boost intent scores based on personal context indicators"""
+    def _calculate_context_score(self, query, context_indicators):
+        """Calculate context score from indicators"""
+        if not context_indicators:
+            return 0
         
-        # Check for personal pronouns
-        personal_indicators = ['tôi', 'toi', 'của tôi', 'cua toi', 'cho tôi', 'cho toi']
-        has_personal_pronoun = any(pronoun in query_lower for pronoun in personal_indicators)
+        context_score = 0
         
-        # Check for schedule time context
-        time_indicators = ['hôm nay', 'hom nay', 'ngày mai', 'ngay mai', 'tuần này', 'tuan nay', 'tuần tới', 'tuan toi']
-        has_time_context = any(time in query_lower for time in time_indicators)
+        for indicator_type, indicators in context_indicators.items():
+            if isinstance(indicators, list):
+                matched_indicators = sum(1 for indicator in indicators if indicator in query)
+                if matched_indicators > 0:
+                    context_score += matched_indicators * 0.1
         
-        # Check for schedule-related words
-        schedule_words = ['lịch', 'lich', 'thời khóa biểu', 'thoi khoa bieu', 'giảng', 'giang', 'dạy', 'day']
-        has_schedule_words = any(word in query_lower for word in schedule_words)
-        
-        # ✅ Boost personal schedule if has personal pronoun + schedule context
-        if has_personal_pronoun and (has_schedule_words or has_time_context):
-            intent_scores['personal_schedule'] = intent_scores.get('personal_schedule', 0) + 0.6
-            logger.info(f"🎯 PERSONAL SCHEDULE BOOST: personal_pronoun={has_personal_pronoun}, schedule_words={has_schedule_words}, time_context={has_time_context}")
-        
-        # ✅ Boost personal info for identity questions
-        identity_words = ['là ai', 'la ai', 'thông tin của', 'thong tin cua', 'làm gì', 'lam gi']
-        if has_personal_pronoun and any(word in query_lower for word in identity_words):
-            intent_scores['personal_info'] = intent_scores.get('personal_info', 0) + 0.5
-            logger.info("🎯 PERSONAL INFO BOOST: identity question detected")
-        
-        # ✅ Boost general schedule for schedule queries without personal pronouns
-        if has_schedule_words and not has_personal_pronoun:
-            intent_scores['schedule_general'] = intent_scores.get('schedule_general', 0) + 0.3
-            logger.info("🎯 GENERAL SCHEDULE BOOST: schedule query without personal context")
-
-    
-    def _boost_lecturer_contextual_intents(self, query_lower, intent_scores):
-        """Boost intent scores based on lecturer-specific context WITH PERSONAL ENHANCEMENTS"""
-        
-        # ✅ LECTURER-SPECIFIC: Department context
-        if any(phrase in query_lower for phrase in ['phòng đảm bảo', 'phòng khảo thí', 'phong dam bao', 'phong khao thi']):
-            intent_scores['bank_exam_questions'] = intent_scores.get('bank_exam_questions', 0) + 0.4
-            intent_scores['quality_assurance'] = intent_scores.get('quality_assurance', 0) + 0.3
-        
-        if any(phrase in query_lower for phrase in ['phòng tổ chức', 'phòng cán bộ', 'phong to chuc', 'phong can bo']):
-            intent_scores['annual_task_declaration'] = intent_scores.get('annual_task_declaration', 0) + 0.4
-            intent_scores['competition_awards'] = intent_scores.get('competition_awards', 0) + 0.3
-        
-        # ✅ LECTURER-SPECIFIC: Urgency context
-        if any(word in query_lower for word in ['hạn cuối', 'deadline', 'gấp', 'khẩn cấp', 'han cuoi', 'gap', 'khan cap']):
-            intent_scores['reports_deadlines'] = intent_scores.get('reports_deadlines', 0) + 0.5
-        
-        # ✅ LECTURER-SPECIFIC: Academic context
-        if any(word in query_lower for word in ['nghiên cứu', 'bài viết', 'tạp chí', 'nghien cuu', 'bai viet', 'tap chi']):
-            intent_scores['academic_journal'] = intent_scores.get('academic_journal', 0) + 0.4
-        
-        # ✅ ENHANCED: Teaching context - could be personal or general
-        if any(word in query_lower for word in ['giảng dạy', 'lịch học', 'thời khóa biểu', 'giang day', 'lich hoc', 'thoi khoa bieu']):
-            # Check if it's personal context
-            if any(pronoun in query_lower for pronoun in ['tôi', 'toi', 'của tôi', 'cua toi']):
-                intent_scores['personal_schedule'] = intent_scores.get('personal_schedule', 0) + 0.5
-            else:
-                intent_scores['teaching_schedule'] = intent_scores.get('teaching_schedule', 0) + 0.4
-        
-        # ✅ LECTURER-SPECIFIC: Awards context
-        if any(word in query_lower for word in ['thi đua', 'khen thưởng', 'danh hiệu', 'thi dua', 'khen thuong', 'danh hieu']):
-            intent_scores['competition_awards'] = intent_scores.get('competition_awards', 0) + 0.4
-        
-        # Question patterns (enhanced for lecturers)
-        if query_lower.endswith('?'):
-            # Questions from lecturers tend to be more specific
-            for intent in ['bank_exam_questions', 'annual_task_declaration', 'academic_journal', 'reports_deadlines', 'personal_schedule', 'personal_info']:
-                if intent in intent_scores:
-                    intent_scores[intent] += 0.2
-        
-        # Vague questions that need clarification
-        vague_indicators = ['gì', 'sao', 'nào', 'như thế nào', 'gi', 'nao', 'nhu the nao']
-        if any(word in query_lower for word in vague_indicators) and len(query_lower.split()) <= 5:
-            intent_scores['clarification_needed'] = intent_scores.get('clarification_needed', 0) + 0.3
-
-    
-    def _add_semantic_similarity(self, query, intent_scores):
-        """Add PhoBERT semantic similarity scores"""
-        try:
-            if self.fallback_mode or not self.model or not self.tokenizer:
-                return
-                
-            query_embedding = self.encode_text(query)
-            if query_embedding is not None:
-                for intent, config in self.intent_categories.items():
-                    # Create comprehensive intent representation
-                    intent_text = f"{config['description']} {' '.join(config['keywords'][:5])}"
-                    intent_embedding = self.encode_text(intent_text)
-                    
-                    if intent_embedding is not None:
-                        similarity = cosine_similarity(query_embedding, intent_embedding)[0][0]
-                        # Blend with keyword score
-                        current_score = intent_scores.get(intent, 0)
-                        blended_score = (current_score * 0.6) + (similarity * 0.4)  # Ưu tiên ngữ cảnh của câu hỏi
-                        intent_scores[intent] = blended_score
-                        
-        except Exception as e:
-            logger.warning(f"Semantic similarity failed: {str(e)}")
+        return min(0.3, context_score)
     
     def encode_text(self, text):
         """Encode text using PhoBERT with error handling"""
@@ -545,7 +702,7 @@ class PhoBERTIntentClassifier:
         query_lower = query.lower()
         entities = {}
         
-        # ✅ NEW: Extract personal context indicators
+        # Extract personal context indicators
         personal_pronouns_found = []
         for pronoun in self.entity_patterns['personal_pronouns']:
             if pronoun in query_lower:
@@ -556,7 +713,7 @@ class PhoBERTIntentClassifier:
             entities['has_personal_context'] = True
             entities['personal_context_confidence'] = 0.9
         
-        # ✅ NEW: Extract schedule context
+        # Extract schedule context
         schedule_contexts_found = []
         for context in self.entity_patterns['schedule_contexts']:
             if context in query_lower:
@@ -566,60 +723,22 @@ class PhoBERTIntentClassifier:
             entities['schedule_context'] = schedule_contexts_found
             entities['schedule_context_confidence'] = 0.8
         
-        # ✅ LECTURER-SPECIFIC: Extract departments with confidence
+        # Extract departments with confidence
         for dept in self.entity_patterns['lecturer_departments']:
             if dept in query_lower:
                 entities['department'] = dept
                 entities['department_confidence'] = 1.0 if dept == query_lower else 0.9
                 break
         
-        # ✅ LECTURER-SPECIFIC: Extract positions
-        for position in self.entity_patterns['lecturer_positions']:
-            if position in query_lower:
-                entities['position'] = position
-                entities['position_confidence'] = 1.0 if position == query_lower else 0.8
-                break
-        
-        # ✅ LECTURER-SPECIFIC: Extract document types
-        for doc_type in self.entity_patterns['document_types']:
-            if doc_type in query_lower:
-                entities['document_type'] = doc_type
-                break
-        
-        # ✅ LECTURER-SPECIFIC: Extract lecturer activities
-        for activity in self.entity_patterns['lecturer_activities']:
-            if activity in query_lower:
-                entities['activity'] = activity
-                break
-        
-        # Extract majors with confidence
-        for major in self.entity_patterns['majors']:
-            if major in query_lower:
-                entities['major'] = major
-                entities['major_confidence'] = 1.0 if major == query_lower else 0.8
-                break
-        
-        # ✅ ENHANCED: Extract time expressions with personal context
-        for time_expr in self.entity_patterns['time_expressions']:
-            if time_expr in query_lower:
-                entities['time'] = time_expr
-                # Check if time expression is combined with personal context
-                if entities.get('has_personal_context'):
-                    entities['personal_time_context'] = True
-                break
-        
-        # ✅ ENHANCED: Extract emotions with lecturer-specific intensity
+        # Extract emotions with lecturer-specific intensity
         emotion_intensity = 0
         detected_emotion = None
         for emotion in self.entity_patterns['emotions']:
             if emotion in query_lower:
-                # Lecturer-specific emotions get different intensity
-                if emotion in ['cần gấp', 'khẩn cấp', 'urgent', 'can gap', 'khan cap']:
-                    emotion_intensity = 0.9  # High urgency for lecturers
-                elif emotion in ['quan trọng', 'ưu tiên', 'quan trong', 'uu tien']:
+                if emotion in ['cần gấp', 'khẩn cấp', 'urgent']:
+                    emotion_intensity = 0.9
+                elif emotion in ['quan trọng', 'ưu tiên']:
                     emotion_intensity = 0.8
-                elif emotion in ['lo lắng', 'khó khăn', 'lo lang', 'kho khan']:
-                    emotion_intensity = 0.7
                 else:
                     emotion_intensity = 0.6
                 detected_emotion = emotion
@@ -639,7 +758,6 @@ class PhoBERTIntentClassifier:
             intent_result = self.classify_intent(query)
             entities = self.extract_entities(query)
             
-            # ✅ ENHANCED: Additional analysis for lecturers
             analysis = {
                 'intent': intent_result,
                 'entities': entities,
@@ -658,14 +776,8 @@ class PhoBERTIntentClassifier:
             
         except Exception as e:
             logger.error(f"Query analysis error: {str(e)}")
-            # Safe fallback for lecturers
             return {
-                'intent': {
-                    'intent': 'general',
-                    'confidence': 0.3,
-                    'description': 'Câu hỏi chung',
-                    'response_style': 'neutral'
-                },
+                'intent': self._get_default_intent(),
                 'entities': {},
                 'query_length': len(query) if query else 0,
                 'word_count': len(query.split()) if query else 0,
@@ -683,11 +795,8 @@ class PhoBERTIntentClassifier:
         if not query:
             return 'normal'
             
-        # ✅ LECTURER-SPECIFIC urgent terms
-        urgent_words = ['gấp', 'urgent', 'khẩn cấp', 'cần ngay', 'hạn cuối', 'deadline', 
-                       'gap', 'khan cap', 'can ngay', 'han cuoi']
-        medium_urgent_words = ['sớm', 'nhanh chóng', 'ưu tiên', 'quan trọng',
-                              'som', 'nhanh chong', 'uu tien', 'quan trong']
+        urgent_words = ['gấp', 'urgent', 'khẩn cấp', 'cần ngay', 'hạn cuối', 'deadline']
+        medium_urgent_words = ['sớm', 'nhanh chóng', 'ưu tiên', 'quan trọng']
         
         query_lower = query.lower()
         
@@ -706,9 +815,8 @@ class PhoBERTIntentClassifier:
         word_count = len(query.split())
         question_marks = query.count('?')
         
-        # ✅ LECTURER-SPECIFIC: Consider technical terms
-        technical_terms = ['ngân hàng đề thi', 'kê khai nhiệm vụ', 'tạp chí khoa học', 
-                          'đảm bảo chất lượng', 'phần mềm quản lý']
+        # Lecturer-specific: Consider technical terms
+        technical_terms = ['ngân hàng đề thi', 'kê khai nhiệm vụ', 'tạp chí khoa học']
         has_technical = any(term in query.lower() for term in technical_terms)
         
         if (word_count > 20 or question_marks > 1) or has_technical:
@@ -723,12 +831,9 @@ class PhoBERTIntentClassifier:
         if not query:
             return 'neutral'
             
-        # ✅ LECTURER-SPECIFIC sentiment words
-        positive_words = ['tốt', 'hay', 'thích', 'muốn', 'quan tâm', 'hào hứng', 'hỗ trợ',
-                         'tot', 'thich', 'quan tam', 'hao hung', 'ho tro']
-        negative_words = ['khó khăn', 'lo lắng', 'không', 'chán', 'tệ', 'vấn đề', 'lỗi',
-                         'kho khan', 'lo lang', 'khong', 'chan', 'te', 'van de', 'loi']
-        urgent_words = ['gấp', 'khẩn cấp', 'cần ngay', 'gap', 'khan cap', 'can ngay']
+        positive_words = ['tốt', 'hay', 'thích', 'muốn', 'quan tâm', 'hỗ trợ']
+        negative_words = ['khó khăn', 'lo lắng', 'không', 'chán', 'tệ', 'vấn đề']
+        urgent_words = ['gấp', 'khẩn cấp', 'cần ngay']
         
         query_lower = query.lower()
         positive_count = sum(1 for word in positive_words if word in query_lower)
@@ -738,14 +843,13 @@ class PhoBERTIntentClassifier:
         # Factor in emotional entities
         if entities and 'emotion' in entities:
             emotion = entities['emotion']
-            if emotion in ['quan trọng', 'ưu tiên', 'quan trong', 'uu tien']:
+            if emotion in ['quan trọng', 'ưu tiên']:
                 positive_count += 1
-            elif emotion in ['lo lắng', 'khó khăn', 'lo lang', 'kho khan']:
+            elif emotion in ['lo lắng', 'khó khăn']:
                 negative_count += 2
-            elif emotion in ['cần gấp', 'khẩn cấp', 'can gap', 'khan cap']:
+            elif emotion in ['cần gấp', 'khẩn cấp']:
                 urgent_count += 2
         
-        # ✅ LECTURER-SPECIFIC: Urgency is often neutral/professional
         if urgent_count > 0:
             return 'urgent'
         elif positive_count > negative_count:
@@ -754,34 +858,49 @@ class PhoBERTIntentClassifier:
             return 'negative'
         else:
             return 'neutral'
-
-    # COMPATIBILITY METHODS - Enhanced for lecturers
+    
+    def _get_default_intent(self):
+        """Default intent when no match found"""
+        return {
+            'intent': 'general',
+            'confidence': 0.3,
+            'description': 'Câu hỏi chung',
+            'response_style': 'neutral',
+            'lecturer_optimized': True
+        }
+    
     def get_system_status(self):
-        """Get PhoBERT system status for lecturers WITH PERSONAL INTENT support"""
+        """Get PhoBERT system status for lecturers WITH enhanced features"""
         return {
             'model_loaded': bool(self.model),
             'fallback_mode': self.fallback_mode,
             'transformers_available': TRANSFORMERS_AVAILABLE,
             'device': str(self.device) if self.device else 'cpu',
             'intents_available': len(self.intent_categories),
-            'lecturer_intents': [
-                'bank_exam_questions', 'annual_task_declaration', 'academic_journal',
-                'competition_awards', 'reports_deadlines', 'teaching_schedule',
-                'quality_assurance', 'departments_contacts'
+            'enhanced_intents': [
+                'document_reference', 'deadline_temporal', 'contact_responsibility',
+                'technical_specification', 'compliance_consequence', 'process_sequence',
+                'authorization_approval', 'document_comparison'
             ],
-            'personal_intents': [  # ✅ NEW
-                'personal_schedule', 'personal_info', 'schedule_general'
+            'original_intents': [
+                'greeting', 'bank_exam_questions', 'annual_task_declaration',
+                'academic_journal', 'competition_awards', 'personal_schedule', 'personal_info'
             ],
             'lecturer_optimized': True,
+            'ensemble_methods': list(self.ensemble_weights.keys()),
             'features': [
-                'lecturer_specific_intents',
-                'department_entity_extraction',
-                'urgency_detection',
-                'clarification_detection',
+                'ensemble_classification',
+                'multi_intent_detection',
+                'context_aware_boosting',
+                'confidence_calibration',
+                'pattern_matching',
+                'enhanced_keyword_matching',
                 'vietnamese_normalization',
-                'personal_context_detection',  # ✅ NEW feature
-                'schedule_context_extraction',  # ✅ NEW feature
-                'personal_pronoun_recognition',  # ✅ NEW feature
-                'time_context_analysis'  # ✅ NEW feature
+                'personal_context_detection',
+                'semantic_similarity',
+                'lecturer_specific_intents',
+                'document_reference_detection',
+                'deadline_temporal_analysis',
+                'compliance_consequence_analysis'
             ]
         }

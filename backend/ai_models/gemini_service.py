@@ -308,7 +308,7 @@ class SimpleVietnameseRestorer:
     
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.model_name = "gemini-2.0-flash"
+        self.model_name = "gemini-1.5-flash"
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         
         # Simple cache to avoid repeated API calls
@@ -442,7 +442,7 @@ class GeminiResponseGenerator:
     def __init__(self, api_key: str = None):
         from django.conf import settings
         self.api_key = api_key or settings.GEMINI_API_KEY
-        self.model_name = "gemini-2.0-flash"
+        self.model_name = "gemini-1.5-flash"
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         
         self.memory = ConversationMemory(max_history=10)
