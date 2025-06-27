@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 import json
+import re # ✅ NÂNG CẤP: Thêm thư viện re để tìm ngày/tháng
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -104,72 +105,70 @@ class ExternalAPIService:
                 }
             
             ma_giang_vien = lecturer_info['ma_giang_vien']
-            ten_giang_vien = lecturer_info['ten_giang_vien']
+            api_data = None # Khởi tạo biến api_data
             
-            # 2. Check cache first
-            cache_key = f"schedule_{ma_giang_vien}"
+            # ✅ SỬA LỖI 1: Logic cache
+            # Thay đổi cache key để cache dữ liệu thô, chưa lọc
+            cache_key = f"schedule_raw_{ma_giang_vien}" 
             if cache_key in self.cache:
                 cache_data = self.cache[cache_key]
                 if datetime.now() - cache_data['timestamp'] < timedelta(seconds=self.cache_duration):
-                    logger.info(f"🎯 Using cached schedule for {ma_giang_vien}")
-                    cache_data['data']['from_cache'] = True
-                    return cache_data['data']
+                    logger.info(f"🎯 Using RAW cached schedule for {ma_giang_vien}")
+                    api_data = cache_data['data'] # Lấy dữ liệu thô từ cache
             
-            # 3. Call external API
-            logger.info(f"🌐 Calling schedule API for {ma_giang_vien} - {ten_giang_vien}")
-            
-            headers = {
-                'Authorization': f'Bearer {token.replace("Bearer ", "")}',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-            
-            response = requests.get(
-                self.schedule_endpoint,
-                headers=headers,
-                timeout=30
-            )
-            
-            logger.info(f"📡 API Response Status: {response.status_code}")
-            
-            if response.status_code == 200:
-                api_data = response.json()
-                schedule_data = api_data.get('data', [])
-                
-                logger.info(f"📅 Retrieved {len(schedule_data)} schedule entries")
-                
-                # 4. Process and format data
-                formatted_data = self._process_schedule_data(
-                    schedule_data, 
-                    lecturer_info, 
-                    query_context
+            # Nếu không có cache hoặc cache hết hạn, gọi API
+            if api_data is None:
+                logger.info(f"🌐 Calling schedule API for {ma_giang_vien}")
+                headers = {
+                    'Authorization': f'Bearer {token.replace("Bearer ", "")}',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+                response = requests.get(
+                    self.schedule_endpoint,
+                    headers=headers,
+                    timeout=30
                 )
                 
-                # 5. Cache the result
-                self.cache[cache_key] = {
-                    'timestamp': datetime.now(),
-                    'data': formatted_data
-                }
+                logger.info(f"📡 API Response Status: {response.status_code}")
                 
-                return formatted_data
-                
-            elif response.status_code == 401:
-                logger.error("❌ API Authentication failed - token expired or invalid")
-                return {
-                    'success': False,
-                    'error': 'Token đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.',
-                    'error_type': 'authentication_failed'
-                }
-            else:
-                logger.error(f"❌ API call failed with status: {response.status_code}")
-                logger.error(f"❌ Response: {response.text}")
-                return {
-                    'success': False,
-                    'error': 'Không thể kết nối đến hệ thống thời khóa biểu của trường',
-                    'error_type': 'api_call_failed',
-                    'status_code': response.status_code
-                }
-                
+                if response.status_code == 200:
+                    api_data = response.json()
+                    # Lưu dữ liệu THÔ vào cache
+                    self.cache[cache_key] = {
+                        'timestamp': datetime.now(),
+                        'data': api_data
+                    }
+                elif response.status_code == 401:
+                    logger.error("❌ API Authentication failed - token expired or invalid")
+                    return {
+                        'success': False,
+                        'error': 'Token đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.',
+                        'error_type': 'authentication_failed'
+                    }
+                else:
+                    logger.error(f"❌ API call failed with status: {response.status_code}")
+                    logger.error(f"❌ Response: {response.text}")
+                    return {
+                        'success': False,
+                        'error': 'Không thể kết nối đến hệ thống thời khóa biểu của trường',
+                        'error_type': 'api_call_failed',
+                        'status_code': response.status_code
+                    }
+
+            # Sau khi có dữ liệu thô (từ cache hoặc API), tiến hành xử lý
+            schedule_data = api_data.get('data', [])
+            logger.info(f"📅 Retrieved {len(schedule_data)} schedule entries to process")
+            
+            # Việc xử lý và lọc sẽ diễn ra ở đây, đảm bảo mỗi lần hỏi đều được lọc lại
+            formatted_data = self._process_schedule_data(
+                schedule_data, 
+                lecturer_info, 
+                query_context
+            )
+            
+            return formatted_data
+            
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ Network error calling schedule API: {str(e)}")
             return {
@@ -191,7 +190,6 @@ class ExternalAPIService:
         """
         try:
             ma_giang_vien = lecturer_info['ma_giang_vien']
-            ten_giang_vien = lecturer_info['ten_giang_vien']
             
             # Filter schedule entries for this lecturer
             lecturer_schedule = [
@@ -239,7 +237,6 @@ class ExternalAPIService:
                 'daily_schedule': filtered_schedule,
                 'query_context': query_context,
                 'processed_at': datetime.now().isoformat(),
-                'from_cache': False
             }
             
             return formatted_result
@@ -262,6 +259,22 @@ class ExternalAPIService:
         query_lower = query_context.lower()
         today = datetime.now()
         
+        # ✅ NÂNG CẤP 2: Thêm logic tìm ngày/tháng cụ thể
+        # Ưu tiên tìm ngày tháng cụ thể trước để tăng độ chính xác
+        date_match = re.search(r'(\d{1,2})[/-](\d{1,2})', query_lower)
+        if date_match:
+            day = int(date_match.group(1))
+            month = int(date_match.group(2))
+            # Mặc định lấy năm hiện tại
+            year = today.year
+            try:
+                specific_date_str = datetime(year, month, day).strftime('%d-%m-%Y')
+                logger.info(f"🔍 Found specific date in query: {specific_date_str}")
+                return {k: v for k, v in schedule.items() if k == specific_date_str}
+            except ValueError:
+                # Nếu ngày tháng không hợp lệ (vd: 30/2), bỏ qua và để các bộ lọc khác xử lý
+                pass 
+
         # Define date filters based on common queries
         if any(keyword in query_lower for keyword in ['hôm nay', 'hom nay', 'today']):
             today_str = today.strftime('%d-%m-%Y')
@@ -275,19 +288,13 @@ class ExternalAPIService:
         elif any(keyword in query_lower for keyword in ['tuần này', 'tuan nay', 'this week']):
             # Get dates for current week (Monday to Sunday)
             start_of_week = today - timedelta(days=today.weekday())
-            week_dates = []
-            for i in range(7):
-                date = start_of_week + timedelta(days=i)
-                week_dates.append(date.strftime('%d-%m-%Y'))
+            week_dates = [(start_of_week + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(7)]
             return {k: v for k, v in schedule.items() if k in week_dates}
             
         elif any(keyword in query_lower for keyword in ['tuần tới', 'tuan toi', 'next week']):
             # Get dates for next week
             start_of_next_week = today + timedelta(days=(7 - today.weekday()))
-            week_dates = []
-            for i in range(7):
-                date = start_of_next_week + timedelta(days=i)
-                week_dates.append(date.strftime('%d-%m-%Y'))
+            week_dates = [(start_of_next_week + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(7)]
             return {k: v for k, v in schedule.items() if k in week_dates}
             
         # Return full schedule if no specific time filter

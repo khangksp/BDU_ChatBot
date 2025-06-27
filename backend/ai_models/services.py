@@ -256,12 +256,13 @@ class LecturerDecisionEngine:
         
         return should_boost
     
-    # ✅ NEW: Check if query needs external API
-    def needs_external_api(self, query: str, confidence: float) -> bool:
+    # ✅ NÂNG CẤP: Chấp nhận `recent_intent` để xử lý ngữ cảnh
+    def needs_external_api(self, query: str, confidence: float, recent_intent: str = None) -> bool:
         """
         Determine if query should use external API based on:
         1. Low confidence from QA database
         2. Personal/schedule related keywords
+        3. ✅ NEW: Recent conversation context (intent)
         """
         query_lower = query.lower()
         
@@ -279,10 +280,16 @@ class LecturerDecisionEngine:
             keyword in query_lower 
             for keyword in self.external_api_config['time_context_keywords']
         )
+
+        # ✅ NÂNG CẤP LOGIC:
+        # Nếu intent gần đây là về lịch, và câu hỏi hiện tại có yếu tố thời gian => hỏi về lịch
+        schedule_related_intent = recent_intent in ['personal_schedule', 'teaching_schedule', 'schedule_general']
+        contextual_schedule_query = has_time_context and schedule_related_intent
         
-        needs_api = low_confidence or has_personal_keywords or (has_time_context and 'lịch' in query_lower)
-        
-        logger.info(f"🔍 External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, needs_api={needs_api}")
+        # Cần API nếu: (Câu hỏi chứa từ khóa cá nhân) HOẶC (Câu hỏi theo ngữ cảnh lịch) HOẶC (Độ tin cậy CSDL quá thấp)
+        needs_api = has_personal_keywords or contextual_schedule_query or low_confidence
+
+        logger.info(f"🔍 External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, recent_intent='{recent_intent}', needs_api={needs_api}")
         
         return needs_api
     
@@ -291,16 +298,28 @@ class LecturerDecisionEngine:
         Enhanced decision making for lecturers with External API integration
         """
         
-        # Step 1: Check conversation context first (existing logic)
+        # ✅ THAY ĐỔI 1: Nâng cấp logic xử lý ngữ cảnh hội thoại
         context_override = False
+        recent_intent = None
         if session_memory and len(session_memory) > 0:
-            recent_queries = [item.get('query', '') for item in session_memory[-3:]]
-            recent_education_queries = [q for q in recent_queries if self.is_education_related(q)]
-            if len(recent_education_queries) >= 1:
+            last_interaction = session_memory[-1]
+            # Lấy toàn bộ object intent_info thay vì chỉ tên intent
+            intent_info_from_memory = last_interaction.get('intent_info', {}) 
+            recent_intent = intent_info_from_memory.get('intent')
+
+            # Nếu intent gần nhất là về lịch, tự động coi câu hỏi tiếp theo là có liên quan
+            if recent_intent in ['personal_schedule', 'teaching_schedule', 'schedule_general']:
                 context_override = True
-                logger.info("🧠 MEMORY OVERRIDE: Recent education context detected")
+                logger.info(f"🧠 MEMORY OVERRIDE: Recent schedule intent '{recent_intent}' detected. Assuming context continues.")
+            else:
+                # Kiểm tra lại các query cũ nếu intent không rõ ràng
+                recent_queries = [item.get('query', '') for item in session_memory[-3:]]
+                recent_education_queries = [q for q in recent_queries if self.is_education_related(q)]
+                if len(recent_education_queries) >= 1:
+                    context_override = True
+                    logger.info("🧠 MEMORY OVERRIDE: Recent education context detected from past queries.")
         
-        # Step 2: Check if education-related
+        # Step 2: Check if education-related (now with context override)
         is_education = self.is_education_related(query) or context_override
         if not is_education:
             return 'reject_non_education', None, False
@@ -309,11 +328,11 @@ class LecturerDecisionEngine:
         similarity = retrieval_result.get('confidence', 0)
         confidence_level = self.categorize_confidence(similarity)
         
-        # ✅ NEW: Step 4: Check if needs external API
-        needs_api = self.needs_external_api(query, similarity)
+        # ✅ THAY ĐỔI 2: Truyền `recent_intent` vào hàm kiểm tra API
+        needs_api = self.needs_external_api(query, similarity, recent_intent)
         has_jwt_token = bool(jwt_token and jwt_token.strip())
         
-        logger.info(f"🤖 Decision inputs: similarity={similarity:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
+        logger.info(f"🤖 Decision inputs: similarity={similarity:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}, recent_intent='{recent_intent}'")
         
         # ✅ NEW: Priority logic - External API takes precedence
         if needs_api and has_jwt_token:
@@ -337,7 +356,7 @@ class LecturerDecisionEngine:
         
         # Step 5: Check if needs clarification (existing logic)
         needs_clarification = self.needs_clarification(query, similarity)
-        if needs_clarification:
+        if needs_clarification and confidence_level != 'medium_trust': # Don't clarify if medium trust, better to enhance
             return 'ask_clarification', {
                 'query': query,
                 'confidence': similarity,
@@ -755,6 +774,7 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         return query
     
+    # ✅ THAY ĐỔI 3: Lưu toàn bộ `intent_result` để giữ ngữ cảnh
     def _update_memory(self, session_id, query, intent_result, confidence, decision_type=None, was_education=True):
         """Enhanced memory update for lecturers with more context"""
         if session_id not in self.conversation_memory:
@@ -762,13 +782,14 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         self.conversation_memory[session_id].append({
             'query': query,
-            'intent': intent_result.get('intent', 'unknown'),
+            # Sửa ở đây: Lưu cả object intent thay vì chỉ tên intent
+            'intent_info': intent_result,
             'confidence': confidence,
             'timestamp': time.time(),
-            'user_type': 'lecturer',  # Track that this is a lecturer session
-            'decision_type': decision_type,  # ✅ NEW: Track decision made
-            'was_education_related': was_education,  # ✅ NEW: Track if was education
-            'is_education_query': self.decision_engine.is_education_related(query)  # ✅ NEW: Direct check
+            'user_type': 'lecturer',
+            'decision_type': decision_type,
+            'was_education_related': was_education,
+            'is_education_query': self.decision_engine.is_education_related(query)
         })
         
         # Keep last 10 interactions for lecturers (more history for work context)
