@@ -20,6 +20,4 @@ urlpatterns = [
     # Chat sessions management
     path('chat-sessions/', views.ChatSessionsView.as_view(), name='chat-sessions'),
     path('chat-sessions/<str:session_id>/', views.ChatSessionDetailView.as_view(), name='chat-session-detail'),
-    
-    path('jwt-test/', views.JWTTokenTestView.as_view(), name='jwt_test'),
 ]

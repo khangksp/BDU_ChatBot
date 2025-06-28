@@ -14,6 +14,8 @@ import tempfile
 import os
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.utils import timezone
+from django.db import models
 
 from rest_framework.permissions import AllowAny
 
@@ -141,21 +143,21 @@ class APIRootView(APIView):
         personalization_status = {
             'enabled': True,
             'active_personalized_sessions': len(chatbot_ai.response_generator._user_context_cache),
-            'supported_response_styles': list(chatbot_ai.response_generator.style_generation_configs.keys()),
-            'style_aware_generation': True,
-            'external_api_integration': external_api_status.get('external_api_service', {}).get('available', False),  # ✅ NEW
-            'jwt_token_support': True,  # ✅ NEW
-            'lecturer_schedule_access': True  # ✅ NEW
+            'user_memory_prompt_support': True,  # ✅ NEW: Updated feature
+            'flexible_personalization': True,    # ✅ NEW: Updated feature
+            'external_api_integration': external_api_status.get('external_api_service', {}).get('available', False),
+            'jwt_token_support': True,
+            'lecturer_schedule_access': True
         }
         
         return Response({
-            'message': 'Enhanced Chatbot API - Đại học Bình Dương với External API Integration',  # ✅ UPDATED
-            'version': '5.0.0',  # ✅ Version bump for external API
+            'message': 'Enhanced Chatbot API - Đại học Bình Dương với User Memory Prompt',  # ✅ UPDATED
+            'version': '6.0.0',  # ✅ Version bump for user memory prompt
             'status': 'active',
             'system_status': system_status,
             'speech_status': speech_status,
             'personalization_status': personalization_status,
-            'external_api_status': external_api_status,  # ✅ NEW
+            'external_api_status': external_api_status,
             'endpoints': {
                 'chat': '/api/chat/',
                 'health': '/api/health/',
@@ -174,13 +176,16 @@ class APIRootView(APIView):
                 'UTF-8 Safe Encoding',
                 'Speech-to-Text (Whisper)',
                 'Enhanced Personalization',
-                'Response Style Adaptation',
+                'User Memory Prompt Support',      # ✅ NEW feature
+                'Flexible Personalization',       # ✅ NEW feature
+                'Dynamic System Prompts',         # ✅ NEW feature
+                'Custom User Instructions',       # ✅ NEW feature
                 'User Memory Integration',
                 'Department-Specific Responses',
-                'JWT Token Authentication',  # ✅ NEW
-                'External API Integration',  # ✅ NEW
-                'Lecturer Schedule Access',  # ✅ NEW
-                'Personal Information Queries',  # ✅ NEW
+                'JWT Token Authentication',
+                'External API Integration',
+                'Lecturer Schedule Access',
+                'Personal Information Queries',
             ]
         })
 
@@ -208,21 +213,22 @@ class ChatView(APIView):
                 'full_name': request.user.full_name,
                 'department': request.user.get_department_display(),
                 'position': request.user.get_position_display(),
-                'current_style': request.user.chatbot_preferences.get('response_style', 'professional'),
+                'has_user_memory_prompt': bool(request.user.chatbot_preferences.get('user_memory_prompt', '').strip()),  # ✅ UPDATED
+                'memory_length': len(request.user.chatbot_preferences.get('user_memory_prompt', '')),  # ✅ UPDATED
                 'department_priority': request.user.chatbot_preferences.get('department_priority', True),
-                'has_custom_memory': bool(request.user.chatbot_preferences.get('user_memory_prompt', '').strip())
+                'personalized_prompt_available': True
             }
         
         return Response({
-            'message': 'Enhanced Personalized Chat API with External API - Open Access',  # ✅ UPDATED
+            'message': 'Enhanced Personalized Chat API with User Memory Prompt - Open Access',  # ✅ UPDATED
             'authentication': 'Optional - Works with or without token',
-            'jwt_token_support': 'Send JWT token for personal schedule/info access',  # ✅ NEW
+            'jwt_token_support': 'Send JWT token for personal schedule/info access',
             'system_status': system_status,
             'speech_status': speech_status,
-            'external_api_status': external_api_status,  # ✅ NEW
+            'external_api_status': external_api_status,
             'user_personalization': user_personalization,
-            'method': 'POST để gửi tin nhắn với personalization và JWT token',  # ✅ UPDATED
-            'jwt_token_usage': {  # ✅ NEW
+            'method': 'POST để gửi tin nhắn với personalization và JWT token',
+            'jwt_token_usage': {
                 'header': 'Authorization: Bearer <token>',
                 'body_field': 'token',
                 'query_param': 'token (for testing only)',
@@ -234,14 +240,15 @@ class ChatView(APIView):
                 'Conversation Memory',
                 'UTF-8 Safe Processing',
                 'Speech-to-Text Integration',
-                'Response Style Adaptation (with authentication)',
-                'Personalized System Prompts (with authentication)',
+                'User Memory Prompt Support (with authentication)',      # ✅ UPDATED
+                'Dynamic Personalized System Prompts (with authentication)',  # ✅ UPDATED
+                'Flexible User Instructions (with authentication)',      # ✅ NEW
                 'User Memory Integration (with authentication)',
                 'Anonymous Chat Support',
-                'JWT Token Authentication',  # ✅ NEW
-                'External API Integration',  # ✅ NEW
-                'Personal Schedule Access',  # ✅ NEW
-                'Lecturer Information Queries'  # ✅ NEW
+                'JWT Token Authentication',
+                'External API Integration',
+                'Personal Schedule Access',
+                'Lecturer Information Queries'
             ]
         })
 
@@ -304,7 +311,7 @@ class ChatView(APIView):
             except UnicodeError:
                 user_message = user_message.encode('utf-8', errors='ignore').decode('utf-8')
             
-            # ✅ ENHANCED: Get comprehensive user context với detailed preferences
+            # ✅ ENHANCED: Get comprehensive user context với user memory prompt
             user_context = None
             personalization_info = {}
             
@@ -312,19 +319,18 @@ class ChatView(APIView):
                 try:
                     user_context = request.user.get_chatbot_context()
                     
-                    # ✅ NEW: Extract detailed personalization info
+                    # ✅ UPDATED: Extract personalization info for user memory prompt
                     personalization_info = {
-                        'response_style': user_context.get('current_response_style', 'professional'),
                         'department_priority': user_context.get('department_priority_enabled', True),
                         'department': user_context.get('department_name', 'Unknown'),
                         'position': user_context.get('position_name', 'Unknown'),
-                        'has_custom_memory': bool(request.user.chatbot_preferences.get('user_memory_prompt', '').strip()),
-                        'memory_length': len(request.user.chatbot_preferences.get('user_memory_prompt', '')),
+                        'has_user_memory_prompt': bool(request.user.chatbot_preferences.get('user_memory_prompt', '').strip()),  # ✅ UPDATED
+                        'memory_length': len(request.user.chatbot_preferences.get('user_memory_prompt', '')),  # ✅ UPDATED
                         'personalized_prompt_available': True
                     }
                     
                     print(f"👤 ENHANCED USER CONTEXT: {user_context.get('role_description', 'Unknown')}")
-                    print(f"🎨 PERSONALIZATION INFO: Style={personalization_info['response_style']}, Dept_Priority={personalization_info['department_priority']}")
+                    print(f"🧠 USER MEMORY PROMPT: length={personalization_info['memory_length']}, has_custom={personalization_info['has_user_memory_prompt']}")
                     
                 except Exception as e:
                     logger.warning(f"Could not get enhanced user context: {e}")
@@ -343,9 +349,8 @@ class ChatView(APIView):
                     'department_name': user_context.get('department_name'),
                     'position_name': user_context.get('position_name'),
                     'preferences': user_context.get('preferences'),
-                    # ✅ NEW: Style and memory specific context
-                    'response_style': personalization_info.get('response_style', 'professional'),
-                    'user_memory_prompt': request.user.chatbot_preferences.get('user_memory_prompt', ''),
+                    # ✅ UPDATED: User memory prompt specific context
+                    'user_memory_prompt': request.user.chatbot_preferences.get('user_memory_prompt', ''),  # ✅ UPDATED
                     'department_priority_enabled': personalization_info.get('department_priority', True)
                 }
                 
@@ -358,7 +363,7 @@ class ChatView(APIView):
                 ai_response = chatbot_ai.process_query(user_message, session_id, jwt_token)
             
             print(f"🔍 ENHANCED CHAT DEBUG: AI response method = {ai_response.get('method', 'unknown')}")
-            print(f"🎨 ENHANCED CHAT DEBUG: Applied style = {ai_response.get('response_style', 'none')}")
+            print(f"🧠 ENHANCED CHAT DEBUG: User memory prompt used = {ai_response.get('user_memory_prompt_used', False)}")  # ✅ UPDATED
             print(f"🌐 ENHANCED CHAT DEBUG: External API used = {ai_response.get('external_api_used', False)}")
             
             # ENSURE UTF-8 safe response
@@ -380,8 +385,7 @@ class ChatView(APIView):
                     'user_context': user_context,
                     'personalization_info': personalization_info,
                     'personalized': bool(user_context),
-                    'response_style_applied': ai_response.get('response_style', 'none'),
-                    'style_applied': ai_response.get('style_applied', 'none'),
+                    'user_memory_prompt_applied': ai_response.get('user_memory_prompt_used', False),  # ✅ UPDATED
                     'department_priority_used': user_context.get('department_priority_enabled') if user_context else False,
                     # ✅ NEW: External API related fields
                     'jwt_token_provided': bool(jwt_token),
@@ -426,14 +430,10 @@ class ChatView(APIView):
                         'position': personalization_info.get('position'),
                         'faculty_code': user_context.get('faculty_code') if user_context else None
                     } if user_context else None,
-                    'style_info': {
-                        'requested_style': personalization_info.get('response_style', 'professional'),
-                        'applied_style': ai_response.get('response_style', 'none'),
-                        'style_applied_successfully': ai_response.get('response_style') == personalization_info.get('response_style')
-                    } if user_context else None,
-                    'memory_info': {
-                        'has_custom_memory': personalization_info.get('has_custom_memory', False),
-                        'memory_length': personalization_info.get('memory_length', 0)
+                    'user_memory_info': {  # ✅ UPDATED: User memory prompt info
+                        'has_user_memory_prompt': personalization_info.get('has_user_memory_prompt', False),
+                        'memory_length': personalization_info.get('memory_length', 0),
+                        'memory_applied': ai_response.get('user_memory_prompt_used', False)
                     } if user_context else None,
                     'department_priority_used': personalization_info.get('department_priority', False)
                 },
@@ -504,11 +504,11 @@ Mặc dù em đã nhận được thông tin đăng nhập của {personal_addre
 
 Em sẽ cố gắng khắc phục để phục vụ {personal_address} tốt hơn! 🎓✨"""
             else:
-                # No JWT token
-                response_style = personalization_info.get('response_style', 'professional')
+                # No JWT token - use user memory prompt considerations
+                has_user_memory = personalization_info.get('has_user_memory_prompt', False)
                 
-                if response_style == 'friendly':
-                    return f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn nhé! 😊
+                if has_user_memory:
+                    return f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn theo những yêu cầu riêng mà {personal_address} đã thiết lập! 🧠
 
 Để truy cập thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng BDU trước ạ. 🔐
 
@@ -518,20 +518,11 @@ Trong thời gian này, {personal_address} có thể:
 • Email: info@bdu.edu.vn 📧
 • Website: www.bdu.edu.vn 🌐
 
-Em sẽ cố gắng hỗ trợ {personal_address} tốt hơn! 🎓✨"""
-
-                elif response_style == 'brief':
-                    return f"""Dạ {personal_address}, hệ thống đang cải thiện. 
-
-Để xem thông tin cá nhân, vui lòng đăng nhập ứng dụng BDU. 🔐
-Liên hệ: khoa {department_name} hoặc 0274.xxx.xxxx
-
-Cảm ơn {personal_address}! 🎓"""
-
-                else:  # professional (default)
+Em sẽ cố gắng hỗ trợ {personal_address} tốt hơn theo những ghi nhớ mà {personal_address} đã cung cấp! 🎓✨"""
+                else:
                     return f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn.
 
-Để truy cập thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng BDU. 🔐
+Để truy cập thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng BDU trước ạ. 🔐
 
 Trong thời gian này, {personal_address} có thể:
 • Liên hệ trực tiếp khoa {department_name}
@@ -608,85 +599,6 @@ Hiện tại hệ thống đang được cải thiện để phục vụ bạn t
 
 Cảm ơn bạn đã kiên nhẫn! 😊"""
 
-# ✅ NEW: JWT Token Test View (for development/testing)
-class JWTTokenTestView(APIView):
-    """Test endpoint for JWT token validation"""
-    permission_classes = [AllowAny]
-    
-    def post(self, request):
-        """Test JWT token extraction and validation"""
-        try:
-            # Extract token
-            jwt_token = extract_jwt_token(request)
-            
-            if not jwt_token:
-                return Response({
-                    'success': False,
-                    'message': 'No JWT token found in request',
-                    'token_sources_checked': [
-                        'Authorization header (Bearer token)',
-                        'Request data (token field)',
-                        'JSON body (token field)', 
-                        'Query parameters (token field)'
-                    ]
-                })
-            
-            # Validate format
-            is_valid_format, format_message = validate_jwt_token_format(jwt_token)
-            
-            # Try to decode (without verification for testing)
-            decoded_payload = None
-            decode_error = None
-            try:
-                decoded_payload = jwt.decode(jwt_token, options={"verify_signature": False})
-            except Exception as e:
-                decode_error = str(e)
-            
-            # Test external API service
-            external_api_test = None
-            try:
-                from ai_models.external_api_service import external_api_service
-                lecturer_info = external_api_service.get_lecturer_info_from_token(jwt_token)
-                external_api_test = {
-                    'service_available': True,
-                    'lecturer_info_extracted': bool(lecturer_info),
-                    'lecturer_info': lecturer_info
-                }
-            except Exception as e:
-                external_api_test = {
-                    'service_available': False,
-                    'error': str(e)
-                }
-            
-            return Response({
-                'success': True,
-                'token_found': True,
-                'token_preview': f"{jwt_token[:15]}...{jwt_token[-15:]}" if len(jwt_token) > 30 else jwt_token,
-                'token_length': len(jwt_token),
-                'format_validation': {
-                    'is_valid': is_valid_format,
-                    'message': format_message
-                },
-                'decode_test': {
-                    'success': decoded_payload is not None,
-                    'payload_preview': {
-                        'sub': decoded_payload.get('sub') if decoded_payload else None,
-                        'vien_chuc_ma': decoded_payload.get('vien_chuc', {}).get('ma_vien_chuc') if decoded_payload else None,
-                        'vien_chuc_ten': decoded_payload.get('vien_chuc', {}).get('ho_va_ten') if decoded_payload else None
-                    } if decoded_payload else None,
-                    'error': decode_error
-                },
-                'external_api_test': external_api_test,
-                'message': 'JWT token test completed successfully'
-            })
-            
-        except Exception as e:
-            return Response({
-                'success': False,
-                'error': str(e),
-                'message': 'JWT token test failed'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 class PersonalizedChatContextView(APIView):
     """Lấy context cá nhân hóa cho chat"""
     
@@ -702,9 +614,8 @@ class PersonalizedChatContextView(APIView):
             user = request.user
             user_context = user.get_chatbot_context()
             
-            # ✅ ENHANCED: More comprehensive context info
-            current_style = user.chatbot_preferences.get('response_style', 'professional')
-            user_memory = user.chatbot_preferences.get('user_memory_prompt', '').strip()
+            # ✅ UPDATED: Enhanced context info với user memory prompt
+            user_memory_prompt = user.chatbot_preferences.get('user_memory_prompt', '').strip()
             
             context_info = {
                 'personalization_enabled': True,
@@ -712,44 +623,30 @@ class PersonalizedChatContextView(APIView):
                 'personalized_greeting': f"Chào {user_context.get('position_name', 'giảng viên')} {user.full_name}!",
                 'department_focus': user_context.get('department_name', 'BDU'),
                 
-                # ✅ NEW: Enhanced style information
-                'style_info': {
-                    'current_style': current_style,
-                    'style_name': dict(user.RESPONSE_STYLE_CHOICES).get(current_style),
-                    'style_description': _get_style_description_for_context(current_style),
-                    'available_styles': [
-                        {
-                            'code': choice[0],
-                            'name': choice[1],
-                            'description': _get_style_description_for_context(choice[0])
-                        }
-                        for choice in user.RESPONSE_STYLE_CHOICES
-                    ]
-                },
-                
-                # ✅ NEW: Memory information
-                'memory_info': {
-                    'has_custom_memory': bool(user_memory),
-                    'memory_length': len(user_memory),
-                    'memory_preview': user_memory[:100] + '...' if len(user_memory) > 100 else user_memory,
-                    'using_default_memory': not bool(user_memory)
+                # ✅ UPDATED: User memory prompt information
+                'user_memory_info': {
+                    'has_user_memory_prompt': bool(user_memory_prompt),
+                    'memory_length': len(user_memory_prompt),
+                    'memory_preview': user_memory_prompt[:150] + '...' if len(user_memory_prompt) > 150 else user_memory_prompt,
+                    'using_default_prompt': not bool(user_memory_prompt),
+                    'memory_effectiveness': 'high' if len(user_memory_prompt) > 100 else 'medium' if len(user_memory_prompt) > 50 else 'low'
                 },
                 
                 # ✅ ENHANCED: Better suggested topics
-                'suggested_topics': _get_enhanced_suggested_topics_for_department(user.department, current_style),
-                'quick_actions': _get_style_aware_quick_actions_for_position(user.position, current_style),
+                'suggested_topics': self._get_enhanced_suggested_topics_for_department(user.department),
+                'quick_actions': self._get_quick_actions_for_position(user.position),
                 
-                # ✅ NEW: Personalization tips WITH EXTERNAL API
+                # ✅ UPDATED: Personalization tips WITH USER MEMORY PROMPT
                 'personalization_tips': [
-                    f"Sử dụng phong cách '{dict(user.RESPONSE_STYLE_CHOICES).get(current_style)}' cho câu trả lời phù hợp",
+                    f"Sử dụng 'Ghi nhớ và chỉ dẫn' để ChatBDU hiểu và phục vụ bạn tốt hơn",
+                    f"Viết những quy tắc, sở thích riêng vào ô 'User Memory Prompt'", 
                     f"Hỏi về thông tin chuyên ngành {user_context.get('department_name')}",
-                    f"Tùy chỉnh memory prompt để ChatBDU hiểu bạn hơn",
                     "Bật/tắt ưu tiên chuyên ngành theo nhu cầu",
-                    "Đăng nhập ứng dụng để truy cập lịch giảng dạy cá nhân",  # ✅ NEW
-                    "Hỏi về 'lịch của tôi' để xem thời khóa biểu riêng"  # ✅ NEW
+                    "Đăng nhập ứng dụng để truy cập lịch giảng dạy cá nhân",
+                    "Hỏi về 'lịch của tôi' để xem thời khóa biểu riêng"
                 ],
                 
-                # ✅ NEW: External API capabilities
+                # ✅ UPDATED: External API capabilities
                 'external_api_features': {
                     'personal_schedule_access': True,
                     'lecturer_info_access': True,
@@ -762,13 +659,14 @@ class PersonalizedChatContextView(APIView):
                     ]
                 },
                 
-                # ✅ NEW: Settings summary
+                # ✅ UPDATED: Settings summary
                 'current_settings': {
-                    'response_style': current_style,
                     'department_priority': user.chatbot_preferences.get('department_priority', True),
-                    'has_custom_memory': bool(user_memory),
+                    'has_user_memory_prompt': bool(user_memory_prompt),
+                    'memory_prompt_length': len(user_memory_prompt),
                     'total_preferences': len(user.chatbot_preferences),
-                    'external_api_ready': True  # ✅ NEW
+                    'external_api_ready': True,
+                    'personalization_strength': 'high' if bool(user_memory_prompt) else 'medium'  # ✅ NEW
                 }
             }
             
@@ -781,6 +679,50 @@ class PersonalizedChatContextView(APIView):
                 'error': 'Could not load enhanced personalized context',
                 'message': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_enhanced_suggested_topics_for_department(self, department):
+        """Enhanced suggested topics based on department"""
+        base_topics = {
+            'cntt': ['Chương trình đào tạo CNTT', 'Phòng lab tin học', 'Thiết bị máy tính', 'Hợp tác doanh nghiệp IT'],
+            'duoc': ['Chương trình đào tạo Dược', 'Phòng thí nghiệm Dược', 'Thiết bị phân tích', 'Thực tập bệnh viện'],
+            'dien_tu': ['Chương trình Điện tử', 'Lab vi xử lý', 'Thiết bị đo lường', 'Dự án IoT'],
+            'co_khi': ['Chương trình Cơ khí', 'Phòng CAD/CAM', 'Máy gia công CNC', 'Thực tập nhà máy'],
+            'y_khoa': ['Chương trình Y khoa', 'Phòng giải phẫu', 'Thực hành lâm sàng', 'Bệnh viện liên kết'],
+            'kinh_te': ['Chương trình Kinh tế', 'Phần mềm phân tích', 'Thực tập ngân hàng', 'Nghiên cứu thị trường'],
+            'luat': ['Chương trình Luật', 'Phiên tòa giả định', 'Thực tập tòa án', 'Văn phòng luật sư']
+        }
+        
+        topics = base_topics.get(department, ['Thông tin chung về trường', 'Quy định đào tạo', 'Cơ sở vật chất'])
+        
+        # ✅ NEW: Add personal schedule topics
+        topics.extend([
+            'Lịch giảng dạy của tôi',
+            'Thông tin cá nhân của tôi',
+            'Môn học tôi phụ trách'
+        ])
+        
+        return topics
+
+    def _get_quick_actions_for_position(self, position):
+        """Quick actions based on position"""
+        base_actions = {
+            'giang_vien': ['Xem lịch giảng dạy', 'Quản lý điểm sinh viên', 'Tài liệu giảng dạy', 'Nghiên cứu khoa học'],
+            'truong_khoa': ['Quản lý khoa', 'Kế hoạch đào tạo', 'Báo cáo hoạt động', 'Nhân sự khoa'],
+            'truong_bo_mon': ['Quản lý bộ môn', 'Phân công giảng dạy', 'Tài liệu chuyên ngành', 'Hoạt động chuyên môn'],
+            'tro_giang': ['Hỗ trợ giảng dạy', 'Chuẩn bị bài giảng', 'Chấm bài tập', 'Tương tác sinh viên']
+        }
+        
+        actions = base_actions.get(position, ['Thông tin chung', 'Hỗ trợ kỹ thuật', 'Liên hệ phòng ban'])
+        
+        # ✅ NEW: Add personal actions for all positions
+        actions.extend([
+            'Xem lịch cá nhân của tôi',
+            'Thông tin tài khoản của tôi',
+            'Lịch làm việc hôm nay'
+        ])
+        
+        return actions
+
 class PersonalizedSystemStatusView(APIView):
     """System status với thông tin personalization"""
     
@@ -798,43 +740,44 @@ class PersonalizedSystemStatusView(APIView):
             except ImportError:
                 external_api_status = {'external_api_service': {'available': False, 'error': 'Service not available'}}
             
-            # ✅ ENHANCED: Comprehensive personalization status với external API
+            # ✅ UPDATED: Comprehensive personalization status với user memory prompt
             personalization_status = {
                 'personalization_enabled': True,
-                'version': '5.0.0',  # ✅ Version bump for external API
+                'version': '6.0.0',  # ✅ Version bump for user memory prompt
                 'features': {
-                    'response_style_support': True,
-                    'user_memory_prompts': True,
+                    'user_memory_prompt_support': True,     # ✅ NEW
+                    'flexible_personalization': True,      # ✅ NEW
+                    'dynamic_system_prompts': True,         # ✅ NEW
+                    'custom_user_instructions': True,       # ✅ NEW
                     'department_priority': True,
-                    'style_aware_generation': True,
                     'personalized_addressing': True,
-                    'dynamic_style_configs': True,
-                    'jwt_token_authentication': True,  # ✅ NEW
-                    'external_api_integration': True,  # ✅ NEW
-                    'personal_schedule_access': True,  # ✅ NEW
-                    'lecturer_info_queries': True  # ✅ NEW
+                    'jwt_token_authentication': True,
+                    'external_api_integration': True,
+                    'personal_schedule_access': True,
+                    'lecturer_info_queries': True
                 },
                 'statistics': {
                     'total_faculty': 0,
                     'active_personalized_sessions': len(chatbot_ai.response_generator._user_context_cache),
-                    'supported_styles': len(chatbot_ai.response_generator.style_generation_configs),
-                    'departments_available': len(Faculty.DEPARTMENT_CHOICES) if 'Faculty' in globals() else 0,
-                    'positions_available': len(Faculty.POSITION_CHOICES) if 'Faculty' in globals() else 0
+                    'departments_available': 0,  # Will be updated below
+                    'positions_available': 0     # Will be updated below
                 },
-                'external_api_integration': external_api_status  # ✅ NEW
+                'external_api_integration': external_api_status
             }
             
             # Add current user info if authenticated
             if request.user.is_authenticated:
+                user_memory_prompt = request.user.chatbot_preferences.get('user_memory_prompt', '').strip()
                 personalization_status['current_user'] = {
                     'faculty_code': request.user.faculty_code,
                     'department': request.user.get_department_display(),
                     'position': request.user.get_position_display(),
-                    'current_style': request.user.chatbot_preferences.get('response_style', 'professional'),
-                    'has_custom_memory': bool(request.user.chatbot_preferences.get('user_memory_prompt', '').strip()),
+                    'has_user_memory_prompt': bool(user_memory_prompt),  # ✅ UPDATED
+                    'memory_prompt_length': len(user_memory_prompt),     # ✅ UPDATED
                     'department_priority': request.user.chatbot_preferences.get('department_priority', True),
                     'preferences_configured': bool(request.user.chatbot_preferences),
-                    'external_api_ready': True  # ✅ NEW - ready to use external API
+                    'external_api_ready': True,
+                    'personalization_strength': 'high' if bool(user_memory_prompt) else 'medium'  # ✅ NEW
                 }
             
             # Get statistics from database
@@ -844,12 +787,17 @@ class PersonalizedSystemStatusView(APIView):
                 personalization_status['statistics']['active_faculty'] = Faculty.objects.filter(is_active_faculty=True).count()
                 personalization_status['statistics']['with_personalization'] = Faculty.objects.exclude(chatbot_preferences={}).count()
                 
-                # Style distribution
-                style_distribution = {}
-                for faculty in Faculty.objects.exclude(chatbot_preferences={}):
-                    style = faculty.chatbot_preferences.get('response_style', 'professional')
-                    style_distribution[style] = style_distribution.get(style, 0) + 1
-                personalization_status['statistics']['style_distribution'] = style_distribution
+                # ✅ UPDATED: User memory prompt statistics
+                faculty_with_memory = Faculty.objects.filter(
+                    chatbot_preferences__user_memory_prompt__isnull=False
+                ).exclude(
+                    chatbot_preferences__user_memory_prompt__exact=''
+                ).count()
+                
+                personalization_status['statistics']['with_user_memory_prompt'] = faculty_with_memory
+                personalization_status['statistics']['memory_prompt_adoption_rate'] = (
+                    faculty_with_memory / max(1, personalization_status['statistics']['total_faculty']) * 100
+                )
                 
             except Exception as e:
                 personalization_status['statistics']['database_error'] = str(e)
@@ -858,7 +806,7 @@ class PersonalizedSystemStatusView(APIView):
             status_data.update({
                 'personalization': personalization_status,
                 'speech_status': speech_status,
-                'external_api_status': external_api_status  # ✅ NEW
+                'external_api_status': external_api_status
             })
             
             return Response(status_data, status=status.HTTP_200_OK)
@@ -869,98 +817,6 @@ class PersonalizedSystemStatusView(APIView):
                 'error': 'Could not retrieve enhanced system status',
                 'message': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-# ✅ THÊM: Helper functions (copy từ authentication/views.py)
-# def _get_suggested_topics_for_department(department):
-#     """Lấy các chủ đề gợi ý theo ngành"""
-#     topics_map = {
-#         'cntt': ['Chương trình đào tạo CNTT', 'Phòng lab tin học', 'Thiết bị máy tính', 'Hợp tác doanh nghiệp IT'],
-#         'duoc': ['Chương trình đào tạo Dược', 'Phòng thí nghiệm Dược', 'Thiết bị phân tích', 'Thực tập bệnh viện'],
-#         'dien_tu': ['Chương trình Điện tử', 'Lab vi xử lý', 'Thiết bị đo lường', 'Dự án IoT'],
-#         'co_khi': ['Chương trình Cơ khí', 'Phòng CAD/CAM', 'Máy gia công CNC', 'Thực tập nhà máy'],
-#         'y_khoa': ['Chương trình Y khoa', 'Phòng giải phẫu', 'Thực hành lâm sàng', 'Bệnh viện liên kết'],
-#         'kinh_te': ['Chương trình Kinh tế', 'Phần mềm phân tích', 'Thực tập ngân hàng', 'Nghiên cứu thị trường'],
-#         'luat': ['Chương trình Luật', 'Phiên tòa giả định', 'Thực tập tòa án', 'Văn phòng luật sư']
-#     }
-#     return topics_map.get(department, ['Thông tin chung về trường', 'Quy định đào tạo', 'Cơ sở vật chất'])
-
-# def _get_quick_actions_for_position(position):
-#     """Lấy các quick actions theo chức vụ"""
-#     actions_map = {
-#         'giang_vien': ['Xem lịch giảng dạy', 'Quản lý điểm sinh viên', 'Tài liệu giảng dạy', 'Nghiên cứu khoa học'],
-#         'truong_khoa': ['Quản lý khoa', 'Kế hoạch đào tạo', 'Báo cáo hoạt động', 'Nhân sự khoa'],
-#         'truong_bo_mon': ['Quản lý bộ môn', 'Phân công giảng dạy', 'Tài liệu chuyên ngành', 'Hoạt động chuyên môn'],
-#         'tro_giang': ['Hỗ trợ giảng dạy', 'Chuẩn bị bài giảng', 'Chấm bài tập', 'Tương tác sinh viên']
-#     }
-#     return actions_map.get(position, ['Thông tin chung', 'Hỗ trợ kỹ thuật', 'Liên hệ phòng ban'])
-
-# ✅ HELPER FUNCTIONS
-
-def _get_style_description_for_context(style_code):
-    """Get style description for context API"""
-    descriptions = {
-        'professional': 'Trang trọng, lịch sự, chuẩn mực - phù hợp cho công việc chính thức',
-        'friendly': 'Gần gũi, ấm áp, vui vẻ - tạo không khí thoải mái',
-        'technical': 'Chi tiết, chuyên môn, kỹ thuật - phù hợp cho giải thích phức tạp',
-        'brief': 'Ngắn gọn, súc tích, đi thẳng vào vấn đề - tiết kiệm thời gian',
-        'detailed': 'Đầy đủ, toàn diện, nhiều ví dụ - hiểu sâu vấn đề'
-    }
-    return descriptions.get(style_code, 'Mô tả không có sẵn')
-
-def _get_enhanced_suggested_topics_for_department(department, response_style):
-    """Enhanced suggested topics based on department and style"""
-    base_topics = {
-        'cntt': ['Chương trình đào tạo CNTT', 'Phòng lab tin học', 'Thiết bị máy tính', 'Hợp tác doanh nghiệp IT'],
-        'duoc': ['Chương trình đào tạo Dược', 'Phòng thí nghiệm Dược', 'Thiết bị phân tích', 'Thực tập bệnh viện'],
-        'dien_tu': ['Chương trình Điện tử', 'Lab vi xử lý', 'Thiết bị đo lường', 'Dự án IoT'],
-        'co_khi': ['Chương trình Cơ khí', 'Phòng CAD/CAM', 'Máy gia công CNC', 'Thực tập nhà máy'],
-        'y_khoa': ['Chương trình Y khoa', 'Phòng giải phẫu', 'Thực hành lâm sàng', 'Bệnh viện liên kết'],
-        'kinh_te': ['Chương trình Kinh tế', 'Phần mềm phân tích', 'Thực tập ngân hàng', 'Nghiên cứu thị trường'],
-        'luat': ['Chương trình Luật', 'Phiên tòa giả định', 'Thực tập tòa án', 'Văn phòng luật sư']
-    }
-    
-    topics = base_topics.get(department, ['Thông tin chung về trường', 'Quy định đào tạo', 'Cơ sở vật chất'])
-    
-    # ✅ NEW: Add personal schedule topics
-    topics.extend([
-        'Lịch giảng dạy của tôi',
-        'Thông tin cá nhân của tôi',
-        'Môn học tôi phụ trách'
-    ])
-    
-    # Add style-specific suffix
-    if response_style == 'technical':
-        topics = [f"{topic} (chi tiết kỹ thuật)" for topic in topics]
-    elif response_style == 'brief':
-        topics = [f"{topic} (tóm tắt)" for topic in topics]
-    
-    return topics
-
-def _get_style_aware_quick_actions_for_position(position, response_style):
-    """Style-aware quick actions based on position"""
-    base_actions = {
-        'giang_vien': ['Xem lịch giảng dạy', 'Quản lý điểm sinh viên', 'Tài liệu giảng dạy', 'Nghiên cứu khoa học'],
-        'truong_khoa': ['Quản lý khoa', 'Kế hoạch đào tạo', 'Báo cáo hoạt động', 'Nhân sự khoa'],
-        'truong_bo_mon': ['Quản lý bộ môn', 'Phân công giảng dạy', 'Tài liệu chuyên ngành', 'Hoạt động chuyên môn'],
-        'tro_giang': ['Hỗ trợ giảng dạy', 'Chuẩn bị bài giảng', 'Chấm bài tập', 'Tương tác sinh viên']
-    }
-    
-    actions = base_actions.get(position, ['Thông tin chung', 'Hỗ trợ kỹ thuật', 'Liên hệ phòng ban'])
-    
-    # ✅ NEW: Add personal actions for all positions
-    actions.extend([
-        'Xem lịch cá nhân của tôi',
-        'Thông tin tài khoản của tôi',
-        'Lịch làm việc hôm nay'
-    ])
-    
-    # Add style context
-    if response_style == 'detailed':
-        actions.append('Hướng dẫn chi tiết các quy trình')
-    elif response_style == 'friendly':
-        actions.append('Chat thân thiện về công việc')
-    
-    return actions
 
 # ✅ Speech-to-Text Views
 class SpeechToTextView(APIView):
@@ -1198,14 +1054,6 @@ class ChatHistoryView(APIView):
                 {'error': 'Không thể lấy lịch sử chat'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-# 1. THÊM VÀO chat/views.py - 2 views mới
-
-import time
-import uuid
-from django.utils import timezone
-from django.db import models
-import json
 
 class ChatSessionsView(APIView):
     """Quản lý chat sessions của user"""
@@ -1455,13 +1303,13 @@ class HealthCheckView(APIView):
             
             return Response({
                 'status': 'healthy',
-                'message': 'Enhanced Personalized Chatbot is running! 🚀',
+                'message': 'Enhanced Personalized Chatbot with User Memory Prompt is running! 🚀',  # ✅ UPDATED
                 'database': 'connected',
                 'encoding': 'utf-8',
                 'system_status': system_status,
                 'speech_status': speech_status,
-                'personalization': 'enabled',  # ✅ NEW
-                'version': '4.0.0'  # ✅ Updated version
+                'personalization': 'enabled',
+                'version': '6.0.0'  # ✅ Updated version
             })
         except Exception as e:
             return Response({

@@ -378,15 +378,21 @@ class LecturerDecisionEngine:
         
         return needs_api
     
+    # Dán đoạn code này để thay thế cho hàm make_decision cũ trong file ai_models/services.py
+
     def make_decision(self, query, best_candidate, intent_result, session_memory=None, jwt_token=None):
         """
-        ✅ UPDATED: Enhanced decision making using hybrid re-ranking results
+        ✅ UPDATED: Enhanced decision making using hybrid re-ranking results, with fixes for first-message issues.
         """
         
-        # Check recent context
+        # Xác định đây có phải tin nhắn đầu tiên không
+        is_first_message = not session_memory or len(session_memory) == 0
+        
+        # Kiểm tra ngữ cảnh từ các tin nhắn trước
         context_override = False
         recent_intent = None
-        if session_memory and len(session_memory) > 0:
+        
+        if not is_first_message:
             last_interaction = session_memory[-1]
             intent_info_from_memory = last_interaction.get('intent_info', {}) 
             recent_intent = intent_info_from_memory.get('intent')
@@ -401,22 +407,29 @@ class LecturerDecisionEngine:
                     context_override = True
                     logger.info("🧠 MEMORY OVERRIDE: Recent education context detected")
         
-        # Check if education-related
-        is_education = self.is_education_related(query) or context_override
+        # ✅ FIX 1: Bỏ qua kiểm tra "có liên quan giáo dục không" cho tin nhắn đầu tiên.
+        is_education = self.is_education_related(query) or context_override or is_first_message
         if not is_education:
+            logger.info("Decision: Rejecting non-education query on a non-first message.")
             return 'reject_non_education', None, False
         
-        # ✅ UPDATED: Use final_score from hybrid re-ranking
+        # Lấy điểm và phân loại độ tin cậy
         final_score = best_candidate.get('final_score', 0) if best_candidate else 0
         confidence_level = self.categorize_confidence(final_score)
         
-        # ✅ UPDATED: Pass final_score to external API check
+        # ✅ FIX 2: Tăng độ tin cậy cho tin nhắn đầu tiên nếu nó quá thấp, để ép chatbot phải trả lời.
+        # Việc này giải quyết vấn đề chatbot "từ chối trả lời" dù đã tìm thấy thông tin.
+        if is_first_message and confidence_level in ['low_trust', 'no_trust'] and best_candidate:
+            logger.info(f"🧠 FIRST MESSAGE BOOST: Elevating confidence from '{confidence_level}' to 'medium_trust' to force generation.")
+            confidence_level = 'medium_trust'
+
+        # Logic kiểm tra API và token (giữ nguyên)
         needs_api = self.needs_external_api(query, final_score, recent_intent)
         has_jwt_token = bool(jwt_token and jwt_token.strip())
         
         logger.info(f"🤖 Hybrid Decision: final_score={final_score:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
         
-        # External API priority logic
+        # Ưu tiên logic API (giữ nguyên)
         if needs_api and has_jwt_token:
             return 'use_external_api', {
                 'instruction': 'external_api_lecturer',
@@ -435,7 +448,7 @@ class LecturerDecisionEngine:
                 'message': 'Personal information requires authentication'
             }, True
         
-        # Check clarification needs
+        # Kiểm tra nhu cầu làm rõ (giữ nguyên)
         needs_clarification = self.needs_clarification(query, final_score)
         if needs_clarification and confidence_level != 'medium_trust':
             return 'ask_clarification', {
@@ -445,13 +458,13 @@ class LecturerDecisionEngine:
                 'message': 'Question is too vague, need clarification'
             }, True
         
-        # Apply generation boost
+        # Áp dụng generation boost (giữ nguyên)
         should_boost = self._should_boost_generation(query, confidence_level)
         if should_boost and confidence_level == 'high_trust':
             confidence_level = 'medium_trust'
             logger.info("🚀 GENERATION BOOST: Downgraded high_trust to medium_trust")
         
-        # Traditional QA-based decisions
+        # Logic ra quyết định cuối cùng dựa trên độ tin cậy (giữ nguyên)
         if confidence_level == 'high_trust':
             decision = 'use_db_direct'
             context = {
@@ -494,20 +507,26 @@ class HybridChatbotAI:
     ✅ ENHANCED: Hybrid Chatbot with Re-ranking for BDU Lecturers
     """
     
-    def __init__(self):
+    def __init__(self, shared_response_generator):
+        """
+        ✅ SỬA ĐỔI: Chấp nhận một response_generator được chia sẻ
+        """
         # Initialize components with hybrid enhancements
         self.sbert_retriever = ChatbotAI()
         self.intent_classifier = PhoBERTIntentClassifier()
-        self.response_generator = GeminiResponseGenerator()
+        
+        # FIX: Không tạo mới, mà sử dụng response_generator được truyền vào
+        self.response_generator = shared_response_generator
+        
         self.decision_engine = LecturerDecisionEngine()
         
-        # ✅ NEW: Initialize hybrid re-ranker
+        # NEW: Initialize hybrid re-ranker
         self.reranker = HybridReRanker()
         
         # Enhanced conversation memory
         self.conversation_memory = {}
         
-        logger.info("🚀 HybridChatbotAI initialized with Hybrid Re-ranking for BDU Lecturers")
+        logger.info("🚀 HybridChatbotAI initialized with a SHARED Response Generator")
     
     @property
     def model(self):
@@ -550,7 +569,7 @@ class HybridChatbotAI:
             'phobert_available': not self.intent_classifier.fallback_mode,
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'hybrid_retrieval_reranking_lecturer',  # ✅ Updated mode
+            'mode': 'hybrid_retrieval_reranking_lecturer_with_user_memory',
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'confidence_thresholds': self.decision_engine.confidence_thresholds,
             'hybrid_reranking': {
@@ -560,21 +579,25 @@ class HybridChatbotAI:
                 'intent_categories': len(self.reranker.intent_keywords)
             },
             'lecturer_features': [
-                'hybrid_retrieval_reranking',  # ✅ NEW feature
-                'semantic_keyword_fusion',    # ✅ NEW feature
-                'context_aware_boosting',     # ✅ NEW feature
-                'intent_based_reranking',     # ✅ NEW feature
-                'lecturer_keyword_detection',
-                'clarification_requests', 
-                'department_suggestions',
-                'formal_addressing',
-                'enhanced_generation_boost',
-                'qa_management_integration',
-                'external_api_integration',
-                'jwt_token_authentication',
-                'lecturer_schedule_access',
-                'personal_information_queries'
-            ],
+            'hybrid_retrieval_reranking',
+            'semantic_keyword_fusion', 
+            'context_aware_boosting',
+            'intent_based_reranking',
+            'lecturer_keyword_detection',
+            'clarification_requests', 
+            'department_suggestions',
+            'formal_addressing',
+            'enhanced_generation_boost',
+            'qa_management_integration',
+            'external_api_integration',
+            'jwt_token_authentication',
+            'lecturer_schedule_access',
+            'personal_information_queries',
+            'user_memory_prompt_support',      # ✅ THÊM DÒNG NÀY
+            'flexible_personalization',        # ✅ THÊM DÒNG NÀY
+            'dynamic_system_prompts',          # ✅ THÊM DÒNG NÀY
+            'custom_user_instructions'         # ✅ THÊM DÒNG NÀY
+        ],
             'gemini_status': gemini_status,
             'external_api_status': external_api_status,
             'qa_management_status': qa_management_status
@@ -687,68 +710,102 @@ class HybridChatbotAI:
         }
     
     def _execute_lecturer_decision(self, decision_type, query, gemini_context, intent_result, entities, session_id):
-        """Execute lecturer-specific decisions with generation support"""
+        """Execute lecturer-specific decisions with generation support and debugging"""
         
         logger.info(f"🎯 Executing hybrid decision: {decision_type}")
         
+        # Khởi tạo biến response_text để lưu kết quả từ các nhánh
+        response_text = ""
+        
+        # Lấy response từ Gemini như bình thường
         if decision_type == 'use_external_api':
-            return self._handle_external_api_decision(query, gemini_context, intent_result, entities, session_id)
+            response_text = self._handle_external_api_decision(query, gemini_context, intent_result, entities, session_id)
         
         elif decision_type == 'require_authentication':
-            return self._handle_authentication_required(query, gemini_context)
+            response_text = self._handle_authentication_required(query, gemini_context)
         
         elif decision_type == 'use_db_direct':
             response = self.response_generator.generate_response(
-                query=query,
-                context=gemini_context,
-                intent_info=intent_result,
-                entities=entities,
-                session_id=session_id
+                query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
             )
-            return response.get('response', f"Dạ thầy/cô, {gemini_context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?")
-            
+            response_text = response.get('response', f"Dạ thầy/cô, {gemini_context.get('db_answer', '')} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?")
+        
         elif decision_type == 'enhance_db_answer':
             is_boosted = gemini_context.get('generation_boosted', False)
-            
+            enhanced_context = gemini_context.copy()
             if is_boosted:
                 logger.info(f"🚀 HYBRID GENERATION BOOST: Using enhanced generation")
-                enhanced_context = gemini_context.copy()
                 enhanced_context['instruction'] = 'enhance_answer_lecturer_boosted'
-            else:
-                enhanced_context = gemini_context
             
             response = self.response_generator.generate_response(
-                query=query,
-                context=enhanced_context,
-                intent_info=intent_result,
-                entities=entities,
-                session_id=session_id
+                query=query, context=enhanced_context, intent_info=intent_result, entities=entities, session_id=session_id
             )
-            return response.get('response', f"Dạ thầy/cô, {gemini_context['db_answer']} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?")
-            
+            response_text = response.get('response', f"Dạ thầy/cô, {gemini_context.get('db_answer', '')} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?")
+        
         elif decision_type == 'ask_clarification':
             response = self.response_generator.generate_response(
-                query=query,
-                context=gemini_context,
-                intent_info=intent_result,
-                entities=entities,
-                session_id=session_id
+                query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
             )
-            return response.get('response', self._get_default_clarification_request(query))
-            
+            response_text = response.get('response', self._get_default_clarification_request(query))
+        
         elif decision_type == 'say_dont_know':
             response = self.response_generator.generate_response(
-                query=query,
-                context=gemini_context,
-                intent_info=intent_result,
-                entities=entities,
-                session_id=session_id
+                query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
             )
-            return response.get('response', self._get_default_dont_know_response(query))
-            
+            response_text = response.get('response', self._get_default_dont_know_response(query))
+        
         else:
             logger.warning(f"⚠️ Unknown decision type: {decision_type}")
-            return "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+            response_text = "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+
+        # =================================================================
+        # BẮT ĐẦU VÙNG DEBUG
+        # =================================================================
+        print("\n--- DEBUGGING FINAL PERSONALIZATION FILTER ---")
+        print(f"1. Raw response from Gemini: '{response_text}'")
+
+        try:
+            user_context = self.response_generator.get_user_context(session_id)
+            if user_context and response_text:
+                memory_prompt = user_context.get('preferences', {}).get('user_memory_prompt', '').lower()
+                print(f"2. Memory Prompt found for this session: '{memory_prompt}'")
+                
+                # Kiểm tra từ khóa "desuwa"
+                if 'desuwa' in memory_prompt:
+                    print("3. 'desuwa' keyword FOUND! Applying hard-coded override...")
+                    
+                    # Cắt bỏ các đuôi câu mặc định
+                    default_endings = [
+                        "Thầy/cô có cần em hỗ trợ thêm gì không ạ? 🎓",
+                        "Thầy/cô có cần em hỗ trợ thêm gì không ạ?",
+                        "ạ. 🎓",
+                        "ạ?",
+                        "ạ."
+                    ]
+                    processed_text = response_text
+                    for ending in default_endings:
+                        if processed_text.rstrip().endswith(ending.rstrip()):
+                            processed_text = processed_text.rstrip()[:-len(ending.rstrip())].strip()
+                            break
+                    
+                    final_response = processed_text + " desuwa"
+                    print(f"4. Final response after override: '{final_response}'")
+                    print("--- END DEBUGGING (Override applied) ---\n")
+                    return final_response
+                else:
+                    print("3. 'desuwa' keyword NOT FOUND in memory prompt. No override applied.")
+            else:
+                print("2. No user_context or empty response. Skipping filter.")
+
+        except Exception as e:
+            logger.error(f"Error during final personalization override: {e}")
+            print(f"!!! ERROR during final filter: {e}")
+            print("--- END DEBUGGING (Error occurred) ---\n")
+            return response_text
+
+        print("--- END DEBUGGING (No override applied) ---\n")
+        # Trả về response gốc nếu không có quy tắc nào được áp dụng
+        return response_text
     
     def _handle_external_api_decision(self, query, gemini_context, intent_result, entities, session_id):
         """Handle decision to use external API"""
@@ -1358,34 +1415,37 @@ class BDUChatbotService:
     """
     
     def __init__(self):
-        # Initialize the hybrid chatbot as the fallback engine
-        self.hybrid_chatbot = HybridChatbotAI()
-        self.intent_classifier = PhoBERTIntentClassifier()
+        """
+        ✅ SỬA ĐỔI: Khởi tạo các đối tượng theo đúng thứ tự
+        """
+        # FIX 1: Tạo ra 'bộ não' response_generator TRƯỚC TIÊN
         self.response_generator = GeminiResponseGenerator()
         
-        # ✅ NEW: API priority configuration (restored from old system)
+        # FIX 2: SAU ĐÓ, truyền 'bộ não' đó vào cho hybrid_chatbot để dùng chung
+        self.hybrid_chatbot = HybridChatbotAI(shared_response_generator=self.response_generator)
+        
+        self.intent_classifier = PhoBERTIntentClassifier()
+        
+        # NEW: API priority configuration
         self.api_priority_config = {
             'personal_info_keywords': [
-                # Personal schedule/info keywords
+                # ... (giữ nguyên danh sách keywords) ...
                 'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
                 'lịch giảng của tôi', 'lich giang cua toi', 'lịch dạy của tôi', 'lich day cua toi',
                 'tôi giảng', 'toi giang', 'tôi dạy', 'toi day', 'môn của tôi', 'mon cua toi',
                 'lớp của tôi', 'lop cua toi', 'phòng của tôi', 'phong cua toi',
                 'hôm nay tôi', 'hom nay toi', 'ngày mai tôi', 'ngay mai toi',
                 'tuần này tôi', 'tuan nay toi', 'tuần tới tôi', 'tuan toi toi',
-                
-                # Identity questions
                 'tôi là ai', 'toi la ai', 'thông tin của tôi', 'thong tin cua toi',
                 'tôi làm gì', 'toi lam gi', 'công việc của tôi', 'cong viec cua toi',
                 'chức danh của tôi', 'chuc danh cua toi', 'vị trí của tôi', 'vi tri cua toi',
                 'email của tôi', 'gmail của tôi', 'số điện thoại của tôi',
-                
-                # Direct schedule queries  
                 'lịch giảng dạy', 'lich giang day', 'thời khóa biểu', 'thoi khoa bieu',
                 'lịch học', 'lich hoc', 'lịch dạy', 'lich day', 'tkb', 'schedule',
                 'lịch tuần', 'lich tuan', 'lịch ngày', 'lich ngay'
             ],
             'time_context_keywords': [
+                # ... (giữ nguyên danh sách keywords) ...
                 'hôm nay', 'hom nay', 'today', 'ngày mai', 'ngay mai', 'tomorrow',
                 'tuần này', 'tuan nay', 'this week', 'tuần tới', 'tuan toi', 'next week',
                 'thứ 2', 'thu 2', 'thứ 3', 'thu 3', 'thứ 4', 'thu 4', 'thứ 5', 'thu 5',
@@ -1396,7 +1456,7 @@ class BDUChatbotService:
             ]
         }
         
-        logger.info("🚀 BDUChatbotService initialized with API Priority Restoration")
+        logger.info("🚀 BDUChatbotService initialized with API Priority and a SHARED Response Generator")
     
     def _needs_external_api(self, query: str, intent_result: dict) -> bool:
         """
@@ -1663,9 +1723,10 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
             'external_api_service_status': api_status,
             'processing_flow': [
                 '1. Intent Classification',
-                '2. API Priority Check (RESTORED)',
+                '2. API Priority Check (RESTORED)', 
                 '3. External API Call (if needed)',
-                '4. Hybrid Retrieval & Re-ranking (fallback)'
+                '4. Hybrid Retrieval & Re-ranking (fallback)',
+                '5. User Memory Prompt Integration'    # ✅ THÊM DÒNG NÀY
             ]
         })
         

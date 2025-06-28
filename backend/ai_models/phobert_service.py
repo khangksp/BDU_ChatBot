@@ -162,7 +162,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['xin chào', 'hello', 'hi', 'chào thầy', 'chào cô', 'halo', 'chào', 'hey'],
                 'confidence_threshold': 0.6,
                 'description': 'Chào hỏi',
-                'response_style': 'friendly',
                 'patterns': [r'(?:xin\s+)?chào\s+(?:thầy|cô)', r'hello|hi|hey'],
                 'context_indicators': {'greeting_markers': ['chào', 'hello']},
                 'boosters': {'polite_terms': ['xin chào', 'chào thầy'], 'boost_factor': 1.2}
@@ -172,7 +171,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['ngân hàng đề thi', 'ngan hang de thi', 'đề thi', 'de thi', 'báo cáo đề thi', 'file mềm'],
                 'confidence_threshold': 0.4,
                 'description': 'Ngân hàng đề thi',
-                'response_style': 'detailed',
                 'patterns': [r'(?:báo cáo|nộp|gửi).*(?:ngân hàng|đề thi)', r'file\s+mềm.*đề\s+thi'],
                 'context_indicators': {'document_markers': ['báo cáo', 'file'], 'exam_markers': ['đề thi', 'ngân hàng']},
                 'boosters': {'document_refs': ['TB_1252'], 'specific_terms': ['ldkham@bdu.edu.vn'], 'boost_factor': 1.4}
@@ -182,7 +180,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['kê khai nhiệm vụ', 'ke khai nhiem vu', 'nhiệm vụ năm học', 'giờ chuẩn', 'gio chuan', 'thỉnh giảng'],
                 'confidence_threshold': 0.4,
                 'description': 'Kê khai nhiệm vụ năm học',
-                'response_style': 'informative',
                 'patterns': [r'kê\s+khai.*nhiệm\s+vụ', r'giờ\s+chuẩn.*năm\s+học'],
                 'context_indicators': {'task_markers': ['kê khai', 'nhiệm vụ'], 'time_markers': ['năm học']},
                 'boosters': {'document_refs': ['TB_746'], 'specific_terms': ['daotao@bdu.edu.vn'], 'boost_factor': 1.4}
@@ -192,7 +189,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['tạp chí', 'tap chi', 'tạp chí khoa học', 'bài viết', 'bai viet', 'nghiên cứu', 'gửi bài'],
                 'confidence_threshold': 0.4,
                 'description': 'Tạp chí khoa học',
-                'response_style': 'detailed',
                 'patterns': [r'(?:gửi|nộp).*(?:bài viết|tạp chí)', r'tạp\s+chí.*khoa\s+học'],
                 'context_indicators': {'research_markers': ['nghiên cứu', 'bài viết'], 'journal_markers': ['tạp chí']},
                 'boosters': {'document_refs': ['TB_676'], 'specific_terms': ['jst@bdu.edu.vn'], 'boost_factor': 1.4}
@@ -202,7 +198,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['thi đua', 'thi dua', 'khen thưởng', 'khen thuong', 'danh hiệu', 'bằng khen', 'lễ khen thưởng'],
                 'confidence_threshold': 0.4,
                 'description': 'Thi đua khen thưởng',
-                'response_style': 'encouraging',
                 'patterns': [r'thi\s+đua.*khen\s+thưởng', r'(?:danh hiệu|bằng khen)'],
                 'context_indicators': {'award_markers': ['thi đua', 'khen thưởng'], 'recognition_markers': ['danh hiệu']},
                 'boosters': {'award_terms': ['chiến sĩ thi đua', 'lao động tiên tiến'], 'boost_factor': 1.3}
@@ -212,7 +207,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi', 'tôi giảng', 'tôi dạy'],
                 'confidence_threshold': 0.3,
                 'description': 'Lịch giảng dạy cá nhân',
-                'response_style': 'detailed',
                 'patterns': [r'(?:lịch|tkb|thời khóa biểu).*(?:tôi|của tôi)', r'(?:tôi|mình).*(?:dạy|giảng)'],
                 'context_indicators': {'personal_markers': ['tôi', 'của tôi'], 'schedule_markers': ['lịch', 'tkb']},
                 'boosters': {'time_contexts': ['hôm nay', 'ngày mai'], 'boost_factor': 1.5}
@@ -222,7 +216,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['tôi là ai', 'toi la ai', 'thông tin của tôi', 'email của tôi', 'chức danh của tôi'],
                 'confidence_threshold': 0.4,
                 'description': 'Thông tin cá nhân giảng viên',
-                'response_style': 'informative',
                 'patterns': [r'(?:tôi|mình)\s+là\s+ai', r'(?:thông tin|email).*của\s+tôi'],
                 'context_indicators': {'identity_markers': ['tôi là', 'thông tin'], 'info_markers': ['email', 'chức danh']},
                 'boosters': {'identity_terms': ['hồ sơ', 'profile'], 'boost_factor': 1.2}
@@ -233,7 +226,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['thông báo số', 'TB_', 'quyết định số', 'QĐ_', 'theo thông báo', 'TB_1252', 'TB_746', 'TB_676'],
                 'confidence_threshold': 0.3,
                 'description': 'Hỏi về văn bản, thông báo cụ thể',
-                'response_style': 'authoritative',
                 'patterns': [r'(?:theo|căn cứ)\s+(?:thông báo|TB|quyết định|QĐ)\s+số\s*\d+', r'TB_\d+'],
                 'context_indicators': {'authority_markers': ['theo', 'căn cứ'], 'document_numbers': ['số', 'TB_']},
                 'boosters': {'document_refs': ['TB_1252', 'TB_746'], 'boost_factor': 1.6}
@@ -243,7 +235,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['hạn cuối', 'han cuoi', 'deadline', 'trước ngày', 'hết ngày', 'chậm nhất', '15/01/2024'],
                 'confidence_threshold': 0.4,
                 'description': 'Hỏi về thời hạn, deadline',
-                'response_style': 'urgent',
                 'patterns': [r'(?:hạn|deadline)\s*(?:cuối|chót|nào)', r'\d{1,2}[/]\d{1,2}[/]\d{4}'],
                 'context_indicators': {'time_markers': ['ngày', 'tháng'], 'deadline_urgency': ['hạn', 'deadline']},
                 'boosters': {'urgent_terms': ['gấp', 'khẩn cấp'], 'boost_factor': 1.4}
@@ -253,7 +244,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['gửi cho ai', 'phụ trách', 'địa chỉ email', '@bdu.edu.vn', 'ldkham@bdu.edu.vn', 'ai ký'],
                 'confidence_threshold': 0.4,
                 'description': 'Hỏi về liên hệ, người phụ trách',
-                'response_style': 'informative',
                 'patterns': [r'(?:gửi|liên hệ)\s+(?:cho\s+)?ai', r'\w+@bdu\.edu\.vn'],
                 'context_indicators': {'contact_markers': ['email', 'liên hệ'], 'responsibility_markers': ['phụ trách', 'ký']},
                 'boosters': {'specific_emails': ['ldkham@bdu.edu.vn'], 'boost_factor': 1.3}
@@ -263,7 +253,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['định dạng', 'file mềm', 'cách gửi', 'thể lệ', 'bản điện tử', 'yêu cầu kỹ thuật'],
                 'confidence_threshold': 0.5,
                 'description': 'Hỏi về yêu cầu kỹ thuật, định dạng',
-                'response_style': 'detailed',
                 'patterns': [r'(?:định dạng|format)\s+(?:file|gì|nào)', r'(?:cách|thế nào)\s+(?:gửi|nộp)'],
                 'context_indicators': {'format_markers': ['định dạng', 'file'], 'submission_markers': ['gửi', 'nộp']},
                 'boosters': {'technical_terms': ['định dạng', 'yêu cầu kỹ thuật'], 'boost_factor': 1.2}
@@ -273,7 +262,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['nếu không', 'xử lý như thế nào', 'hậu quả', 'vi phạm', 'bị xem là', 'thiếu giờ nghĩa vụ'],
                 'confidence_threshold': 0.5,
                 'description': 'Hỏi về tuân thủ và hậu quả vi phạm',
-                'response_style': 'warning',
                 'patterns': [r'(?:nếu|nếu như)\s+(?:không|chậm|vi phạm)', r'(?:xử lý|hậu quả)\s+(?:như thế nào|gì)'],
                 'context_indicators': {'condition_markers': ['nếu'], 'consequence_markers': ['bị', 'hậu quả']},
                 'boosters': {'violation_terms': ['vi phạm quy định'], 'boost_factor': 1.3}
@@ -283,7 +271,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['quy trình', 'thủ tục', 'các bước', 'thứ tự', 'từng bước', 'làm thế nào', 'cách thức'],
                 'confidence_threshold': 0.4,
                 'description': 'Hỏi về quy trình, thủ tục',
-                'response_style': 'procedural',
                 'patterns': [r'(?:quy trình|thủ tục)\s+(?:gì|nào|như thế nào)', r'(?:các bước|thứ tự)\s+(?:thực hiện|làm)'],
                 'context_indicators': {'process_markers': ['quy trình', 'thủ tục'], 'sequence_markers': ['bước', 'thứ tự']},
                 'boosters': {'process_terms': ['quy trình chi tiết'], 'boost_factor': 1.2}
@@ -293,7 +280,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['phê duyệt', 'ai duyệt', 'cho phép', 'thẩm quyền', 'hiệu trưởng', 'phó hiệu trưởng'],
                 'confidence_threshold': 0.4,
                 'description': 'Hỏi về phê duyệt, ủy quyền',
-                'response_style': 'authoritative',
                 'patterns': [r'(?:ai|đơn vị nào)\s+(?:duyệt|phê duyệt)', r'(?:có được|được)\s+(?:phép|quyền)'],
                 'context_indicators': {'authority_markers': ['duyệt', 'phê duyệt'], 'hierarchy_markers': ['hiệu trưởng']},
                 'boosters': {'authority_titles': ['hiệu trưởng'], 'boost_factor': 1.3}
@@ -303,7 +289,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['so sánh', 'khác biệt', 'TB_1252 và TB_746', 'các thông báo', 'giống nhau', 'khác với'],
                 'confidence_threshold': 0.5,
                 'description': 'So sánh giữa các văn bản',
-                'response_style': 'analytical',
                 'patterns': [r'(?:so sánh|khác biệt)\s+(?:giữa|với)', r'TB_\d+\s+(?:và|với)\s+TB_\d+'],
                 'context_indicators': {'comparison_markers': ['so sánh', 'khác'], 'conjunction_markers': ['và', 'với']},
                 'boosters': {'multi_doc_refs': ['TB_1252 và TB_746'], 'boost_factor': 1.4}
@@ -314,7 +299,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['gì', 'gi', 'sao', 'nào', 'nao', 'như thế nào', 'làm sao', 'cách nào'],
                 'confidence_threshold': 0.2,
                 'description': 'Cần làm rõ',
-                'response_style': 'clarifying',
                 'patterns': [r'(?:gì|sao|nào|như thế nào)\s*\?*$'],
                 'context_indicators': {'vague_markers': ['gì', 'sao', 'nào']},
                 'boosters': {'question_markers': ['?'], 'boost_factor': 1.1}
@@ -324,7 +308,6 @@ class PhoBERTIntentClassifier:
                 'keywords': ['thông tin', 'hỗ trợ', 'giúp', 'hướng dẫn', 'bdu', 'đại học bình dương'],
                 'confidence_threshold': 0.15,
                 'description': 'Câu hỏi chung',
-                'response_style': 'neutral',
                 'patterns': [r'(?:thông tin|hỗ trợ|giúp).*(?:bdu|đại học)'],
                 'context_indicators': {'general_markers': ['thông tin', 'hỗ trợ']},
                 'boosters': {'school_terms': ['bdu', 'đại học bình dương'], 'boost_factor': 1.0}
@@ -547,7 +530,6 @@ class PhoBERTIntentClassifier:
                 'intent': intent_name,
                 'confidence': confidence,
                 'description': intent_config.get('description', 'Unknown'),
-                'response_style': intent_config.get('response_style', 'neutral'),
                 'normalized_query': query,
                 'ensemble_scores': dict(final_scores),
                 'method_breakdown': ensemble_results,
@@ -865,7 +847,6 @@ class PhoBERTIntentClassifier:
             'intent': 'general',
             'confidence': 0.3,
             'description': 'Câu hỏi chung',
-            'response_style': 'neutral',
             'lecturer_optimized': True
         }
     

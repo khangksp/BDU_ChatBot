@@ -438,9 +438,18 @@ const ChatBot = () => {
     const getPersonalizedWelcomeMessage = () => {
         if (user) {
             const name = user.full_name?.split(' ').pop() || user.faculty_code;
+            
+            // ✅ UPDATED: Thông điệp chào mừng với User Memory Prompt
+            const hasUserMemoryPrompt = user.chatbot_preferences?.user_memory_prompt?.trim();
+            const memoryStatus = hasUserMemoryPrompt ? 
+                "🧠 Tôi đã ghi nhớ những chỉ dẫn riêng mà bạn đã thiết lập!" : 
+                "💡 Bạn có thể thiết lập 'Ghi nhớ và chỉ dẫn' trong cài đặt để tôi phục vụ bạn tốt hơn!";
+            
             return `Xin chào ${user.position_name || 'giảng viên'} ${name}! 
 
-Tôi là ChatBDU, trợ lý AI của Đại học Bình Dương. Tôi có thể hỗ trợ ${user.position_name?.toLowerCase() || 'bạn'} về:
+Tôi là ChatBDU, trợ lý AI của Đại học Bình Dương. ${memoryStatus}
+
+Tôi có thể hỗ trợ ${user.position_name?.toLowerCase() || 'bạn'} về:
 
 • 📚 Thông tin đào tạo và ngành học
 • 🎓 Quy định và thủ tục  
@@ -801,7 +810,10 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                     response_time: response.data.response_time,
                     timestamp: new Date(),
                     chat_id: Date.now(),
-                    reference_links: finalReferenceLinks
+                    reference_links: finalReferenceLinks,
+                    // ✅ UPDATED: User memory prompt information
+                    user_memory_applied: response.data.personalization?.user_memory_info?.memory_applied || false,
+                    external_api_used: response.data.external_api?.external_api_used || false
                 };
 
                 console.log('🎯 FINAL BOTMESSAGE:', botMessage);
@@ -832,6 +844,7 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
             sendMessage();
         }
     };
+    
     const formatMessage = (content) => {
         if (!content) return null;
         
@@ -1027,6 +1040,25 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                                             {formatMessage(message.content)}
                                         </div>
 
+                                        {/* ✅ UPDATED: Enhanced metadata with user memory prompt info */}
+                                        {message.type === 'bot' && !message.isError && !message.temporary && (
+                                            <div className="message-metadata-enhanced">
+                                                {/* User Memory Prompt Indicator */}
+                                                {message.user_memory_applied && (
+                                                    <div className="memory-applied-badge">
+                                                        🧠 Đã áp dụng ghi nhớ cá nhân
+                                                    </div>
+                                                )}
+                                                
+                                                {/* External API Indicator */}
+                                                {message.external_api_used && (
+                                                    <div className="external-api-badge">
+                                                        🌐 Thông tin cá nhân từ hệ thống
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {/* Sources and Reference Links */}
                                         {(message.sources && message.sources.length > 0) || (message.reference_links && message.reference_links.length > 0) ? (
                                             <div className="message-attachments">
@@ -1179,6 +1211,8 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                     onClose={() => setShowPersonalization(false)}
                     onUpdateSuccess={(newData) => {
                         console.log('Personalization updated:', newData);
+                        // ✅ UPDATED: Reload user auth to get updated user memory prompt
+                        checkUserAuth();
                     }}
                 />
             )}
