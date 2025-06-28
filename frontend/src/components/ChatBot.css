@@ -772,7 +772,7 @@ body {
     border-radius: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     width: 100%;
-    max-width: 400px;
+    max-width: auto;
 }
 
 .modal-header {
@@ -1093,43 +1093,6 @@ body {
     margin-top: 12px;
     display: flex;
     justify-content: flex-end;
-}
-
-.feedback-buttons {
-    display: flex;
-    gap: 8px;
-}
-
-.feedback-btn {
-    background: rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    padding: 8px 12px;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 14px;
-}
-
-.feedback-btn:hover {
-    background: rgba(0, 0, 0, 0.1);
-    transform: scale(1.05);
-}
-
-.feedback-btn.like:hover {
-    background: rgba(16, 163, 127, 0.1);
-    border-color: var(--success-green);
-}
-
-.feedback-btn.dislike:hover {
-    background: rgba(254, 82, 82, 0.1);
-    border-color: var(--primary-red);
-}
-
-.feedback-sent {
-    font-size: 12px;
-    color: var(--text-gray);
-    font-style: italic;
-    padding: 4px 8px;
 }
 @media (max-width: 768px) {
     .modern-sidebar {

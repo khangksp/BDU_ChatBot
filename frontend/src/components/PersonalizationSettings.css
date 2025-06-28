@@ -48,7 +48,7 @@
 
 /* Header - Updated with page gradient */
 .modal-header {
-    background: linear-gradient(135deg, #ffd543 0%, #fe5252 100%, #f55253 100%);
+    background: red;
     color: white;
     padding: 24px 30px;
     display: flex;
@@ -124,7 +124,7 @@
 }
 
 .faculty-code {
-    background: linear-gradient(135deg, #fe5252 0%, #ffd543 100%);
+    background: red;
     color: white;
     padding: 4px 10px;
     border-radius: 12px;
@@ -247,7 +247,7 @@
 }
 
 .setting-group:hover {
-    border-color: #ffd543;
+    border-color: red;
     box-shadow: 0 4px 12px rgba(255, 213, 67, 0.15);
 }
 
@@ -611,7 +611,7 @@
 }
 
 .save-btn {
-    background: linear-gradient(135deg, #ffd543 0%, #fe5252 100%);
+    background: red;
     color: white;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }

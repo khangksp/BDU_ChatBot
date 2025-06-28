@@ -832,26 +832,6 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
             sendMessage();
         }
     };
-
-    const sendFeedback = async (chatId, feedbackType, comment = '') => {
-        try {
-            await axios.post('/api/feedback/', {
-                chat_id: chatId,
-                feedback_type: feedbackType,
-                comment: comment
-            });
-            
-            setMessages(prev => prev.map(msg => 
-                msg.chat_id === chatId 
-                    ? { ...msg, feedbackSent: feedbackType }
-                    : msg
-            ));
-            
-        } catch (error) {
-            console.error('Error sending feedback:', error);
-        }
-    };
-
     const formatMessage = (content) => {
         if (!content) return null;
         
@@ -1101,34 +1081,6 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                                                 )}
                                             </div>
                                         )}
-
-                                        {/* Feedback buttons */}
-                                        {message.type === 'bot' && !message.isError && !message.temporary && message.chat_id && (
-                                            <div className="message-feedback">
-                                                {!message.feedbackSent ? (
-                                                    <div className="feedback-buttons">
-                                                        <button
-                                                            className="feedback-btn like"
-                                                            onClick={() => sendFeedback(message.chat_id, 'like')}
-                                                            title="Hữu ích"
-                                                        >
-                                                            👍
-                                                        </button>
-                                                        <button
-                                                            className="feedback-btn dislike"
-                                                            onClick={() => sendFeedback(message.chat_id, 'dislike')}
-                                                            title="Không hữu ích"
-                                                        >
-                                                            👎
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="feedback-sent">
-                                                        {message.feedbackSent === 'like' ? '👍 Đã đánh giá' : '👎 Đã đánh giá'}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
 
                                     <div className="message-timestamp">
@@ -1208,28 +1160,12 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                                         {isRecording ? '⏹️' : (isProcessingSpeech ? '⏳' : '🎤')}
                                     </button>
                                 )}
-                                
-                                <button 
-                                    onClick={sendMessage}
-                                    disabled={isLoading || !inputMessage.trim() || connectionStatus !== 'connected' || isRecording}
-                                    className="send-btn"
-                                    title="Gửi tin nhắn"
-                                >
-                                    {isLoading ? '⏳' : '↗️'}
-                                </button>
                             </div>
                         </div>
                         
                         <div className="input-footer">
                             <div className="char-counter">
                                 {inputMessage.length}/1000
-                            </div>
-                            
-                            <div className="input-tools">
-                                <button className="tool-btn" title="Công cụ khác">
-                                    <span className="tool-icon">⚡</span>
-                                    <span className="tool-text">Công cụ khác</span>
-                                </button>
                             </div>
                         </div>
                     </div>
