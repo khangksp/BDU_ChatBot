@@ -315,10 +315,13 @@ const Login = ({ onLoginSuccess }) => {
                                     <strong>ADMIN001</strong> / admin123456 (Quản trị)
                                 </div>
                                 <div className="sample-account">
-                                    <strong>GV001</strong> / gv001@2024 (Giảng viên)
+                                    <strong>TK_CNTT_001</strong> / khangksp456 (Giảng viên)
                                 </div>
                                 <div className="sample-account">
-                                    <strong>TEST</strong> / 123456 (Test)
+                                    <strong>GV_CNTT_001</strong> / khangksp789 (Giảng viên)
+                                </div>
+                                <div className="sample-account">
+                                    <strong>TEST</strong> / Nothingthere456 (Test)
                                 </div>
                             </div>
                         </div>

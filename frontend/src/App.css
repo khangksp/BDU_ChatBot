@@ -60,7 +60,7 @@
 
 /* App Header - Updated with new gradient */
 .app-header {
-    background: linear-gradient(135deg, #ffd543 0%, #fe5252 100%);
+    background: red;
     color: white;
     padding: 15px 20px;
     display: flex;

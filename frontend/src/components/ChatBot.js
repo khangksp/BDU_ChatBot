@@ -41,7 +41,7 @@ const ChatBot = () => {
     const [renameSessionId, setRenameSessionId] = useState('');
     const [newSessionTitle, setNewSessionTitle] = useState('');
 
-    // ✅ 4. UI STATES
+    // ✅ 4. UI STATES - Enhanced sidebar management
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [chatSessions, setChatSessions] = useState([]);
 
@@ -60,6 +60,19 @@ const ChatBot = () => {
         checkSpeechSupport();
         checkUserAuth(); 
         
+        // ✅ Check initial screen size for sidebar
+        const handleResize = () => {
+            if (window.innerWidth <= 768) {
+                setSidebarOpen(false);
+            } else {
+                setSidebarOpen(true);
+            }
+        };
+        
+        // Set initial sidebar state
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        
         return () => {
             if (recordingInterval.current) {
                 clearInterval(recordingInterval.current);
@@ -67,6 +80,7 @@ const ChatBot = () => {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
+            window.removeEventListener('resize', handleResize);
         };
     }, []);
 
@@ -183,7 +197,18 @@ const ChatBot = () => {
         }
     };
 
-    // ✅ 11. SIMPLIFIED CHAT SESSION FUNCTIONS
+    // ✅ 11. SIDEBAR TOGGLE FUNCTIONS
+
+    const toggleSidebar = () => {
+        setSidebarOpen(!sidebarOpen);
+    };
+
+    const handleLogoClick = () => {
+        // Toggle sidebar when logo is clicked
+        setSidebarOpen(!sidebarOpen);
+    };
+
+    // ✅ 12. SIMPLIFIED CHAT SESSION FUNCTIONS
 
     const showContextMenu = (e, sessionId) => {
         e.stopPropagation();
@@ -539,7 +564,7 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         );
     };
 
-    // ✅ 12. SPEECH FUNCTIONS (unchanged)
+    // ✅ 13. SPEECH FUNCTIONS (unchanged)
 
     const startRecording = async () => {
         try {
@@ -737,7 +762,7 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    // ✅ 13. CHAT FUNCTIONS
+    // ✅ 14. CHAT FUNCTIONS
 
     const sendMessage = async () => {
         if (!inputMessage.trim() || isLoading || connectionStatus !== 'connected') return;
@@ -858,7 +883,7 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         formattedContent = formattedContent.replace(/^[\s]{2,}[•\-\*]\s+(.+)$/gm, '<div class="format-sub-bullet"><span class="sub-bullet-icon">▸</span><span class="sub-bullet-text">$1</span></div>');
         formattedContent = formattedContent.replace(/([?？])\s*([A-ZÁÊÔƠƯĐ][^?]*)/g, '$1</div><div class="format-answer"><strong>Trả lời:</strong> $2');
         formattedContent = formattedContent.replace(/`([^`\n]+)`/g, '<code class="format-code">$1</code>');
-        formattedContent = formattedContent.replace(/\b(thầy\/cô|giảng viên|học phí|tuyển sinh|đăng ký|liên hệ|quan trọng|lưu ý|chú ý|hạn chót|deadline)\b/gi, '<span class="format-keyword">$1</span>');
+        
         formattedContent = formattedContent.replace(/(https?:\/\/[^\s<>]+)/g, '<a href="$1" target="_blank" class="format-link">$1</a>');
         formattedContent = formattedContent.replace(/(\b0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b)/g, '<a href="tel:$1" class="format-phone">📞 $1</a>');
         formattedContent = formattedContent.replace(/(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)/g, '<a href="mailto:$1" class="format-email">✉️ $1</a>');
@@ -885,14 +910,14 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         testConnection();
     };
 
-    // ✅ 14. RENDER JSX
+    // ✅ 15. RENDER JSX
 
     return (
         <div className="modern-chatbot-container">
             {/* Sidebar */}
             <div className={`modern-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
                 <div className="sidebar-header">
-                    <div className="logo-section">
+                    <div className="logo-section" onClick={handleLogoClick}>
                         <div className="logo-icon">
                             <img 
                                 src="../assets/logo.png" 
@@ -905,12 +930,6 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                             <span>Trợ lý AI thông minh</span>
                         </div>
                     </div>
-                    <button 
-                        className="toggle-sidebar-btn"
-                        onClick={() => setSidebarOpen(!sidebarOpen)}
-                    >
-                        {sidebarOpen ? '‹' : '›'}
-                    </button>
                 </div>
 
                 <div className="sidebar-actions">
@@ -970,36 +989,6 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
 
             {/* Main Chat Area */}
             <div className="modern-main-area">
-                {/* Header */}
-                <div className="modern-header">
-                    {!sidebarOpen && (
-                        <button 
-                            className="open-sidebar-btn"
-                            onClick={() => setSidebarOpen(true)}
-                        >
-                            ☰
-                        </button>
-                    )}
-                    
-                    <div className="header-title">
-                        <h2>Tôi có thể giúp gì cho bạn?</h2>
-                        <p>Đặt câu hỏi về Đại học Bình Dương hoặc bất kỳ điều gì bạn muốn biết</p>
-                    </div>
-
-                    <div className="header-controls">
-                        {speechSupported && (
-                            <div className="voice-indicator">
-                                <span className="voice-icon">🎤</span>
-                                <span className="voice-text">Voice enabled</span>
-                            </div>
-                        )}
-                        
-                        <button className="clear-chat-btn" onClick={clearChat}>
-                            <span className="btn-icon">🔄</span>
-                            <span className="btn-text">Làm mới</span>
-                        </button>
-                    </div>
-                </div>
 
                 {/* Messages Area */}
                 <div className={`modern-messages-area ${loadingMessages ? 'loading' : ''}`}>
@@ -1015,12 +1004,6 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                                 </div>
                                 <div className="pulse-ring"></div>
                             </div>
-                            
-                            {messages.length > 0 && (
-                                <div className="welcome-message">
-                                    {formatMessage(messages[0].content)}
-                                </div>
-                            )}
                             
                             <div className="quick-actions">
                                 <h3>Gợi ý câu hỏi:</h3>

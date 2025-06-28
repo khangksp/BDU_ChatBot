@@ -92,8 +92,7 @@ function App() {
                     {/* Header with user info and logout */}
                     <header className="app-header">
                         <div className="header-left">
-                            <h1>🎓 Chatbot Đại học Bình Dương</h1>
-                            <p>Hệ thống hỗ trợ thông tin</p>
+                            <h1>Chatbot BDU</h1>
                         </div>
                         <div className="header-right">
                             <div className="user-info">
