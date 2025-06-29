@@ -7,8 +7,67 @@ from typing import Dict, Any, Optional, List
 from unidecode import unidecode
 import difflib
 import pandas as pd
+import os
 
 logger = logging.getLogger(__name__)
+
+class GeminiApiKeyManager:
+    """Quản lý và tự động xoay vòng các API key của Gemini để tránh lỗi rate limit."""
+    def __init__(self):
+        self.keys = []
+        self._load_keys_from_env()
+        self.current_key_index = 0
+        self.key_status = {k: {'is_rate_limited': False, 'limited_until': 0} for k in self.keys}
+        
+        if not self.keys:
+            logger.error("CRITICAL: No Gemini API keys found in .env file (e.g., GEMINI_API_KEY, GEMINI_API_KEY2)!")
+        else:
+            logger.info(f"✅ GeminiApiKeyManager initialized with {len(self.keys)} keys.")
+
+    def _load_keys_from_env(self):
+        """Tự động tải các key từ file .env theo định dạng GEMINI_API_KEY..."""
+        main_key = os.getenv('GEMINI_API_KEY')
+        if main_key:
+            self.keys.append(main_key)
+        
+        i = 2
+        while True:
+            extra_key = os.getenv(f'GEMINI_API_KEY{i}')
+            if extra_key:
+                self.keys.append(extra_key)
+                i += 1
+            else:
+                break
+    
+    def get_key(self) -> Optional[str]:
+        """Lấy một API key hợp lệ để sử dụng (xoay vòng)."""
+        if not self.keys:
+            return None
+        
+        start_index = self.current_key_index
+        for i in range(len(self.keys)):
+            index = (start_index + i) % len(self.keys)
+            key = self.keys[index]
+            status = self.key_status[key]
+            
+            if status['is_rate_limited'] and time.time() > status['limited_until']:
+                status['is_rate_limited'] = False
+                logger.info(f"🔑 API Key '{key[:4]}...{key[-4:]}' is now available again.")
+
+            if not status['is_rate_limited']:
+                self.current_key_index = (index + 1) % len(self.keys)
+                return key
+            
+        logger.warning("⚠️ All Gemini API keys are currently rate-limited.")
+        return None
+
+    def report_failure(self, key: str):
+        """Báo cáo một key đã bị lỗi 429 (rate limit)."""
+        if key in self.key_status:
+            self.key_status[key]['is_rate_limited'] = True
+            self.key_status[key]['limited_until'] = time.time() + 61 
+            logger.warning(f"RATE LIMIT: Key '{key[:4]}...{key[-4:]}' is now rate-limited for 61 seconds.")
+
 
 def build_personalized_system_prompt(user_memory_prompt: str = None):
     """
@@ -258,20 +317,13 @@ class SimpleVietnameseRestorer:
     - Minimal complexity, maximum effectiveness
     """
     
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.model_name = "gemini-2.0-flash"
+    def __init__(self, key_manager: GeminiApiKeyManager):
+        self.key_manager = key_manager
+        self.model_name = "gemini-2.0-flash" # Dùng model flash cho nhanh và rẻ
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
-        
-        # Simple cache to avoid repeated API calls
         self.cache = {}
         self.max_cache_size = 500
-        
-        # Rate limiting - simple approach
-        self.last_call_time = 0
-        self.min_interval = 4  # 4 seconds between calls (15 calls/min = 4s interval)
-        
-        logger.info("✅ SimpleVietnameseRestorer initialized")
+        logger.info("✅ SimpleVietnameseRestorer initialized with Key Manager.")
     
     def has_vietnamese_accents(self, text: str) -> bool:
         """Check if text has Vietnamese accents"""
@@ -279,8 +331,8 @@ class SimpleVietnameseRestorer:
         vietnamese_chars += vietnamese_chars.upper()
         return any(char in vietnamese_chars for char in text)
     
-    def restore_vietnamese_tone(self, input_text: str) -> str:
-        """Restore Vietnamese accents using Gemini API - exactly like your sample"""
+    def restore_vietnamese_tone(self, input_text: str, retry_count=0) -> str:
+        """Restore Vietnamese accents using Gemini API with Key Manager."""
         if not input_text or not input_text.strip():
             return input_text
         
@@ -289,35 +341,28 @@ class SimpleVietnameseRestorer:
         # Check cache first
         cache_key = input_text.lower()
         if cache_key in self.cache:
-            logger.debug(f"🎯 Cache hit for: '{input_text}'")
+            logger.debug(f"🎯 Tone-restorer cache hit for: '{input_text}'")
             return self.cache[cache_key]
         
         # If already has accents, return as is
         if self.has_vietnamese_accents(input_text):
             self.cache[cache_key] = input_text
             return input_text
-        
-        # Rate limiting check
-        current_time = time.time()
-        if current_time - self.last_call_time < self.min_interval:
-            logger.warning(f"⚠️ Rate limiting: skipping API call for '{input_text}'")
-            self.cache[cache_key] = input_text
-            return input_text
-        
-        # Call Gemini API
+
+        # Lấy một key hợp lệ từ bộ quản lý
+        api_key_to_use = self.key_manager.get_key()
+        if not api_key_to_use:
+            logger.error("Tone Restorer: All keys are rate-limited. Skipping restoration.")
+            self._cache_result(cache_key, input_text)
+            return input_text # Trả về text gốc nếu không còn key
+
         prompt = f'Hãy viết lại câu sau thành tiếng Việt có dấu đầy đủ, không thay đổi ý nghĩa: "{input_text}"'
         
         try:
-            self.last_call_time = current_time
-            
             headers = {'Content-Type': 'application/json'}
             data = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "temperature": 0.1,
-                    "maxOutputTokens": 100,
-                    "topP": 0.8
-                },
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 100, "topP": 0.8},
                 "safetySettings": [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -326,7 +371,7 @@ class SimpleVietnameseRestorer:
                 ]
             }
             
-            url = f"{self.base_url}?key={self.api_key}"
+            url = f"{self.base_url}?key={api_key_to_use}"
             response = requests.post(url, headers=headers, json=data, timeout=10)
             
             if response.status_code == 200:
@@ -335,26 +380,32 @@ class SimpleVietnameseRestorer:
                     candidate = result['candidates'][0]
                     if 'content' in candidate and 'parts' in candidate['content']:
                         restored_text = candidate['content']['parts'][0]['text'].strip()
-                        
-                        # Clean up response
                         restored_text = re.sub(r'^["\'](.*)["\']$', r'\1', restored_text)
                         restored_text = re.sub(r'^(Câu đã có dấu:|Kết quả:|Trả lời:)\s*', '', restored_text, flags=re.IGNORECASE)
                         
-                        # Simple validation
                         if self._is_valid_restoration(input_text, restored_text):
                             logger.info(f"✅ Restored: '{input_text}' -> '{restored_text}'")
                             self._cache_result(cache_key, restored_text)
                             return restored_text
                         else:
                             logger.warning(f"⚠️ Invalid restoration: '{restored_text}'")
+            
             elif response.status_code == 429:
-                logger.warning(f"⚠️ Rate limit hit, increasing interval")
-                self.min_interval = min(10, self.min_interval + 1)
+                # Báo cáo key bị lỗi và thử lại với key khác (chỉ thử lại 1 lần)
+                self.key_manager.report_failure(api_key_to_use)
+                if retry_count == 0:
+                    logger.warning("Tone Restorer: Rate limit hit, retrying with new key...")
+                    return self.restore_vietnamese_tone(input_text, retry_count=1)
+            
             else:
-                logger.error(f"❌ Gemini API Error {response.status_code}")
+                logger.error(f"❌ Gemini API Error {response.status_code} for tone restorer")
                 
         except Exception as e:
             logger.error(f"❌ Error restoring tone: {e}")
+        
+        # Fallback: trả về text gốc nếu có lỗi
+        self._cache_result(cache_key, input_text)
+        return input_text
         
         # Fallback: return original
         self._cache_result(cache_key, input_text)
@@ -391,14 +442,13 @@ class SimpleVietnameseRestorer:
 class GeminiResponseGenerator:
     """🚀 Advanced Gemini Response Generator với Smart Token Management"""
     
-    def __init__(self, api_key: str = None):
-        from django.conf import settings
-        self.api_key = api_key or settings.GEMINI_API_KEY
-        self.model_name = "gemini-2.0-flash"
+    def __init__(self):
+        self.key_manager = GeminiApiKeyManager()
+        # Thống nhất phiên bản model ở đây
+        self.model_name = "gemini-2.0-flash" 
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
-        
         self.memory = ConversationMemory(max_history=10)
-        self.vietnamese_restorer = SimpleVietnameseRestorer(self.api_key)
+        self.vietnamese_restorer = SimpleVietnameseRestorer(self.key_manager)
         
         # ✅ NEW: Smart Token Manager
         self.token_manager = SmartTokenManager()
@@ -998,31 +1048,36 @@ Trả lời:"""
         else:
             return "thầy/cô"
 
-    # 🚀 ENHANCED API CALL với Smart Tokens
-    def _call_gemini_api_with_smart_tokens(self, prompt: str, strategy: str, max_tokens: int) -> Optional[str]:
-        """Call Gemini API with Smart Token Management"""
+    def _call_gemini_api_with_smart_tokens(self, prompt: str, strategy: str, max_tokens: int, retry_count=0) -> Optional[str]:
+        """Call Gemini API with Smart Token Management and automatic key rotation."""
+        
+        # Lấy một key hợp lệ từ bộ quản lý
+        api_key_to_use = self.key_manager.get_key()
+        
+        # Nếu tất cả các key đều bị giới hạn, đợi 5 giây rồi thử lại một lần cuối
+        if not api_key_to_use:
+            if retry_count == 0:
+                logger.warning("All keys are limited. Waiting 5 seconds before one last retry...")
+                time.sleep(5)
+                return self._call_gemini_api_with_smart_tokens(prompt, strategy, max_tokens, retry_count=1)
+            else:
+                logger.error("CRITICAL: All Gemini API keys are rate-limited. Aborting call.")
+                return "Dạ thầy/cô, hiện tại hệ thống đang quá tải, tất cả các kết nối đều đang bận. Vui lòng thử lại sau khoảng 1 phút nữa ạ. 😥"
+
         try:
             headers = {'Content-Type': 'application/json'}
             
-            # Strategy-specific temperature adjustments
             strategy_temp_adjustments = {
-                'quick_clarify': -0.2,
-                'direct_enhance': 0.0,
-                'enhanced_generation': +0.2,
-                'completion': -0.3,  # ✅ NEW: Lower temp for completion
-                'balanced': 0.0
+                'quick_clarify': -0.2, 'direct_enhance': 0.0, 'enhanced_generation': +0.2,
+                'completion': -0.3, 'balanced': 0.0
             }
-            
             temp_adjustment = strategy_temp_adjustments.get(strategy, 0.0)
             final_temperature = max(0.1, min(1.0, self.default_generation_config["temperature"] + temp_adjustment))
             
             config = {
-                "temperature": final_temperature,
-                "maxOutputTokens": max_tokens,  # ✅ Use smart calculated tokens
+                "temperature": final_temperature, "maxOutputTokens": max_tokens,
                 "topP": self.default_generation_config["topP"]
             }
-            
-            print(f"🚀 SMART API CONFIG: {strategy} -> temp={config['temperature']}, tokens={config['maxOutputTokens']}")
             
             data = {
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -1035,19 +1090,39 @@ Trả lời:"""
                 ]
             }
             
-            url = f"{self.base_url}?key={self.api_key}"
-            response = requests.post(url, headers=headers, json=data, timeout=30)  # Increased timeout for larger responses
+            url = f"{self.base_url}?key={api_key_to_use}"
+            response = requests.post(url, headers=headers, json=data, timeout=30)
             
             if response.status_code == 200:
                 result = response.json()
                 if 'candidates' in result and result['candidates']:
                     candidate = result['candidates'][0]
+                    # Kiểm tra xem có bị block vì lý do an toàn không
+                    if 'finishReason' in candidate and candidate['finishReason'] == 'SAFETY':
+                        logger.warning("🚨 Gemini response blocked due to SAFETY reasons.")
+                        return "Dạ thầy/cô, em không thể trả lời câu hỏi này vì lý do an toàn và chính sách nội dung."
+                    
                     if 'content' in candidate and 'parts' in candidate['content']:
                         return candidate['content']['parts'][0]['text']
+            
+            elif response.status_code == 429:
+                # Lỗi Rate Limit! Báo cáo key bị lỗi và thử lại ngay với key khác
+                self.key_manager.report_failure(api_key_to_use)
+                if retry_count == 0:
+                    logger.warning(f"Rate limit on key. Retrying immediately with a new key...")
+                    return self._call_gemini_api_with_smart_tokens(prompt, strategy, max_tokens, retry_count=1)
+                else:
+                    logger.error("Rate limit hit on retry attempt as well. Aborting call.")
+                    return "Dạ thầy/cô, hiện tại hệ thống đang quá tải. Vui lòng thử lại sau ít phút ạ."
+            
             else:
-                logger.error(f"Gemini API Error {response.status_code}: {response.text}")
+                logger.error(f"Gemini API Error {response.status_code} with key '{api_key_to_use[:4]}...': {response.text}")
+            
             return None
         
+        except requests.exceptions.Timeout:
+            logger.error("Gemini API call timed out.")
+            return "Dạ thầy/cô, yêu cầu xử lý mất quá nhiều thời gian và đã bị ngắt. Thầy/cô có thể thử lại với câu hỏi ngắn gọn hơn không ạ?"
         except Exception as e:
             logger.error(f"Smart Gemini API call failed: {str(e)}")
             return None

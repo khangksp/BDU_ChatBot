@@ -377,8 +377,6 @@ class LecturerDecisionEngine:
         logger.info(f"🔍 External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, recent_intent='{recent_intent}', needs_api={needs_api}")
         
         return needs_api
-    
-    # Dán đoạn code này để thay thế cho hàm make_decision cũ trong file ai_models/services.py
 
     def make_decision(self, query, best_candidate, intent_result, session_memory=None, jwt_token=None):
         """
@@ -512,7 +510,7 @@ class HybridChatbotAI:
         ✅ SỬA ĐỔI: Chấp nhận một response_generator được chia sẻ
         """
         # Initialize components with hybrid enhancements
-        self.sbert_retriever = ChatbotAI()
+        self.sbert_retriever = ChatbotAI(shared_response_generator=shared_response_generator)
         self.intent_classifier = PhoBERTIntentClassifier()
         
         # FIX: Không tạo mới, mà sử dụng response_generator được truyền vào
@@ -758,10 +756,7 @@ class HybridChatbotAI:
             logger.warning(f"⚠️ Unknown decision type: {decision_type}")
             response_text = "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
 
-        # =================================================================
-        # BẮT ĐẦU VÙNG DEBUG
-        # =================================================================
-        print("\n--- DEBUGGING FINAL PERSONALIZATION FILTER ---")
+        print("\n--- DEBUGGING PERSONALIZATION FILTER ---")
         print(f"1. Raw response from Gemini: '{response_text}'")
 
         try:
@@ -770,7 +765,6 @@ class HybridChatbotAI:
                 memory_prompt = user_context.get('preferences', {}).get('user_memory_prompt', '').lower()
                 print(f"2. Memory Prompt found for this session: '{memory_prompt}'")
                 
-                # Kiểm tra từ khóa "desuwa"
                 if 'desuwa' in memory_prompt:
                     print("3. 'desuwa' keyword FOUND! Applying hard-coded override...")
                     
@@ -1033,11 +1027,11 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
 
 # ✅ ENHANCED: ChatbotAI class with top-k semantic search
 class ChatbotAI:
-    def __init__(self):
+    def __init__(self, shared_response_generator):
         self.model = None
         self.index = None
         self.knowledge_data = []
-        self.vietnamese_restorer = None
+        self.vietnamese_restorer = shared_response_generator.vietnamese_restorer
         self.link_mapping = {}
         self.cached_data = None
         self.cache_timestamp = 0
@@ -1050,12 +1044,16 @@ class ChatbotAI:
             self.model = SentenceTransformer('keepitreal/vietnamese-sbert')
             logger.info("✅ Vietnamese SBERT loaded for lecturers")
             
-            try:
-                self.vietnamese_restorer = SimpleVietnameseRestorer(settings.GEMINI_API_KEY)
-                logger.info("✅ Vietnamese Restorer loaded for search")
-            except Exception as e:
-                logger.warning(f"⚠️ Vietnamese Restorer failed to load: {e}")
-                self.vietnamese_restorer = None
+            # try:
+            #     self.vietnamese_restorer = SimpleVietnameseRestorer(settings.GEMINI_API_KEY)
+            #     logger.info("✅ Vietnamese Restorer loaded for search")
+            # except Exception as e:
+            #     logger.warning(f"⚠️ Vietnamese Restorer failed to load: {e}")
+            #     self.vietnamese_restorer = None
+            if self.vietnamese_restorer:
+                 logger.info("✅ Vietnamese Restorer linked successfully for search.")
+            else:
+                 logger.warning("⚠️ Vietnamese Restorer not available.")
             
             self.load_knowledge_base()
         except Exception as e:
