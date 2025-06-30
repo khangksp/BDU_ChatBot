@@ -22,6 +22,15 @@ const ChatBot = () => {
     const [mediaRecorder, setMediaRecorder] = useState(null);
     const [recordingTime, setRecordingTime] = useState(0);
     
+    // ✅ FIXED: TTS states with better logic
+    const [ttsSupported, setTtsSupported] = useState(false);
+    const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+    const [currentAudio, setCurrentAudio] = useState(null);
+    const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
+    const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
+    const [lastUserInputMethod, setLastUserInputMethod] = useState('text'); // 'text' or 'voice'
+    const [forceVoiceMode, setForceVoiceMode] = useState(false); // ✅ NEW: Force voice mode for next message
+    
     // Reference sources state
     const [expandedSources, setExpandedSources] = useState(new Set());
     
@@ -50,6 +59,7 @@ const ChatBot = () => {
     const inputRef = useRef(null);
     const audioChunks = useRef([]);
     const recordingInterval = useRef(null);
+    const audioRef = useRef(null); // ✅ NEW: Ref for audio playback
 
     // ✅ 6. MAIN SETUP useEffect (FIRST)
     useEffect(() => {
@@ -58,6 +68,7 @@ const ChatBot = () => {
         
         testConnection();
         checkSpeechSupport();
+        checkTtsSupport(); // ✅ NEW: Check TTS support
         checkUserAuth(); 
         
         // ✅ Check initial screen size for sidebar
@@ -79,6 +90,11 @@ const ChatBot = () => {
             }
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
+            }
+            // ✅ NEW: Cleanup audio
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.src = '';
             }
             window.removeEventListener('resize', handleResize);
         };
@@ -124,7 +140,7 @@ const ChatBot = () => {
                 setMessages([welcomeMessage]);
             }
         }
-    }, [connectionStatus, speechSupported, user]);
+    }, [connectionStatus, speechSupported, ttsSupported, user]);
 
     // ✅ 9. SCROLL useEffect
     useEffect(() => {
@@ -194,6 +210,125 @@ const ChatBot = () => {
         } catch (error) {
             console.error('Error checking speech support:', error);
             setSpeechSupported(false);
+        }
+    };
+
+    // ✅ FIXED: Better TTS support checking
+    const checkTtsSupport = async () => {
+        try {
+            const response = await axios.get('/api/speech-status/');
+            const ttsServiceAvailable = response.data.tts_service?.available || false;
+            
+            console.log('TTS service status:', response.data.tts_service);
+            setTtsSupported(ttsServiceAvailable);
+            
+            if (ttsServiceAvailable) {
+                console.log('✅ TTS service available');
+                // ✅ FIXED: Auto-enable voice mode if both STT and TTS are available
+                if (speechSupported) {
+                    setVoiceModeEnabled(true);
+                    console.log('🎤🔊 Auto-enabled voice mode (STT + TTS available)');
+                }
+            } else {
+                console.log('⚠️ Backend TTS service not available');
+                setVoiceModeEnabled(false);
+            }
+        } catch (error) {
+            console.error('Error checking TTS support:', error);
+            setTtsSupported(false);
+            setVoiceModeEnabled(false);
+        }
+    };
+
+    // ✅ NEW: Audio playback functions
+    const playAudioFromBase64 = async (base64Audio) => {
+        if (!base64Audio || !autoPlayEnabled) {
+            return;
+        }
+
+        try {
+            setIsPlayingAudio(true);
+            
+            // Stop current audio if playing
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.src = '';
+            }
+
+            // Create audio blob from base64
+            const audioBlob = base64ToBlob(base64Audio, 'audio/mp3');
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            const audio = new Audio(audioUrl);
+            setCurrentAudio(audio);
+            
+            audio.onended = () => {
+                setIsPlayingAudio(false);
+                URL.revokeObjectURL(audioUrl);
+                setCurrentAudio(null);
+            };
+            
+            audio.onerror = (error) => {
+                console.error('Audio playback error:', error);
+                setIsPlayingAudio(false);
+                showTemporaryMessage('❌ Lỗi phát âm thanh', 'audio-error');
+                URL.revokeObjectURL(audioUrl);
+                setCurrentAudio(null);
+            };
+            
+            await audio.play();
+            console.log('🔊 Playing TTS audio');
+            
+        } catch (error) {
+            console.error('Error playing audio:', error);
+            setIsPlayingAudio(false);
+            showTemporaryMessage('❌ Không thể phát âm thanh', 'audio-error');
+        }
+    };
+
+    const base64ToBlob = (base64, mimeType) => {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: mimeType });
+    };
+
+    const stopCurrentAudio = () => {
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.src = '';
+            setCurrentAudio(null);
+            setIsPlayingAudio(false);
+        }
+    };
+
+    const toggleAutoPlay = () => {
+        setAutoPlayEnabled(!autoPlayEnabled);
+        if (!autoPlayEnabled) {
+            showTemporaryMessage('🔊 Tự động phát âm thanh: BẬT', 'audio-info');
+        } else {
+            showTemporaryMessage('🔇 Tự động phát âm thanh: TẮT', 'audio-info');
+            stopCurrentAudio();
+        }
+    };
+
+    const toggleVoiceMode = () => {
+        if (!ttsSupported) {
+            showTemporaryMessage('❌ Chế độ giọng nói không khả dụng', 'audio-error');
+            return;
+        }
+        
+        setVoiceModeEnabled(!voiceModeEnabled);
+        if (!voiceModeEnabled) {
+            showTemporaryMessage('🎤🔊 Chế độ giọng nói: BẬT', 'voice-mode-on');
+        } else {
+            showTemporaryMessage('📝 Chế độ văn bản: BẬT', 'voice-mode-off');
+            stopCurrentAudio();
         }
     };
 
@@ -439,11 +574,20 @@ const ChatBot = () => {
         if (user) {
             const name = user.full_name?.split(' ').pop() || user.faculty_code;
             
-            // ✅ UPDATED: Thông điệp chào mừng với User Memory Prompt
+            // ✅ UPDATED: Thông điệp chào mừng với User Memory Prompt và TTS
             const hasUserMemoryPrompt = user.chatbot_preferences?.user_memory_prompt?.trim();
             const memoryStatus = hasUserMemoryPrompt ? 
                 "🧠 Tôi đã ghi nhớ những chỉ dẫn riêng mà bạn đã thiết lập!" : 
                 "💡 Bạn có thể thiết lập 'Ghi nhớ và chỉ dẫn' trong cài đặt để tôi phục vụ bạn tốt hơn!";
+            
+            // ✅ NEW: TTS status in welcome message
+            const voiceStatus = ttsSupported ? 
+                (speechSupported ? 
+                    "🎤🔊 Bạn có thể gõ, nói hoặc nghe phản hồi bằng giọng nói!" :
+                    "🔊 Bạn có thể nghe phản hồi bằng giọng nói!") :
+                (speechSupported ? 
+                    "🎤 Bạn có thể gõ hoặc nói để đặt câu hỏi!" :
+                    "Hãy đặt câu hỏi để bắt đầu!");
             
             return `Xin chào ${user.position_name || 'giảng viên'} ${name}! 
 
@@ -457,10 +601,18 @@ Tôi có thể hỗ trợ ${user.position_name?.toLowerCase() || 'bạn'} về:
 • 🏢 Cơ sở vật chất
 • 📞 Thông tin liên hệ
 
-${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏi!' : 'Hãy đặt câu hỏi để bắt đầu!'}`;
+${voiceStatus}`;
         }
         
         // Fallback cho user chưa login
+        const voiceStatus = ttsSupported ? 
+            (speechSupported ? 
+                "🎤🔊 Bạn có thể gõ, nói hoặc nghe phản hồi bằng giọng nói!" :
+                "🔊 Bạn có thể nghe phản hồi bằng giọng nói!") :
+            (speechSupported ? 
+                "🎤 Bạn có thể gõ hoặc nói để đặt câu hỏi!" :
+                "Hãy đặt câu hỏi để bắt đầu!");
+        
         return `Xin chào! Tôi là trợ lý AI của Đại học Bình Dương. Tôi có thể giúp bạn:
 
 • 📚 Thông tin tuyển sinh và ngành học
@@ -469,7 +621,7 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
 • 🏢 Cơ sở vật chất và tiện ích
 • 📞 Thông tin liên hệ
 
-${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏi!' : 'Hãy đặt câu hỏi để bắt đầu!'}`;
+${voiceStatus}`;
     };
 
     const switchChatSession = async (sessionId) => {
@@ -573,10 +725,14 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         );
     };
 
-    // ✅ 13. SPEECH FUNCTIONS (unchanged)
+    // ✅ 13. SPEECH FUNCTIONS (FIXED TTS integration)
 
     const startRecording = async () => {
         try {
+            // ✅ FIXED: Set voice input method and force voice mode for next message
+            setLastUserInputMethod('voice');
+            setForceVoiceMode(true); // ✅ NEW: Force voice mode for this recording
+            
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     sampleRate: 16000,
@@ -626,6 +782,8 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                     console.error('❌ Audio too small:', totalSize, 'bytes');
                     showTemporaryMessage('❌ Audio quá ngắn. Vui lòng ghi âm lâu hơn.', 'speech-error');
                     setIsProcessingSpeech(false);
+                    // ✅ Reset force voice mode on error
+                    setForceVoiceMode(false);
                     return;
                 }
                 
@@ -650,6 +808,8 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         } catch (error) {
             console.error('❌ Error starting recording:', error);
             showTemporaryMessage('❌ Không thể truy cập microphone. Vui lòng cho phép truy cập và thử lại.', 'speech-error');
+            // ✅ Reset force voice mode on error
+            setForceVoiceMode(false);
         }
     };
     
@@ -711,6 +871,11 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                 }
                 
                 showTemporaryMessage(`🎤 "${transcribedText}"`, 'speech-success');
+                
+                // ✅ FIXED: Show TTS mode indicator if enabled
+                if (ttsSupported && voiceModeEnabled) {
+                    showTemporaryMessage('🎤🔊 Sẵn sàng trả lời bằng giọng nói', 'voice-mode-ready');
+                }
             } else {
                 console.error('❌ Speech failed - Success:', response.data.success);
                 console.error('❌ Speech failed - Text:', response.data.text);
@@ -718,6 +883,8 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                 
                 const errorMsg = response.data.error || 'Không nhận diện được giọng nói';
                 showTemporaryMessage(`❌ ${errorMsg}`, 'speech-error');
+                // ✅ Reset force voice mode on STT error
+                setForceVoiceMode(false);
             }
         } catch (error) {
             console.error('❌ Error processing speech:', error);
@@ -730,6 +897,8 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
             } else {
                 showTemporaryMessage('❌ Lỗi xử lý giọng nói. Vui lòng thử lại.', 'speech-error');
             }
+            // ✅ Reset force voice mode on error
+            setForceVoiceMode(false);
         } finally {
             setIsProcessingSpeech(false);
         }
@@ -771,7 +940,7 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    // ✅ 14. CHAT FUNCTIONS
+    // ✅ 14. CHAT FUNCTIONS (FIXED TTS mode logic)
 
     const sendMessage = async () => {
         if (!inputMessage.trim() || isLoading || connectionStatus !== 'connected') return;
@@ -789,10 +958,33 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
         const messageToSend = inputMessage.trim();
         setInputMessage('');
 
+        // ✅ FIXED: Better mode detection logic
+        let requestMode = 'text'; // Default
+        
+        if (ttsSupported) {
+            if (forceVoiceMode) {
+                // User just used STT, force voice mode
+                requestMode = 'voice';
+                console.log('🎤🔊 FORCE VOICE MODE: Using voice mode because user used STT');
+            } else if (voiceModeEnabled && lastUserInputMethod === 'voice') {
+                // Voice mode enabled and last input was voice
+                requestMode = 'voice';
+                console.log('🎤🔊 VOICE MODE: Using voice mode (enabled + voice input)');
+            } else if (voiceModeEnabled) {
+                // Voice mode enabled but text input - still use voice for consistency
+                requestMode = 'voice';
+                console.log('🔊 VOICE MODE: Using voice mode (enabled globally)');
+            }
+        }
+        
+        console.log(`📤 Sending message with mode: ${requestMode} (TTS: ${ttsSupported}, voice_enabled: ${voiceModeEnabled}, force: ${forceVoiceMode}, input: ${lastUserInputMethod})`);
+
         try {
+            // ✅ FIXED: Send mode in request
             const response = await axios.post('/api/chat/', {
                 message: messageToSend,
-                session_id: sessionId
+                session_id: sessionId,
+                mode: requestMode  // ✅ FIXED: Send correct mode
             }, {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 30000
@@ -813,12 +1005,32 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                     reference_links: finalReferenceLinks,
                     // ✅ UPDATED: User memory prompt information
                     user_memory_applied: response.data.personalization?.user_memory_info?.memory_applied || false,
-                    external_api_used: response.data.external_api?.external_api_used || false
+                    external_api_used: response.data.external_api?.external_api_used || false,
+                    // ✅ FIXED: TTS information
+                    audio_content: response.data.audio_content,
+                    mode: response.data.mode,
+                    tts_info: response.data.tts_info
                 };
 
                 console.log('🎯 FINAL BOTMESSAGE:', botMessage);
+                console.log('🔊 TTS INFO:', botMessage.tts_info);
+                console.log('🎵 AUDIO CONTENT LENGTH:', botMessage.audio_content ? botMessage.audio_content.length : 'null');
+                
                 setMessages(prev => [...prev, botMessage]);
                 setIsTyping(false);
+                
+                // ✅ FIXED: Play audio if available and auto-play is enabled
+                if (botMessage.audio_content && autoPlayEnabled) {
+                    console.log('🔊 Auto-playing TTS audio');
+                    playAudioFromBase64(botMessage.audio_content);
+                } else if (botMessage.audio_content && !autoPlayEnabled) {
+                    console.log('🔇 TTS audio available but auto-play disabled');
+                    showTemporaryMessage('🔊 Âm thanh có sẵn - bấm để phát', 'audio-available');
+                } else if (requestMode === 'voice' && !botMessage.audio_content) {
+                    console.error('❌ Voice mode requested but no audio returned');
+                    showTemporaryMessage('❌ Không thể tạo âm thanh phản hồi', 'audio-error');
+                }
+
             }, 1000);
 
         } catch (error) {
@@ -835,13 +1047,26 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
             }, 1000);
         } finally {
             setIsLoading(false);
+            // ✅ FIXED: Reset states after sending
+            setLastUserInputMethod('text');
+            setForceVoiceMode(false); // Reset force mode after sending
         }
     };
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
+            setLastUserInputMethod('text'); // ✅ FIXED: Track text input
             sendMessage();
+        }
+    };
+
+    // ✅ FIXED: Handle input change to track manual text editing
+    const handleInputChange = (e) => {
+        setInputMessage(e.target.value);
+        // ✅ FIXED: Only set to text if user is actually typing (not from STT)
+        if (!forceVoiceMode) {
+            setLastUserInputMethod('text');
         }
     };
     
@@ -968,6 +1193,27 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                         </span>
                     </div>
                     
+                    {/* ✅ FIXED: Voice features status */}
+                    {(speechSupported || ttsSupported) && (
+                        <div className="voice-features-status">
+                            {speechSupported && (
+                                <span className="feature-badge stt" title="Speech-to-Text khả dụng">
+                                    🎤
+                                </span>
+                            )}
+                            {ttsSupported && (
+                                <span className="feature-badge tts" title="Text-to-Speech khả dụng">
+                                    🔊
+                                </span>
+                            )}
+                            {speechSupported && ttsSupported && (
+                                <span className="feature-badge voice-chat" title="Trò chuyện bằng giọng nói hoàn chỉnh">
+                                    💬
+                                </span>
+                            )}
+                        </div>
+                    )}
+                    
                     {personalizationEnabled && user && (
                         <button 
                             className="personalization-btn"
@@ -982,6 +1228,55 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
 
             {/* Main Chat Area */}
             <div className="modern-main-area">
+
+                {/* ✅ FIXED: Voice Control Panel */}
+                {(speechSupported || ttsSupported) && (
+                    <div className="voice-control-panel">
+                        {ttsSupported && (
+                            <>
+                                <button 
+                                    className={`voice-control-btn ${voiceModeEnabled ? 'active' : ''}`}
+                                    onClick={toggleVoiceMode}
+                                    title={voiceModeEnabled ? 'Tắt chế độ giọng nói' : 'Bật chế độ giọng nói'}
+                                >
+                                    {voiceModeEnabled ? '🎤🔊' : '📝'} 
+                                    {voiceModeEnabled ? 'Giọng nói' : 'Văn bản'}
+                                </button>
+                                
+                                <button 
+                                    className={`voice-control-btn ${autoPlayEnabled ? 'active' : ''}`}
+                                    onClick={toggleAutoPlay}
+                                    title={autoPlayEnabled ? 'Tắt tự động phát' : 'Bật tự động phát'}
+                                >
+                                    {autoPlayEnabled ? '🔊' : '🔇'} 
+                                    {autoPlayEnabled ? 'Tự động' : 'Thủ công'}
+                                </button>
+                                
+                                {isPlayingAudio && (
+                                    <button 
+                                        className="voice-control-btn stop-audio"
+                                        onClick={stopCurrentAudio}
+                                        title="Dừng phát âm thanh"
+                                    >
+                                        ⏹️ Dừng
+                                    </button>
+                                )}
+                            </>
+                        )}
+                        
+                        <div className="voice-status-indicator">
+                            {voiceModeEnabled && ttsSupported && (
+                                <span className="status-badge voice-mode">🎤🔊 Chế độ giọng nói</span>
+                            )}
+                            {forceVoiceMode && (
+                                <span className="status-badge force-voice">🎤 Sẵn sàng nói</span>
+                            )}
+                            {isPlayingAudio && (
+                                <span className="status-badge playing">🔊 Đang phát...</span>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Messages Area */}
                 <div className={`modern-messages-area ${loadingMessages ? 'loading' : ''}`}>
@@ -1003,25 +1298,41 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                                 <div className="quick-buttons">
                                     <button 
                                         className="quick-btn"
-                                        onClick={() => setInputMessage('Thông tin tuyển sinh năm 2024')}
+                                        onClick={() => {
+                                            setInputMessage('Thông tin tuyển sinh năm 2024');
+                                            setLastUserInputMethod('text');
+                                            setForceVoiceMode(false);
+                                        }}
                                     >
                                         📚 Tuyển sinh 2024
                                     </button>
                                     <button 
                                         className="quick-btn"
-                                        onClick={() => setInputMessage('Học phí các ngành năm 2024')}
+                                        onClick={() => {
+                                            setInputMessage('Học phí các ngành năm 2024');
+                                            setLastUserInputMethod('text');
+                                            setForceVoiceMode(false);
+                                        }}
                                     >
                                         💰 Học phí
                                     </button>
                                     <button 
                                         className="quick-btn"
-                                        onClick={() => setInputMessage('Các ngành đào tạo tại BDU')}
+                                        onClick={() => {
+                                            setInputMessage('Các ngành đào tạo tại BDU');
+                                            setLastUserInputMethod('text');
+                                            setForceVoiceMode(false);
+                                        }}
                                     >
                                         🎓 Ngành học
                                     </button>
                                     <button 
                                         className="quick-btn"
-                                        onClick={() => setInputMessage('Cơ sở vật chất và ký túc xá')}
+                                        onClick={() => {
+                                            setInputMessage('Cơ sở vật chất và ký túc xá');
+                                            setLastUserInputMethod('text');
+                                            setForceVoiceMode(false);
+                                        }}
                                     >
                                         🏢 Cơ sở vật chất
                                     </button>
@@ -1040,7 +1351,27 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                                             {formatMessage(message.content)}
                                         </div>
 
-                                        {/* ✅ UPDATED: Enhanced metadata with user memory prompt info */}
+                                        {/* ✅ FIXED: Audio playback controls for bot messages */}
+                                        {message.type === 'bot' && message.audio_content && !message.temporary && (
+                                            <div className="audio-controls">
+                                                <button 
+                                                    className={`audio-play-btn ${isPlayingAudio && currentAudio ? 'playing' : ''}`}
+                                                    onClick={() => playAudioFromBase64(message.audio_content)}
+                                                    disabled={isPlayingAudio}
+                                                    title="Phát âm thanh"
+                                                >
+                                                    {isPlayingAudio ? '🔊' : '▶️'} 
+                                                    {isPlayingAudio ? 'Đang phát...' : 'Nghe phản hồi'}
+                                                </button>
+                                                {message.tts_info && (
+                                                    <span className="audio-info">
+                                                        🎵 Âm thanh có sẵn ({message.tts_info.processing_time?.toFixed(2) || 0}s)
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* ✅ UPDATED: Enhanced metadata with user memory prompt info and TTS */}
                                         {message.type === 'bot' && !message.isError && !message.temporary && (
                                             <div className="message-metadata-enhanced">
                                                 {/* User Memory Prompt Indicator */}
@@ -1054,6 +1385,13 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                                                 {message.external_api_used && (
                                                     <div className="external-api-badge">
                                                         🌐 Thông tin cá nhân từ hệ thống
+                                                    </div>
+                                                )}
+                                                
+                                                {/* ✅ FIXED: TTS Mode Indicator */}
+                                                {message.mode === 'voice' && (
+                                                    <div className="voice-mode-badge">
+                                                        🎤🔊 Chế độ giọng nói
                                                     </div>
                                                 )}
                                             </div>
@@ -1170,7 +1508,7 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                             <textarea
                                 ref={inputRef}
                                 value={inputMessage}
-                                onChange={(e) => setInputMessage(e.target.value)}
+                                onChange={handleInputChange} // ✅ FIXED: Use improved handler
                                 onKeyPress={handleKeyPress}
                                 placeholder={connectionStatus === 'connected' 
                                     ? "Hỏi bất cứ điều gì về Đại học Bình Dương..."
@@ -1184,7 +1522,7 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                             <div className="input-actions">
                                 {speechSupported && (
                                     <button 
-                                        className={`voice-btn ${isRecording ? 'recording' : ''} ${isProcessingSpeech ? 'processing' : ''}`}
+                                        className={`voice-btn ${isRecording ? 'recording' : ''} ${isProcessingSpeech ? 'processing' : ''} ${forceVoiceMode ? 'voice-ready' : ''}`}
                                         onClick={isRecording ? stopRecording : startRecording}
                                         disabled={isLoading || connectionStatus !== 'connected' || isProcessingSpeech}
                                         title={isRecording ? 'Dừng ghi âm' : 'Bắt đầu ghi âm'}
@@ -1196,6 +1534,15 @@ ${speechSupported ? '🎤 Bạn có thể gõ hoặc nói để đặt câu hỏ
                         </div>
                         
                         <div className="input-footer">
+                            <div className="input-mode-indicator">
+                                {forceVoiceMode ? (
+                                    <span className="mode-badge voice-ready">🎤🔊 Sẵn sàng nói</span>
+                                ) : voiceModeEnabled && ttsSupported ? (
+                                    <span className="mode-badge voice">🎤🔊 Chế độ giọng nói</span>
+                                ) : (
+                                    <span className="mode-badge text">📝 Chế độ văn bản</span>
+                                )}
+                            </div>
                             <div className="char-counter">
                                 {inputMessage.length}/1000
                             </div>

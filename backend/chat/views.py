@@ -5,13 +5,14 @@ from rest_framework import status
 from django.http import JsonResponse
 from knowledge.models import ChatHistory, UserFeedback
 from ai_models.services import chatbot_ai
-from ai_models.speech_service import speech_service  # ← THÊM IMPORT
+from ai_models.speech_service import speech_service, tts_service  # ✅ THÊM TTS SERVICE
 import uuid
 import time
 import logging
 import json
 import tempfile
 import os
+import base64  # ✅ THÊM IMPORT BASE64
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.utils import timezone
@@ -133,6 +134,9 @@ class APIRootView(APIView):
         system_status = chatbot_ai.get_system_status()
         speech_status = speech_service.get_system_status()
         
+        # ✅ THÊM TTS STATUS
+        tts_status = tts_service.get_system_status()
+        
         try:
             from ai_models.external_api_service import external_api_service
             external_api_status = external_api_service.get_system_status()
@@ -151,11 +155,12 @@ class APIRootView(APIView):
         }
         
         return Response({
-            'message': 'Enhanced Chatbot API - Đại học Bình Dương với User Memory Prompt',  # ✅ UPDATED
-            'version': '6.0.0',  # ✅ Version bump for user memory prompt
+            'message': 'Enhanced Chatbot API với Text-to-Speech - Đại học Bình Dương',  # ✅ UPDATED
+            'version': '6.1.0',  # ✅ Version bump for TTS feature
             'status': 'active',
             'system_status': system_status,
             'speech_status': speech_status,
+            'tts_status': tts_status,  # ✅ THÊM TTS STATUS
             'personalization_status': personalization_status,
             'external_api_status': external_api_status,
             'endpoints': {
@@ -175,11 +180,13 @@ class APIRootView(APIView):
                 'Emotional Context',
                 'UTF-8 Safe Encoding',
                 'Speech-to-Text (Whisper)',
+                'Text-to-Speech (gTTS)',           # ✅ NEW feature
+                'Voice Conversation Mode',         # ✅ NEW feature
                 'Enhanced Personalization',
-                'User Memory Prompt Support',      # ✅ NEW feature
-                'Flexible Personalization',       # ✅ NEW feature
-                'Dynamic System Prompts',         # ✅ NEW feature
-                'Custom User Instructions',       # ✅ NEW feature
+                'User Memory Prompt Support',
+                'Flexible Personalization',
+                'Dynamic System Prompts',
+                'Custom User Instructions',
                 'User Memory Integration',
                 'Department-Specific Responses',
                 'JWT Token Authentication',
@@ -190,13 +197,14 @@ class APIRootView(APIView):
         })
 
 class ChatView(APIView):
-    """Enhanced Chat API with Natural Responses"""
+    """Enhanced Chat API with Natural Responses and TTS"""
     permission_classes = [AllowAny]
     
     def get(self, request):
-        """GET method - API information with personalization"""
+        """GET method - API information with personalization and TTS"""
         system_status = chatbot_ai.get_system_status()
         speech_status = speech_service.get_system_status()
+        tts_status = tts_service.get_system_status()  # ✅ THÊM TTS STATUS
         
         # ✅ NEW: Get external API status
         try:
@@ -220,19 +228,27 @@ class ChatView(APIView):
             }
         
         return Response({
-            'message': 'Enhanced Personalized Chat API with User Memory Prompt - Open Access',  # ✅ UPDATED
+            'message': 'Enhanced Personalized Chat API với Text-to-Speech - Open Access',  # ✅ UPDATED
             'authentication': 'Optional - Works with or without token',
             'jwt_token_support': 'Send JWT token for personal schedule/info access',
             'system_status': system_status,
             'speech_status': speech_status,
+            'tts_status': tts_status,  # ✅ THÊM TTS STATUS
             'external_api_status': external_api_status,
             'user_personalization': user_personalization,
-            'method': 'POST để gửi tin nhắn với personalization và JWT token',
+            'method': 'POST để gửi tin nhắn với personalization, JWT token và TTS',
             'jwt_token_usage': {
                 'header': 'Authorization: Bearer <token>',
                 'body_field': 'token',
                 'query_param': 'token (for testing only)',
                 'purpose': 'Access personal schedule and lecturer information'
+            },
+            'tts_usage': {  # ✅ THÊM HƯỚNG DẪN TTS
+                'mode_field': 'mode',
+                'voice_mode': 'voice - Tạo audio từ response text',
+                'text_mode': 'text - Chỉ trả về text (default)',
+                'audio_format': 'MP3 encoded as base64 string',
+                'supported_languages': tts_status.get('supported_languages', ['vi', 'en'])
             },
             'features': [
                 'PhoBERT Intent Classification',
@@ -240,9 +256,11 @@ class ChatView(APIView):
                 'Conversation Memory',
                 'UTF-8 Safe Processing',
                 'Speech-to-Text Integration',
-                'User Memory Prompt Support (with authentication)',      # ✅ UPDATED
-                'Dynamic Personalized System Prompts (with authentication)',  # ✅ UPDATED
-                'Flexible User Instructions (with authentication)',      # ✅ NEW
+                'Text-to-Speech Integration (NEW)',        # ✅ NEW
+                'Voice Conversation Mode (NEW)',           # ✅ NEW
+                'User Memory Prompt Support (with authentication)',
+                'Dynamic Personalized System Prompts (with authentication)',
+                'Flexible User Instructions (with authentication)',
                 'User Memory Integration (with authentication)',
                 'Anonymous Chat Support',
                 'JWT Token Authentication',
@@ -253,13 +271,17 @@ class ChatView(APIView):
         })
 
     def post(self, request):
-        """POST method - Process chat with enhanced personalization support"""
+        """POST method - Process chat with enhanced personalization support and TTS"""
         start_time = time.time()
         
         try:
             # Get and validate input
             user_message = request.data.get('message', '').strip()
             session_id = request.data.get('session_id', str(uuid.uuid4()))
+            
+            # ✅ BƯỚC 1: ĐỌC "MODE" TỪ REQUEST
+            request_mode = request.data.get('mode', 'text').lower()  # Mặc định là 'text'
+            logger.info(f"🎯 Request mode: {request_mode}")
             
             # ✅ NEW: Extract JWT token from request
             jwt_token = extract_jwt_token(request)
@@ -292,6 +314,7 @@ class ChatView(APIView):
             
             print(f"🔍 ENHANCED CHAT DEBUG: user_id = {user_id}, session_id = {session_id}")
             print(f"🔍 ENHANCED CHAT DEBUG: User message = {user_message}")
+            print(f"🔊 TTS MODE DEBUG: mode = {request_mode}")
             
             if not user_message:
                 return Response(
@@ -336,7 +359,7 @@ class ChatView(APIView):
                     logger.warning(f"Could not get enhanced user context: {e}")
                     personalization_info['error'] = str(e)
             
-            logger.info(f"💬 Processing with enhanced personalization + JWT: {user_message[:50]}... (User: {user_context.get('faculty_code') if user_context else 'Anonymous'}, JWT: {bool(jwt_token)})")
+            logger.info(f"💬 Processing with enhanced personalization + JWT + TTS: {user_message[:50]}... (User: {user_context.get('faculty_code') if user_context else 'Anonymous'}, JWT: {bool(jwt_token)}, Mode: {request_mode})")
 
             # ✅ ENHANCED: Process với comprehensive user context
             if user_context:
@@ -376,11 +399,40 @@ class ChatView(APIView):
             # Clean response text
             response_text = self._clean_response_text(response_text)
             
+            # ✅ BƯỚC 2: KIỂM TRA MODE VÀ TẠO AUDIO
+            audio_content_base64 = None
+            tts_processing_time = 0
+            tts_error = None
+            
+            if request_mode == 'voice' and response_text:
+                logger.info("🔊 Voice mode detected. Generating TTS response...")
+                tts_start_time = time.time()
+                
+                try:
+                    audio_content_base64 = tts_service.text_to_audio_base64(response_text)
+                    tts_processing_time = time.time() - tts_start_time
+                    
+                    if audio_content_base64:
+                        logger.info(f"✅ TTS audio generated successfully in {tts_processing_time:.2f}s")
+                    else:
+                        logger.warning("⚠️ TTS audio generation failed - no audio returned")
+                        tts_error = "TTS service returned no audio"
+                        
+                except Exception as e:
+                    tts_processing_time = time.time() - tts_start_time
+                    tts_error = str(e)
+                    logger.error(f"❌ TTS audio generation failed: {e}")
+            elif request_mode == 'voice':
+                logger.warning("⚠️ Voice mode requested but no response text available")
+                tts_error = "No response text available for TTS"
+            else:
+                logger.info(f"📝 Text mode - no TTS processing (mode: {request_mode})")
+            
             processing_time = time.time() - start_time
             
-            # ✅ ENHANCED: Save chat history với JWT and external API info
+            # ✅ ENHANCED: Save chat history với JWT, external API info và TTS info
             try:
-                # Enhanced entities with personalization + external API info
+                # Enhanced entities with personalization + external API info + TTS info
                 enhanced_entities = {
                     'user_context': user_context,
                     'personalization_info': personalization_info,
@@ -392,7 +444,12 @@ class ChatView(APIView):
                     'external_api_used': ai_response.get('external_api_used', False),
                     'external_api_method': ai_response.get('method', '') if ai_response.get('external_api_used') else None,
                     'decision_type': ai_response.get('decision_type', ''),
-                    'token_preview': f"{jwt_token[:10]}...{jwt_token[-10:]}" if jwt_token and len(jwt_token) > 20 else None
+                    'token_preview': f"{jwt_token[:10]}...{jwt_token[-10:]}" if jwt_token and len(jwt_token) > 20 else None,
+                    # ✅ NEW: TTS related fields
+                    'request_mode': request_mode,
+                    'tts_generated': bool(audio_content_base64),
+                    'tts_processing_time': tts_processing_time,
+                    'tts_error': tts_error
                 }
                 
                 chat_record = ChatHistory.objects.create(
@@ -405,11 +462,11 @@ class ChatView(APIView):
                     user=request.user if request.user.is_authenticated else None,
                     entities=json.dumps(enhanced_entities) if enhanced_entities else None  # ✅ Enhanced entities
                 )
-                logger.info(f"✅ Enhanced chat with external API saved: {chat_record.id}")
+                logger.info(f"✅ Enhanced chat with external API and TTS saved: {chat_record.id}")
             except Exception as e:
                 logger.error(f"Error saving enhanced chat: {str(e)}")
             
-            # ✅ ENHANCED: Return comprehensive response with external API details
+            # ✅ BƯỚC 3: CẬP NHẬT JSON RESPONSE
             return Response({
                 'session_id': session_id,
                 'response': response_text,
@@ -421,6 +478,18 @@ class ChatView(APIView):
                 'status': 'success',
                 'encoding': 'utf-8',
                 'reference_links': ai_response.get('reference_links', []),
+                
+                # ✅ CÁC TRƯỜNG MỚI CHO TTS
+                'audio_content': audio_content_base64,  # Sẽ là null nếu mode='text'
+                'mode': request_mode,
+                'tts_info': {
+                    'enabled': request_mode == 'voice',
+                    'processing_time': tts_processing_time,
+                    'success': bool(audio_content_base64),
+                    'error': tts_error,
+                    'audio_format': 'mp3_base64' if audio_content_base64 else None
+                },
+                # -----------------------------
                 
                 # ✅ ENHANCED: Detailed personalization response
                 'personalization': {
@@ -450,23 +519,33 @@ class ChatView(APIView):
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
-            logger.error(f"❌ Enhanced chat error with external API: {str(e)}")
+            logger.error(f"❌ Enhanced chat error with external API and TTS: {str(e)}")
             
-            # Enhanced fallback response với personalization + external API
-            fallback_response = self._get_enhanced_fallback_response_with_external_api(
+            # Enhanced fallback response với personalization + external API + TTS
+            fallback_response = self._get_enhanced_fallback_response_with_external_api_and_tts(
                 locals().get('user_message', ''),
                 locals().get('user_context'),
                 locals().get('personalization_info', {}),
-                locals().get('jwt_token')
+                locals().get('jwt_token'),
+                locals().get('request_mode', 'text')
             )
             
             return Response({
                 'session_id': locals().get('session_id', str(uuid.uuid4())),
                 'response': fallback_response,
                 'confidence': 0.3,
-                'method': 'enhanced_fallback_with_external_api',
+                'method': 'enhanced_fallback_with_external_api_and_tts',
                 'response_time': time.time() - start_time,
                 'status': 'fallback',
+                'audio_content': None,  # ✅ Không tạo TTS cho fallback
+                'mode': locals().get('request_mode', 'text'),
+                'tts_info': {
+                    'enabled': False,
+                    'processing_time': 0,
+                    'success': False,
+                    'error': 'Fallback mode - TTS disabled',
+                    'audio_format': None
+                },
                 'personalization': {
                     'enabled': bool(locals().get('user_context')),
                     'fallback_used': True,
@@ -480,8 +559,8 @@ class ChatView(APIView):
                 }
             }) 
     
-    def _get_enhanced_fallback_response_with_external_api(self, user_message='', user_context=None, personalization_info={}, jwt_token=None):
-        """Enhanced fallback response với comprehensive personalization + external API"""
+    def _get_enhanced_fallback_response_with_external_api_and_tts(self, user_message='', user_context=None, personalization_info={}, jwt_token=None, request_mode='text'):
+        """Enhanced fallback response với comprehensive personalization + external API + TTS"""
         if user_context:
             full_name = user_context.get('full_name', '')
             faculty_code = user_context.get('faculty_code', '')
@@ -489,10 +568,10 @@ class ChatView(APIView):
             personal_address = f"thầy/cô {name_suffix}"
             department_name = user_context.get('department_name', 'BDU')
             
-            # ✅ NEW: Different messages based on JWT token availability
+            # ✅ NEW: Different messages based on JWT token availability and TTS mode
             if jwt_token:
                 # Have JWT token but still failed
-                return f"""Dạ xin lỗi {personal_address}, hệ thống đang được nâng cấp để phục vụ {personal_address} tốt hơn.
+                base_message = f"""Dạ xin lỗi {personal_address}, hệ thống đang được nâng cấp để phục vụ {personal_address} tốt hơn.
 
 Mặc dù em đã nhận được thông tin đăng nhập của {personal_address}, nhưng hiện tại có một số khó khăn kỹ thuật. 
 
@@ -508,7 +587,7 @@ Em sẽ cố gắng khắc phục để phục vụ {personal_address} tốt hơ
                 has_user_memory = personalization_info.get('has_user_memory_prompt', False)
                 
                 if has_user_memory:
-                    return f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn theo những yêu cầu riêng mà {personal_address} đã thiết lập! 🧠
+                    base_message = f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn theo những yêu cầu riêng mà {personal_address} đã thiết lập! 🧠
 
 Để truy cập thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng BDU trước ạ. 🔐
 
@@ -520,7 +599,7 @@ Trong thời gian này, {personal_address} có thể:
 
 Em sẽ cố gắng hỗ trợ {personal_address} tốt hơn theo những ghi nhớ mà {personal_address} đã cung cấp! 🎓✨"""
                 else:
-                    return f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn.
+                    base_message = f"""Dạ xin lỗi {personal_address}, hệ thống đang được cải thiện để phục vụ {personal_address} tốt hơn.
 
 Để truy cập thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng BDU trước ạ. 🔐
 
@@ -531,10 +610,15 @@ Trong thời gian này, {personal_address} có thể:
 • Website: www.bdu.edu.vn
 
 Cảm ơn {personal_address} đã kiên nhẫn! 🎓"""
+            
+            # ✅ Add TTS-specific note for voice mode
+            if request_mode == 'voice':
+                base_message += f"\n\n🔊 Lưu ý: Chức năng chuyển văn bản thành giọng nói tạm thời không khả dụng. {personal_address} vẫn có thể đọc phản hồi này."
+            
+            return base_message
         
         # Fallback for non-authenticated users
-        if jwt_token:
-            return """Xin chào! Tôi đã nhận được thông tin đăng nhập, nhưng hiện tại gặp khó khăn kỹ thuật.
+        base_message = """Xin chào! Tôi đã nhận được thông tin đăng nhập, nhưng hiện tại gặp khó khăn kỹ thuật.
 
 Bạn có thể thử lại sau hoặc liên hệ:
 • Hotline: 0274.xxx.xxxx
@@ -542,8 +626,11 @@ Bạn có thể thử lại sau hoặc liên hệ:
 • Website: www.bdu.edu.vn
 
 Cảm ơn bạn đã kiên nhẫn! 🎓"""
-        else:
-            return self._get_safe_fallback_response(user_message)
+        
+        if request_mode == 'voice':
+            base_message += "\n\n🔊 Lưu ý: Chức năng chuyển văn bản thành giọng nói tạm thời không khả dụng."
+        
+        return base_message if jwt_token else self._get_safe_fallback_response(user_message)
     
     def _clean_response_text(self, text):
         """Clean and ensure safe UTF-8 text (unchanged from original)"""
@@ -603,7 +690,7 @@ class PersonalizedChatContextView(APIView):
     """Lấy context cá nhân hóa cho chat"""
     
     def get(self, request):
-        """GET method - Enhanced personalized context"""
+        """GET method - Enhanced personalized context with TTS"""
         try:
             if not request.user.is_authenticated:
                 return Response({
@@ -616,6 +703,9 @@ class PersonalizedChatContextView(APIView):
             
             # ✅ UPDATED: Enhanced context info với user memory prompt
             user_memory_prompt = user.chatbot_preferences.get('user_memory_prompt', '').strip()
+            
+            # ✅ THÊM TTS STATUS
+            tts_status = tts_service.get_system_status()
             
             context_info = {
                 'personalization_enabled': True,
@@ -632,18 +722,27 @@ class PersonalizedChatContextView(APIView):
                     'memory_effectiveness': 'high' if len(user_memory_prompt) > 100 else 'medium' if len(user_memory_prompt) > 50 else 'low'
                 },
                 
+                # ✅ THÊM TTS CAPABILITIES
+                'tts_capabilities': {
+                    'available': tts_status.get('available', False),
+                    'supported_languages': tts_status.get('supported_languages', []),
+                    'default_language': tts_status.get('default_language', 'vi'),
+                    'voice_mode_enabled': tts_status.get('available', False)
+                },
+                
                 # ✅ ENHANCED: Better suggested topics
                 'suggested_topics': self._get_enhanced_suggested_topics_for_department(user.department),
                 'quick_actions': self._get_quick_actions_for_position(user.position),
                 
-                # ✅ UPDATED: Personalization tips WITH USER MEMORY PROMPT
+                # ✅ UPDATED: Personalization tips WITH USER MEMORY PROMPT AND TTS
                 'personalization_tips': [
                     f"Sử dụng 'Ghi nhớ và chỉ dẫn' để ChatBDU hiểu và phục vụ bạn tốt hơn",
                     f"Viết những quy tắc, sở thích riêng vào ô 'User Memory Prompt'", 
                     f"Hỏi về thông tin chuyên ngành {user_context.get('department_name')}",
                     "Bật/tắt ưu tiên chuyên ngành theo nhu cầu",
                     "Đăng nhập ứng dụng để truy cập lịch giảng dạy cá nhân",
-                    "Hỏi về 'lịch của tôi' để xem thời khóa biểu riêng"
+                    "Hỏi về 'lịch của tôi' để xem thời khóa biểu riêng",
+                    "Sử dụng chế độ giọng nói để trò chuyện tự nhiên hơn 🎤🔊"  # ✅ NEW TTS tip
                 ],
                 
                 # ✅ UPDATED: External API capabilities
@@ -666,6 +765,8 @@ class PersonalizedChatContextView(APIView):
                     'memory_prompt_length': len(user_memory_prompt),
                     'total_preferences': len(user.chatbot_preferences),
                     'external_api_ready': True,
+                    'tts_enabled': tts_status.get('available', False),  # ✅ NEW
+                    'voice_conversation_ready': tts_status.get('available', False),  # ✅ NEW
                     'personalization_strength': 'high' if bool(user_memory_prompt) else 'medium'  # ✅ NEW
                 }
             }
@@ -724,14 +825,15 @@ class PersonalizedChatContextView(APIView):
         return actions
 
 class PersonalizedSystemStatusView(APIView):
-    """System status với thông tin personalization"""
+    """System status với thông tin personalization và TTS"""
     
     def get(self, request):
-        """GET method - Enhanced system status với personalization + external API"""
+        """GET method - Enhanced system status với personalization + external API + TTS"""
         try:
             # Base system status
             status_data = chatbot_ai.get_system_status()
             speech_status = speech_service.get_system_status()
+            tts_status = tts_service.get_system_status()  # ✅ THÊM TTS STATUS
             
             # ✅ NEW: Get external API status
             try:
@@ -740,10 +842,10 @@ class PersonalizedSystemStatusView(APIView):
             except ImportError:
                 external_api_status = {'external_api_service': {'available': False, 'error': 'Service not available'}}
             
-            # ✅ UPDATED: Comprehensive personalization status với user memory prompt
+            # ✅ UPDATED: Comprehensive personalization status với user memory prompt và TTS
             personalization_status = {
                 'personalization_enabled': True,
-                'version': '6.0.0',  # ✅ Version bump for user memory prompt
+                'version': '6.1.0',  # ✅ Version bump for TTS feature
                 'features': {
                     'user_memory_prompt_support': True,     # ✅ NEW
                     'flexible_personalization': True,      # ✅ NEW
@@ -754,7 +856,11 @@ class PersonalizedSystemStatusView(APIView):
                     'jwt_token_authentication': True,
                     'external_api_integration': True,
                     'personal_schedule_access': True,
-                    'lecturer_info_queries': True
+                    'lecturer_info_queries': True,
+                    'text_to_speech_support': True,         # ✅ NEW TTS
+                    'voice_conversation_mode': True,        # ✅ NEW TTS
+                    'speech_to_text_support': True,
+                    'full_voice_interaction': True          # ✅ NEW - STT + TTS combined
                 },
                 'statistics': {
                     'total_faculty': 0,
@@ -762,7 +868,8 @@ class PersonalizedSystemStatusView(APIView):
                     'departments_available': 0,  # Will be updated below
                     'positions_available': 0     # Will be updated below
                 },
-                'external_api_integration': external_api_status
+                'external_api_integration': external_api_status,
+                'tts_integration': tts_status  # ✅ THÊM TTS INTEGRATION
             }
             
             # Add current user info if authenticated
@@ -777,6 +884,8 @@ class PersonalizedSystemStatusView(APIView):
                     'department_priority': request.user.chatbot_preferences.get('department_priority', True),
                     'preferences_configured': bool(request.user.chatbot_preferences),
                     'external_api_ready': True,
+                    'tts_ready': tts_status.get('available', False),  # ✅ NEW TTS
+                    'voice_interaction_ready': tts_status.get('available', False) and speech_status.get('available', False),  # ✅ NEW
                     'personalization_strength': 'high' if bool(user_memory_prompt) else 'medium'  # ✅ NEW
                 }
             
@@ -806,6 +915,7 @@ class PersonalizedSystemStatusView(APIView):
             status_data.update({
                 'personalization': personalization_status,
                 'speech_status': speech_status,
+                'tts_status': tts_status,  # ✅ THÊM TTS STATUS
                 'external_api_status': external_api_status
             })
             
@@ -818,7 +928,7 @@ class PersonalizedSystemStatusView(APIView):
                 'message': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# ✅ Speech-to-Text Views
+# ✅ Speech-to-Text Views (unchanged)
 class SpeechToTextView(APIView):
     """
     API endpoint for Speech-to-Text conversion
@@ -988,27 +1098,44 @@ class SpeechStatusView(APIView):
     """
     
     def get(self, request):
-        """GET method - Service status"""
+        """GET method - Service status including TTS"""
         try:
             speech_status = speech_service.get_system_status()
+            tts_status = tts_service.get_system_status()  # ✅ THÊM TTS STATUS
             
             return Response({
                 'status': 'ok',
-                'message': 'Speech-to-Text Service Status',
+                'message': 'Speech Services Status (STT + TTS)',  # ✅ UPDATED
                 'speech_service': speech_status,
+                'tts_service': tts_status,  # ✅ THÊM TTS SERVICE STATUS
                 'endpoints': {
                     'speech_to_text': '/api/speech-to-text/',
                     'speech_status': '/api/speech-status/'
                 },
                 'capabilities': {
-                    'languages': ['vi', 'en'],  # Vietnamese and English
+                    'stt_languages': ['vi', 'en'],  # Vietnamese and English
+                    'tts_languages': tts_status.get('supported_languages', ['vi', 'en']),  # ✅ NEW
                     'supported_formats': speech_service.supported_formats,
                     'max_file_size_mb': speech_service.max_file_size_mb,
                     'features': [
                         'Voice Activity Detection',
                         'Noise Suppression', 
                         'Automatic Language Detection',
-                        'GPU Acceleration (if available)'
+                        'GPU Acceleration (if available)',
+                        'Text-to-Speech (gTTS)',           # ✅ NEW
+                        'Voice Conversation Mode',         # ✅ NEW
+                        'Multi-language TTS Support'       # ✅ NEW
+                    ]
+                },
+                'voice_interaction': {  # ✅ NEW SECTION
+                    'full_duplex_available': speech_status.get('available', False) and tts_status.get('available', False),
+                    'stt_available': speech_status.get('available', False),
+                    'tts_available': tts_status.get('available', False),
+                    'recommended_workflow': [
+                        '1. User speaks (STT)',
+                        '2. AI processes text',
+                        '3. AI responds with text + audio (TTS)',
+                        '4. User hears response'
                     ]
                 }
             }, status=status.HTTP_200_OK)
@@ -1019,6 +1146,10 @@ class SpeechStatusView(APIView):
                 'status': 'error',
                 'error': str(e),
                 'speech_service': {
+                    'available': False,
+                    'error': 'Service status check failed'
+                },
+                'tts_service': {
                     'available': False,
                     'error': 'Service status check failed'
                 }
@@ -1295,21 +1426,146 @@ class FeedbackView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+class TextToSpeechTestView(APIView):
+    """
+    ✅ NEW: Endpoint test riêng cho TTS service
+    """
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """GET method - TTS service information"""
+        tts_status = tts_service.get_system_status()
+        return Response({
+            'message': 'Text-to-Speech Test API',
+            'method': 'POST để test TTS conversion',
+            'tts_service': tts_status,
+            'usage': {
+                'method': 'POST',
+                'content_type': 'application/json',
+                'fields': {
+                    'text': 'Text to convert to speech (required)',
+                    'language': 'Language code (optional, default: vi)',
+                    'slow': 'Slow speech (optional, default: false)'
+                },
+                'response': {
+                    'success': 'Boolean indicating success',
+                    'audio_content': 'Base64 encoded MP3 audio (if successful)',
+                    'text_processed': 'The text that was processed',
+                    'processing_time': 'Time taken to generate audio'
+                }
+            },
+            'examples': {
+                'vietnamese': {
+                    'text': 'Xin chào, tôi là trợ lý AI của Đại học Bình Dương',
+                    'language': 'vi'
+                },
+                'english': {
+                    'text': 'Hello, I am the AI assistant of Binh Duong University',
+                    'language': 'en'
+                }
+            }
+        })
+    
+    def post(self, request):
+        """POST method - Test TTS conversion"""
+        start_time = time.time()
+        
+        try:
+            # Check if TTS service is available
+            if not tts_service.is_available:
+                return Response({
+                    'success': False,
+                    'error': 'TTS service not available. Please install gTTS.',
+                    'audio_content': None,
+                    'tts_status': tts_service.get_system_status()
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+            # Get and validate input
+            text_to_convert = request.data.get('text', '').strip()
+            language = request.data.get('language', 'vi')
+            slow = request.data.get('slow', False)
+            
+            if not text_to_convert:
+                return Response({
+                    'success': False,
+                    'error': 'Text field is required and cannot be empty.',
+                    'audio_content': None
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if len(text_to_convert) > 1000:
+                return Response({
+                    'success': False,
+                    'error': 'Text too long. Maximum 1000 characters.',
+                    'audio_content': None
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            logger.info(f"🔊 TTS Test: Converting text to speech: '{text_to_convert[:50]}...' (lang: {language}, slow: {slow})")
+            
+            # Generate TTS audio
+            audio_base64 = tts_service.text_to_audio_base64(
+                text=text_to_convert,
+                language=language,
+                slow=slow
+            )
+            
+            processing_time = time.time() - start_time
+            
+            if audio_base64:
+                logger.info(f"✅ TTS Test: Successfully generated audio in {processing_time:.2f}s")
+                return Response({
+                    'success': True,
+                    'audio_content': audio_base64,
+                    'text_processed': text_to_convert,
+                    'language': language,
+                    'slow': slow,
+                    'processing_time': processing_time,
+                    'audio_format': 'mp3_base64',
+                    'audio_size_chars': len(audio_base64),
+                    'message': 'TTS conversion successful! Use the audio_content in your frontend.'
+                })
+            else:
+                logger.error(f"❌ TTS Test: Failed to generate audio")
+                return Response({
+                    'success': False,
+                    'error': 'Failed to generate TTS audio. Check server logs for details.',
+                    'audio_content': None,
+                    'text_processed': text_to_convert,
+                    'processing_time': processing_time
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            processing_time = time.time() - start_time
+            logger.error(f"💥 TTS Test error: {str(e)}")
+            
+            return Response({
+                'success': False,
+                'error': f'TTS test failed: {str(e)}',
+                'audio_content': None,
+                'processing_time': processing_time
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class HealthCheckView(APIView):
     def get(self, request):
         try:
             system_status = chatbot_ai.get_system_status()
             speech_status = speech_service.get_system_status()
+            tts_status = tts_service.get_system_status()  # ✅ THÊM TTS STATUS
             
             return Response({
                 'status': 'healthy',
-                'message': 'Enhanced Personalized Chatbot with User Memory Prompt is running! 🚀',  # ✅ UPDATED
+                'message': 'Enhanced Personalized Chatbot với Text-to-Speech is running! 🚀🔊',  # ✅ UPDATED
                 'database': 'connected',
                 'encoding': 'utf-8',
                 'system_status': system_status,
                 'speech_status': speech_status,
+                'tts_status': tts_status,  # ✅ THÊM TTS STATUS
                 'personalization': 'enabled',
-                'version': '6.0.0'  # ✅ Updated version
+                'voice_interaction': {  # ✅ NEW
+                    'stt_available': speech_status.get('available', False),
+                    'tts_available': tts_status.get('available', False),
+                    'full_voice_chat': speech_status.get('available', False) and tts_status.get('available', False)
+                },
+                'version': '6.1.0'  # ✅ Updated version for TTS
             })
         except Exception as e:
             return Response({

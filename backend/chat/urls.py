@@ -13,6 +13,9 @@ urlpatterns = [
     path('speech-to-text/', views.SpeechToTextView.as_view(), name='speech-to-text'),
     path('speech-status/', views.SpeechStatusView.as_view(), name='speech-status'),
     
+    # ✅ NEW: Text-to-Speech test endpoint
+    path('text-to-speech-test/', views.TextToSpeechTestView.as_view(), name='text-to-speech-test'),
+    
     # Personalized chat endpoints
     path('personalized-context/', views.PersonalizedChatContextView.as_view(), name='personalized-chat-context'),
     path('system-status-personalized/', views.PersonalizedSystemStatusView.as_view(), name='system-status-personalized'),

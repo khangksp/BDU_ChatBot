@@ -233,7 +233,7 @@ CORS_ALLOWED_ORIGINS = [
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
-    "https://3a95-113-161-163-160.ngrok-free.app",
+    "https://1393-14-191-196-54.ngrok-free.app",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -278,7 +278,7 @@ CSRF_TRUSTED_ORIGINS = [
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
     "https://*.ngrok.io",
     "https://*.ngrok-free.app",
-    "https://3a95-113-161-163-160.ngrok-free.app",
+    "https://1393-14-191-196-54.ngrok-free.app",
 ]
 
 # =============================================================================
