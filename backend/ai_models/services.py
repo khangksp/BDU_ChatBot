@@ -217,10 +217,10 @@ class LecturerDecisionEngine:
     """
     
     def __init__(self):
-        # ✅ MODIFIED: Adjusted confidence thresholds for hybrid scores
+        # ✅ BƯỚC 3: Tăng ngưỡng medium_trust từ 0.4 lên 0.55
         self.confidence_thresholds = {
             'high_trust': 0.75,    # Slightly lower due to re-ranking boost
-            'medium_trust': 0.4,   
+            'medium_trust': 0.55,   # ✅ ĐÃ TĂNG từ 0.4 lên 0.55
             'low_trust': 0.25,      
             'no_trust': 0.1         
         }
@@ -356,10 +356,14 @@ class LecturerDecisionEngine:
         return should_boost
     
     def needs_external_api(self, query: str, confidence: float, recent_intent: str = None) -> bool:
-        """Determine if query should use external API"""
+        """
+        ✅ BƯỚC 1: Sửa logic cốt lõi - Loại bỏ hoàn toàn biến low_confidence khỏi điều kiện quyết định
+        Determine if query should use external API
+        """
         query_lower = query.lower()
         
-        low_confidence = confidence < self.external_api_config['low_confidence_threshold']
+        # ✅ REMOVED: low_confidence = confidence < self.external_api_config['low_confidence_threshold']
+        
         has_personal_keywords = any(
             keyword in query_lower 
             for keyword in self.external_api_config['personal_info_keywords']
@@ -369,12 +373,34 @@ class LecturerDecisionEngine:
             for keyword in self.external_api_config['time_context_keywords']
         )
 
+        # ✅ BƯỚC 1: Chỉ được phép gọi API khi có tín hiệu tích cực và rõ ràng
+        # Kiểm tra intent có độ tin cậy cao
+        intent_confidence = 0
+        intent_is_personal = False
+        if recent_intent:
+            # Giả sử recent_intent là string, nếu là dict thì cần extract
+            if isinstance(recent_intent, str):
+                intent_is_personal = recent_intent in ['personal_schedule', 'personal_info']
+                intent_confidence = 0.7  # Mặc định nếu không có thông tin
+            elif isinstance(recent_intent, dict):
+                intent_name = recent_intent.get('intent', '')
+                intent_confidence = recent_intent.get('confidence', 0)
+                intent_is_personal = intent_name in ['personal_schedule', 'personal_info']
+        
+        high_confidence_personal_intent = intent_is_personal and intent_confidence > 0.6
+        
         schedule_related_intent = recent_intent in ['personal_schedule', 'teaching_schedule', 'schedule_general']
         contextual_schedule_query = has_time_context and schedule_related_intent
         
-        needs_api = has_personal_keywords or contextual_schedule_query or low_confidence
+        # ✅ BƯỚC 1: Logic mới - CHỈ gọi API khi có tín hiệu tích cực, KHÔNG bao giờ vì low_confidence
+        needs_api = (
+            has_personal_keywords or 
+            contextual_schedule_query or 
+            high_confidence_personal_intent
+        )
+        # ✅ ĐÃ REMOVED: or low_confidence
 
-        logger.info(f"🔍 External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, recent_intent='{recent_intent}', needs_api={needs_api}")
+        logger.info(f"🔍 FIXED External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, recent_intent='{recent_intent}', high_conf_personal={high_confidence_personal_intent}, needs_api={needs_api}")
         
         return needs_api
 
@@ -417,15 +443,15 @@ class LecturerDecisionEngine:
         
         # ✅ FIX 2: Tăng độ tin cậy cho tin nhắn đầu tiên nếu nó quá thấp, để ép chatbot phải trả lời.
         # Việc này giải quyết vấn đề chatbot "từ chối trả lời" dù đã tìm thấy thông tin.
-        if is_first_message and confidence_level in ['low_trust', 'no_trust'] and best_candidate:
-            logger.info(f"🧠 FIRST MESSAGE BOOST: Elevating confidence from '{confidence_level}' to 'medium_trust' to force generation.")
-            confidence_level = 'medium_trust'
+        # if is_first_message and confidence_level in ['low_trust', 'no_trust'] and best_candidate:
+        #     logger.info(f"🧠 FIRST MESSAGE BOOST: Elevating confidence from '{confidence_level}' to 'medium_trust' to force generation.")
+        #     confidence_level = 'medium_trust'
 
-        # Logic kiểm tra API và token (giữ nguyên)
-        needs_api = self.needs_external_api(query, final_score, recent_intent)
+        # ✅ BƯỚC 1: Logic kiểm tra API và token (ĐÃ SỬA ĐỔI)
+        needs_api = self.needs_external_api(query, final_score, intent_result)
         has_jwt_token = bool(jwt_token and jwt_token.strip())
         
-        logger.info(f"🤖 Hybrid Decision: final_score={final_score:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
+        logger.info(f"🤖 FIXED Hybrid Decision: final_score={final_score:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
         
         # Ưu tiên logic API (giữ nguyên)
         if needs_api and has_jwt_token:
@@ -496,7 +522,7 @@ class LecturerDecisionEngine:
                 'message': 'No relevant information - say dont know'
             }
         
-        logger.info(f"🎯 Hybrid Decision made: {decision} (final_score: {final_score:.3f})")
+        logger.info(f"🎯 FIXED Hybrid Decision made: {decision} (final_score: {final_score:.3f})")
         return decision, context, True
 
 
@@ -602,20 +628,73 @@ class HybridChatbotAI:
         }
         
         return status
+
+    def _is_valid_short_query(self, query):
+        """
+        ✅ BƯỚC 2: Kiểm tra query ngắn có hợp lệ không
+        Kiểm tra xem query ngắn có phải là từ hợp lệ như "hi", "ok", "dạ" không
+        """
+        if not query:
+            return False
+            
+        query_clean = query.strip().lower()
+        
+        # Danh sách các từ ngắn hợp lệ
+        valid_short_words = [
+            'hi', 'hello', 'chào', 'xin chào',
+            'ok', 'okay', 'được', 'ừ', 'uh', 'uhm',
+            'dạ', 'vâng', 'yes', 'no', 'không',
+            'à', 'ờ', 'ô', 'ơ', 'hả', 'hả?',
+            'cảm ơn', 'thanks', 'thank you', 'cam on',
+            'tạm biệt', 'bye', 'goodbye', 'tam biet'
+        ]
+        
+        # Kiểm tra query có trong danh sách từ hợp lệ không
+        for valid_word in valid_short_words:
+            if query_clean == valid_word or query_clean.startswith(valid_word + ' '):
+                return True
+        
+        # Kiểm tra pattern câu chào cơ bản
+        greeting_patterns = [
+            r'^(xin )?chào( .+)?$',
+            r'^hi( .+)?$',
+            r'^hello( .+)?$'
+        ]
+        
+        for pattern in greeting_patterns:
+            if re.match(pattern, query_clean):
+                return True
+        
+        return False
     
     def process_query(self, query, session_id=None, jwt_token=None):
         """
         ✅ ENHANCED: Main query processing with Hybrid Re-ranking
+        ✅ BƯỚC 2: Thêm validation input ngay từ đầu
         """
         start_time = time.time()
         
         logger.info(f"👨‍🏫 Processing hybrid query: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
         
         try:
-            # Step 1: Clean and validate input
+            # ✅ BƯỚC 2: VALIDATE INPUT NGAY TỪ ĐẦU
             query = self._clean_query(query)
-            if not query or len(query.strip()) < 2:
+            if not query:
                 return self._get_empty_query_response_lecturer()
+            
+            # ✅ BƯỚC 2: Kiểm tra query quá ngắn và không hợp lệ
+            if len(query.strip()) < 3 and not self._is_valid_short_query(query):
+                logger.info(f"🚫 EARLY VALIDATION: Query too short and invalid: '{query}'")
+                return {
+                    'response': "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",
+                    'confidence': 0.1,
+                    'method': 'early_validation_failed',
+                    'decision_type': 'ask_clarification',
+                    'processing_time': time.time() - start_time,
+                    'is_education': True,
+                    'lecturer_optimized': True,
+                    'early_validation_triggered': True  # ✅ Flag để tracking
+                }
             
             # Step 2: Get intent and entities
             intent_result = self.intent_classifier.classify_intent(query)
