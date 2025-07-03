@@ -193,9 +193,29 @@ class PhoBERTIntentClassifier:
                 'context_indicators': {'research_markers': ['nghiên cứu', 'bài viết'], 'journal_markers': ['tạp chí']},
                 'boosters': {'document_refs': ['TB_676'], 'specific_terms': ['jst@bdu.edu.vn'], 'boost_factor': 1.4}
             },
+            'academic_regulations': {
+                'keywords': [
+                    'điểm', 'học lại', 'nâng điểm', 'điểm trung bình', 'dtb', 'tính điểm',
+                    'đạt', 'không đạt', 'tín chỉ', 'chuyển đổi', 'công nhận', 
+                    'phần trăm', 'khối lượng', 'quy định học tập'
+                ],
+                'confidence_threshold': 0.3,
+                'description': 'Quy định học tập và điểm số',
+                'patterns': [r'(?:điểm|học lại).*(?:như thế nào|quy định)', r'(?:tín chỉ|chuyển đổi).*(?:phần trăm|tối thiểu)'],
+            },
+
+            'graduation_ceremony': {
+                'keywords': [
+                    'tốt nghiệp', 'lễ tốt nghiệp', 'tham dự', 'ai tham dự', 'được phép',
+                    'cử nhân', 'bằng cấp', 'thành phần', 'danh sách'
+                ],
+                'confidence_threshold': 0.3,
+                'description': 'Lễ tốt nghiệp và cấp bằng',
+                'patterns': [r'(?:ai|những ai).*(?:tham dự|được phép)', r'lễ\s+tốt\s+nghiệp'],
+            },
             
             'competition_awards': {
-                'keywords': ['thi đua', 'thi dua', 'khen thưởng', 'khen thuong', 'danh hiệu', 'bằng khen', 'lễ khen thưởng'],
+                'keywords': ['thi đua', 'thi dua', 'khen thưởng', 'khen thuong', 'danh hiệu', 'bằng khen', 'lễ khen thưởng', 'le khen thuong', 'hội đồng', 'thường trực', 'kỷ luật'],
                 'confidence_threshold': 0.4,
                 'description': 'Thi đua khen thưởng',
                 'patterns': [r'thi\s+đua.*khen\s+thưởng', r'(?:danh hiệu|bằng khen)'],
@@ -311,6 +331,80 @@ class PhoBERTIntentClassifier:
                 'patterns': [r'(?:thông tin|hỗ trợ|giúp).*(?:bdu|đại học)'],
                 'context_indicators': {'general_markers': ['thông tin', 'hỗ trợ']},
                 'boosters': {'school_terms': ['bdu', 'đại học bình dương'], 'boost_factor': 1.0}
+            },
+            
+            'university_general_info': {
+                'keywords': [
+                    # Thông tin trường
+                    'trường đại học bình dương', 'bdu', 'đại học bình dương',
+                    'thành lập', 'lịch sử', 'phát triển', 'đặc điểm',
+                    
+                    # Cơ cấu tổ chức  
+                    'phòng', 'khoa', 'bộ môn', 'cơ cấu tổ chức', 'đơn vị',
+                    'phòng quản lý đào tạo', 'phòng tổng hợp', 'phòng tài chính',
+                    
+                    # Đào tạo chung
+                    'ngành', 'chuyên ngành', 'đào tạo', 'chương trình', 'cấp bậc',
+                    'phương pháp đào tạo', 'cộng học', 'người thầy',
+                    
+                    # Đội ngũ
+                    'giảng viên', 'cán bộ', 'nhân sự', 'đội ngũ', 'giáo viên',
+                    
+                    # Sinh viên  
+                    'sinh viên', 'học sinh', 'dịch vụ sinh viên', 'hỗ trợ sinh viên'
+                ],
+                'confidence_threshold': 0.3,
+                'description': 'Thông tin chung về Đại học Bình Dương',
+                'patterns': [
+                    r'trường đại học bình dương.*(?:gì|nào|như thế nào)',
+                    r'(?:phòng|khoa|bộ môn).*(?:chức năng|nhiệm vụ)',
+                    r'bdu.*(?:có|là|được|thành lập)',
+                    r'(?:ngành|chuyên ngành).*(?:nào|gì|như thế nào)'
+                ],
+                'context_indicators': {
+                    'university_markers': ['trường', 'bdu', 'đại học'],
+                    'org_structure': ['phòng', 'khoa', 'đơn vị'],
+                    'info_requests': ['là gì', 'như thế nào', 'bao gồm']
+                },
+                'boosters': {
+                    'specific_terms': ['cộng học', 'người thầy', 'cơ cấu tổ chức'],
+                    'boost_factor': 1.3
+                }
+            },
+            
+            'quality_assessment_accreditation': {
+                'keywords': ['chất lượng', 'đánh giá', 'kiểm định', 'akc', 'chuẩn đầu ra', 'mục tiêu', 'ctđt', 'clo', 'plo'],
+                'confidence_threshold': 0.4,
+                'description': 'Đánh giá chất lượng và kiểm định',
+                'patterns': [r'(?:đánh giá|chất lượng).*(?:chương trình|môn học)', r'kiểm định.*chất lượng'],
+            },
+
+            'financial_tuition_fees': {
+                'keywords': ['học phí', 'chi phí', 'tiền', 'thanh toán', 'miễn giảm', 'phí dịch vụ'],
+                'confidence_threshold': 0.4,
+                'description': 'Học phí và tài chính',
+                'patterns': [r'(?:học phí|chi phí).*(?:bao nhiêu|như thế nào)', r'thanh toán.*học phí'],
+            },
+
+            'registration_admission': {
+                'keywords': ['đăng ký', 'tuyển sinh', 'xét tuyển', 'nộp hồ sơ', 'thủ tục', 'nhập học'],
+                'confidence_threshold': 0.4, 
+                'description': 'Đăng ký và tuyển sinh',
+                'patterns': [r'(?:đăng ký|tuyển sinh).*(?:như thế nào|thủ tục)', r'hồ sơ.*(?:gì|nào)'],
+            },
+
+            'scholarships_financial_support': {
+                'keywords': ['học bổng', 'hỗ trợ', 'miễn giảm', 'khó khăn', 'ưu đãi'],
+                'confidence_threshold': 0.4,
+                'description': 'Học bổng và hỗ trợ tài chính',
+                'patterns': [r'học bổng.*(?:như thế nào|điều kiện)', r'hỗ trợ.*(?:tài chính|học phí)'],
+            },
+
+            'facilities_infrastructure': {
+                'keywords': ['cơ sở vật chất', 'phòng học', 'thiết bị', 'thư viện', 'ký túc xá', 'wifi'],
+                'confidence_threshold': 0.4,
+                'description': 'Cơ sở vật chất và tiện ích', 
+                'patterns': [r'(?:phòng học|thiết bị).*(?:như thế nào|ra sao)', r'cơ sở vật chất.*trường'],
             }
         }
     
@@ -341,7 +435,29 @@ class PhoBERTIntentClassifier:
             ],
             'emotions': [
                 'cần gấp', 'khẩn cấp', 'urgent', 'quan trọng', 'lo lắng', 'khó khăn'
-            ]
+            ],
+            'university_departments_extended': [
+                'phòng đảm bảo chất lượng', 'phòng khảo thí', 'phòng tổ chức cán bộ',
+                'phòng nghiên cứu hợp tác', 'phòng đào tạo', 'phòng công tác sinh viên',
+                'phòng quản lý đào tạo', 'phòng tổng hợp', 'phòng tài chính',  # 🆕
+                'khoa công nghệ thông tin', 'khoa kinh tế', 'khoa ngoại ngữ'    # 🆕
+            ],
+            'academic_programs': [  # 🆕
+                'công nghệ thông tin', 'kinh tế', 'quản trị kinh doanh', 'ngôn ngữ anh',
+                'kế toán', 'tài chính ngân hàng', 'du lịch', 'logistics'
+            ],
+            'quality_terms': [  # 🆕
+                'akc', 'kiểm định chất lượng', 'chuẩn đầu ra', 'mục tiêu học tập',
+                'ctđt', 'clo', 'plo', 'đánh giá môn học', 'feedback sinh viên'
+            ],
+            'financial_terms': [  # 🆕
+                'học phí', 'chi phí đào tạo', 'miễn giảm học phí', 'học bổng',
+                'hỗ trợ tài chính', 'phí dịch vụ', 'thanh toán trực tuyến'
+            ],
+            'facility_terms': [  # 🆕
+                'thư viện', 'phòng thí nghiệm', 'phòng máy tính', 'wifi',
+                'ký túc xá', 'căn tin', 'bãi xe', 'sân thể thao'
+            ]    
         }
     
     def load_model(self):

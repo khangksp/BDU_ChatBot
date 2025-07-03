@@ -449,7 +449,8 @@ class ChatView(APIView):
                     'request_mode': request_mode,
                     'tts_generated': bool(audio_content_base64),
                     'tts_processing_time': tts_processing_time,
-                    'tts_error': tts_error
+                    'tts_error': tts_error,
+                    'reference_links': ai_response.get('reference_links', [])
                 }
                 
                 chat_record = ChatHistory.objects.create(
@@ -1281,6 +1282,14 @@ class ChatSessionDetailView(APIView):
                     'content': chat.user_message,
                     'timestamp': chat.timestamp.isoformat()
                 })
+                
+                bot_entities = {}
+                if chat.entities:
+                    try:
+                        bot_entities = json.loads(chat.entities)
+                    except json.JSONDecodeError:
+                        bot_entities = {}
+                        
                 # Bot message
                 messages.append({
                     'type': 'bot',
@@ -1288,8 +1297,8 @@ class ChatSessionDetailView(APIView):
                     'timestamp': chat.timestamp.isoformat(),
                     'confidence': chat.confidence_score,
                     'response_time': chat.response_time,
-                    'sources': [],
-                    'reference_links': [],
+                    'sources': bot_entities.get('sources', []),
+                    'reference_links': bot_entities.get('reference_links', []),
                     'chat_id': chat.id
                 })
             

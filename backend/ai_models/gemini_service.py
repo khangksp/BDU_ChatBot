@@ -1441,6 +1441,17 @@ Trả lời:"""
             'lớp học', 'môn học', 'học phần', 'tín chỉ', 'cố vấn',
             'ngân hàng đề thi', 'file mềm', 'nộp', 'email', 'phòng ban',
             'kê khai', 'giờ chuẩn', 'thỉnh giảng', 'tạp chí', 'bài viết',
+            'điểm', 'đạt', 'không đạt', 'học lại', 'nâng điểm', 'cải thiện điểm',
+            'điểm trung bình', 'trung bình', 'tính điểm', 'tính',
+            'chuyển đổi', 'công nhận', 'khối lượng', 'tối thiểu', 'chương trình', 
+            'phần trăm', 'tối đa', 'giới hạn',
+            'tốt nghiệp', 'lễ tốt nghiệp', 'tham dự', 'được phép', 'bằng cấp', 
+            'văn bằng', 'cử nhân', 'cấp bằng', 'nhận bằng',
+            'thường trực', 'kỷ luật', 'hội đồng thi đua', 'danh sách', 'thành phần',
+            'theo quy định', 'quy định về', 'thể lệ', 'hướng dẫn', 'thủ tục',
+            'điều kiện', 'yêu cầu',
+            'như thế nào', 'bao nhiêu', 'là ai', 'ai là', 'làm gì', 'ở đâu', 
+            'khi nào', 'có được',
             
             # Không dấu
             'truong', 'hoc', 'sinh vien', 'tuyen sinh', 'hoc phi', 'nganh',
@@ -1452,6 +1463,16 @@ Trả lời:"""
             'lop hoc', 'mon hoc', 'hoc phan', 'tin chi', 'co van',
             'ngan hang de thi', 'file mem', 'ke khai', 'gio chuan',
             'thinh giang', 'tap chi', 'bai viet'
+            'diem', 'dat', 'khong dat', 'hoc lai', 'nang diem', 'cai thien diem',
+            'diem trung binh', 'trung binh', 'tb', 'dtb', 'tinh diem', 'tinh',
+            'chuyen doi', 'cong nhan', 'khoi luong', 'toi thieu', 'chuong trinh',
+            'phan tram', 'toi da', 'gioi han',
+            'tot nghiep', 'le tot nghiep', 'tham du', 'duoc phep', 'bang cap',
+            'van bang', 'cu nhan', 'cap bang', 'nhan bang',
+            'thuong truc', 'ky luat', 'hoi dong thi dua', 'danh sach', 'thanh phan',
+            'ai phu trach', 'theo quy dinh', 'quy dinh ve', 'the le', 'huong dan', 'thu tuc',
+            'dieu kien', 'yeu cau', 'nhu the nao', 'bao nhieu', 'la ai',
+            'ai la', 'lam gi', 'o dau', 'khi nao', 'co duoc'
         ]
         
         if not query:

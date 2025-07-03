@@ -64,7 +64,32 @@ class HybridReRanker:
             ],
             'technical_specification': [
                 'định dạng', 'file mềm', 'cách gửi', 'thể lệ', 'bản điện tử'
-            ]
+            ],
+            'university_general_info': [
+                'trường đại học bình dương', 'bdu', 'phòng', 'khoa', 'cơ cấu tổ chức',
+                'ngành', 'chuyên ngành', 'giảng viên', 'sinh viên', 'cộng học'
+            ],
+            'quality_assessment_accreditation': [
+                'chất lượng', 'đánh giá', 'kiểm định', 'chuẩn đầu ra', 'feedback'
+            ],
+            'financial_tuition_fees': [
+                'học phí', 'chi phí', 'thanh toán', 'miễn giảm', 'phí dịch vụ'  
+            ],
+            'registration_admission': [
+                'đăng ký', 'tuyển sinh', 'xét tuyển', 'nộp hồ sơ', 'thủ tục'
+            ],
+            'scholarships_financial_support': [
+                'học bổng', 'hỗ trợ', 'miễn giảm', 'khó khăn', 'ưu đãi'
+            ],
+            'facilities_infrastructure': [
+                'cơ sở vật chất', 'phòng học', 'thiết bị', 'thư viện', 'ký túc xá'
+            ],
+            'academic_regulations': [
+                'điểm', 'học lại', 'nâng điểm', 'tín chỉ', 'chuyển đổi', 'quy định'
+            ],
+            'graduation_ceremony': [
+                'tốt nghiệp', 'lễ tốt nghiệp', 'tham dự', 'cử nhân', 'bằng cấp'
+            ], 
         }
         
         logger.info("🎯 HybridReRanker initialized with α={}, β={}".format(self.alpha, self.beta))
@@ -217,10 +242,10 @@ class LecturerDecisionEngine:
     """
     
     def __init__(self):
-        # ✅ BƯỚC 3: Tăng ngưỡng medium_trust từ 0.4 lên 0.55
+        # ✅ BƯỚC 3: Tăng ngưỡng medium_trust lên 0.5
         self.confidence_thresholds = {
             'high_trust': 0.75,    # Slightly lower due to re-ranking boost
-            'medium_trust': 0.55,   # ✅ ĐÃ TĂNG từ 0.4 lên 0.55
+            'medium_trust': 0.45,   # ✅ tăng 0.5
             'low_trust': 0.25,      
             'no_trust': 0.1         
         }
