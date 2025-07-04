@@ -70,26 +70,203 @@ class HybridReRanker:
                 'ngành', 'chuyên ngành', 'giảng viên', 'sinh viên', 'cộng học'
             ],
             'quality_assessment_accreditation': [
-                'chất lượng', 'đánh giá', 'kiểm định', 'chuẩn đầu ra', 'feedback'
+                'chất lượng', 'đánh giá', 'kiểm định', 'chuẩn đầu ra', 'feedback',
+                'akc', 'kiểm định chất lượng', 'mục tiêu học tập', 'ctđt', 'clo', 'plo',
+                'đánh giá môn học', 'feedback sinh viên', 'khảo sát chất lượng',
+                'rà soát chương trình', 'cải tiến chương trình', 'nâng cao chất lượng',
+                'tiêu chuẩn chất lượng', 'đảm bảo chất lượng', 'giám sát chất lượng',
+                'đánh giá nội bộ', 'đánh giá ngoài', 'tự đánh giá', 'báo cáo tự đánh giá'
             ],
             'financial_tuition_fees': [
-                'học phí', 'chi phí', 'thanh toán', 'miễn giảm', 'phí dịch vụ'  
+                # Học phí sinh viên (không phải thù lao giảng viên)
+                'học phí sinh viên', 'chi phí học tập', 'học phí đại học',
+                'thanh toán học phí', 'nộp học phí', 'miễn giảm học phí sinh viên',
+                'phí dịch vụ sinh viên', 'phí đào tạo', 'học phí theo tín chỉ',
+                'hạn nộp học phí', 'cách thức thanh toán học phí',
+                'chính sách học phí', 'mức học phí', 'điều chỉnh học phí',
+                'hoàn trả học phí', 'chính sách miễn giảm học phí',
+                'hỗ trợ tài chính sinh viên', 'vay vốn sinh viên',
+                
+                # Phí dịch vụ khác (không phải lương)
+                'phí lễ tốt nghiệp', 'phí thuê lễ phục', 'phí chứng chỉ',
+                'phí bằng cấp', 'phí sao y', 'phí làm thẻ sinh viên'
             ],
             'registration_admission': [
-                'đăng ký', 'tuyển sinh', 'xét tuyển', 'nộp hồ sơ', 'thủ tục'
+                'đăng ký', 'tuyển sinh', 'xét tuyển', 'nộp hồ sơ', 'thủ tục',
+                'nhập học', 'tuyển sinh đại học', 'xét tuyển đại học',
+                'hồ sơ tuyển sinh', 'thủ tục nhập học', 'điều kiện tuyển sinh',
+                'phương thức tuyển sinh', 'chỉ tiêu tuyển sinh', 'ngành tuyển sinh',
+                'đăng ký xét tuyển', 'đăng ký môn học', 'đăng ký học phần',
+                'rút môn học', 'thêm môn học', 'thay đổi đăng ký'
             ],
             'scholarships_financial_support': [
-                'học bổng', 'hỗ trợ', 'miễn giảm', 'khó khăn', 'ưu đãi'
+                'học bổng', 'hỗ trợ', 'miễn giảm', 'khó khăn', 'ưu đãi',
+                'học bổng khuyến khích học tập', 'học bổng xã hội',
+                'hỗ trợ tài chính', 'chính sách hỗ trợ', 'điều kiện hỗ trợ',
+                'đăng ký hỗ trợ', 'xét duyệt học bổng', 'quy định học bổng',
+                'sinh viên khó khăn', 'hỗ trợ đặc biệt', 'ưu đãi học tập'
             ],
             'facilities_infrastructure': [
                 'cơ sở vật chất', 'phòng học', 'thiết bị', 'thư viện', 'ký túc xá'
             ],
-            'academic_regulations': [
-                'điểm', 'học lại', 'nâng điểm', 'tín chỉ', 'chuyển đổi', 'quy định'
+            'facilities_infrastructure': [
+                'cơ sở vật chất', 'phòng học', 'thiết bị', 'thư viện', 'ký túc xá',
+                'wifi', 'phòng thí nghiệm', 'phòng máy tính', 'phòng CAD/CAM',
+                'sân thể thao', 'bãi xe', 'căn tin', 'khu vực nghỉ ngơi',
+                'hệ thống âm thanh', 'máy chiếu', 'điều hòa', 'hệ thống điện',
+                'camera an ninh', 'hệ thống báo cháy', 'thang máy',
+                'cải tạo cơ sở', 'nâng cấp thiết bị', 'bảo trì cơ sở'
             ],
             'graduation_ceremony': [
-                'tốt nghiệp', 'lễ tốt nghiệp', 'tham dự', 'cử nhân', 'bằng cấp'
-            ], 
+                'tốt nghiệp', 'lễ tốt nghiệp', 'tham dự', 'cử nhân', 'bằng cấp',
+                'ai tham dự', 'được phép', 'thành phần', 'danh sách',
+                'văn bằng', 'cấp bằng', 'nhận bằng', 'lễ phục',
+                'thời gian tốt nghiệp', 'địa điểm tốt nghiệp', 'thủ tục tốt nghiệp',
+                'điều kiện tốt nghiệp', 'xét tốt nghiệp', 'bằng tạm thời',
+                'chụp ảnh tốt nghiệp', 'phí tham dự', 'lệ phí tốt nghiệp'
+            ],
+            'academic_regulations': [
+                'điểm', 'học lại', 'nâng điểm', 'tín chỉ', 'chuyển đổi', 'quy định',
+                'điểm trung bình', 'dtb', 'tính điểm', 'chuyển đổi điểm',
+                'công nhận tín chỉ', 'khối lượng kiến thức', 'tối thiểu',
+                'phần trăm', 'tối đa', 'giới hạn', 'quy định học tập',
+                'xử lý học vụ', 'cảnh báo học tập', 'đình chỉ học tập',
+                'buộc thôi học', 'kỷ luật học tập', 'vi phạm quy định'
+            ],
+            'lecturer_compensation': [
+                # Thù lao cốt lõi
+                'thù lao', 'thù lao giảng dạy', 'tiền dạy', 'tiền giảng dạy', 'thu lao',
+                
+                # Hệ số và tính toán
+                'hệ số giảng dạy', 'hệ số thực hành', 'hệ số lý thuyết', 'hệ số tiếng nước ngoài',
+                'công thức tính thù lao', 'cách tính thù lao', 'tính thù lao',
+                
+                # Giờ dạy và định mức
+                'định mức giờ dạy', 'định mức giờ chuẩn', 'giờ chuẩn giảng dạy',
+                'dạy 1 giờ', 'giờ dạy', 'tiết dạy', 'buổi dạy', 'số giờ dạy',
+                
+                # Lương
+                'lương giảng viên', 'mức lương', 'bậc lương', 'lương cơ bản', 'hệ số lương',
+                'nâng lương', 'tăng lương', 'bảng lương', 'ngạch lương',
+                
+                # Phụ cấp
+                'phụ cấp', 'phụ cấp trách nhiệm', 'phụ cấp giảng dạy xa', 'phụ cấp đi xa',
+                'trợ cấp', 'trợ cấp ăn trưa', 'phụ cấp khu vực',
+                
+                # Thưởng
+                'thưởng giảng viên', 'thưởng cuối năm', 'thưởng thành tích', 'tiền thưởng',
+                'khen thưởng tài chính', 'bonus',
+                
+                # Các loại thù lao
+                'thù lao hợp đồng', 'thù lao thỉnh giảng', 'mức thù lao tuyển dụng',
+                'thù lao cộng tác viên', 'lương thử việc',
+                
+                # Thanh toán
+                'chi trả lương', 'thanh toán thù lao', 'ngày trả lương', 'nhận lương',
+                'chuyển khoản lương', 'bảng thanh toán', 'phiếu lương',
+                
+                # Quyết định liên quan (từ phân tích QA.csv)
+                'QĐ 442', 'QĐ 895', 'QĐ 1733', 'QĐ 101', 'QĐ 1153', 'QĐ 2004',
+                'quyết định 442', 'quyết định thù lao', 'quyết định lương',
+                
+                # Mức thù lao cụ thể (từ phân tích)
+                '15 triệu', '13 triệu', '10 triệu', '5 triệu', '2 triệu',
+                'giáo sư 15 triệu', 'phó giáo sư 13 triệu', 'tiến sĩ 10 triệu', 'thạc sĩ 5 triệu',
+                
+                # Câu hỏi thường gặp
+                'dạy 1 giờ bao nhiêu', 'giờ dạy được bao nhiêu', 'mức giá giờ dạy',
+                'giảng viên nhận bao nhiêu', 'lương giảng viên bao nhiêu'
+            ],
+            'salary_benefits': [
+                # Chế độ làm việc
+                'chế độ làm việc', 'chế độ công tác', 'chế độ nghỉ phép', 'nghỉ phép năm',
+                'thời gian làm việc', 'giờ làm việc', 'lịch làm việc',
+                'nghỉ lễ', 'nghỉ tết', 'nghỉ hè', 'nghỉ thai sản', 'nghỉ ốm',
+                
+                # Phúc lợi
+                'phúc lợi', 'đãi ngộ', 'quyền lợi', 'chế độ ưu đãi',
+                'bảo hiểm xã hội', 'bảo hiểm y tế', 'bảo hiểm thất nghiệp',
+                'chăm sóc sức khỏe', 'khám sức khỏe định kỳ',
+                
+                # Nghỉ dưỡng
+                'nghỉ dưỡng', 'du lịch công tác', 'tham quan học tập',
+                'nghỉ mát', 'team building', 'hoạt động tập thể',
+                
+                # Đào tạo
+                'đào tạo nâng cao', 'học tập nâng cao', 'học thêm', 'học cao học',
+                'hỗ trợ học phí', 'học bổng nâng cao trình độ',
+                
+                # Hỗ trợ
+                'laptop công tác', 'máy tính làm việc', 'điện thoại công việc',
+                'hỗ trợ internet', 'wifi miễn phí', 'văn phòng phẩm',
+                'hỗ trợ nhà ở', 'hỗ trợ đi lại', 'hỗ trợ con em',
+                'quà tết', 'quà sinh nhật', 'tiệc cuối năm'
+            ],
+            'university_programs': [
+                'chương trình đào tạo', 'chương trình học', 'khóa học', 'học chế',
+                'tín chỉ tích lũy', 'chuẩn đầu ra', 'mục tiêu đào tạo', 'phương pháp giảng dạy',
+                'giáo trình', 'tài liệu học tập', 'đào tạo đại học', 'liên kết đào tạo',
+                'chất lượng đào tạo', 'cải tiến chương trình', 'phát triển chương trình'
+            ],
+
+            'academic_assessment': [
+                'đánh giá học tập', 'đánh giá kết quả', 'kiểm tra đánh giá', 'phương pháp đánh giá',
+                'thang điểm', 'tiêu chí đánh giá', 'feedback sinh viên', 'phản hồi học tập',
+                'đánh giá giảng viên', 'chất lượng giảng dạy', 'khảo sát sinh viên',
+                'cải thiện chất lượng', 'giám sát chất lượng', 'đảm bảo chất lượng',
+                'rà soát chương trình', 'điều chỉnh chương trình', 'nâng cao chất lượng'
+            ],
+
+            'student_services': [
+                'dịch vụ sinh viên', 'hỗ trợ sinh viên', 'cố vấn học tập', 'tư vấn học tập',
+                'ký túc xá', 'phòng ở', 'căn tin', 'y tế sinh viên', 'bảo hiểm y tế',
+                'hoạt động ngoại khóa', 'câu lạc bộ sinh viên', 'sinh hoạt cộng đồng',
+                'đoàn thanh niên', 'hội sinh viên', 'định hướng nghề nghiệp',
+                'thực tập sinh viên', 'kết nối doanh nghiệp'
+            ],
+
+            'administrative_procedures': [
+                'thủ tục hành chính', 'quy trình hành chính', 'giấy tờ hành chính',
+                'đơn từ', 'giấy xác nhận', 'bản sao bằng cấp', 'chứng minh học tập',
+                'giấy chuyển trường', 'bảng điểm tích lũy', 'khai học', 'thôi học',
+                'chuyển ngành', 'chuyển lớp', 'nghỉ học tạm thời', 'bảo lưu kết quả',
+                'phúc khảo bài thi', 'khiếu nại điểm số', 'hồ sơ sinh viên'
+            ],
+
+            'academic_calendar': [
+                'lịch học tập', 'thời khóa biểu', 'lịch thi', 'lịch giảng dạy',
+                'học kỳ', 'niên khóa', 'năm học', 'khai giảng', 'bế giảng',
+                'nghỉ lễ', 'nghỉ tết', 'nghỉ hè', 'học phần', 'tín chỉ',
+                'đăng ký môn học', 'rút môn', 'thêm môn', 'thay đổi lịch học',
+                'lịch tập trung', 'lịch học bù', 'lịch thi lại', 'bảo vệ khóa luận'
+            ],
+            'lecturer_affairs': [
+                'công việc giảng viên', 'nhiệm vụ giảng viên', 'trách nhiệm giảng viên',
+                'định mức giờ dạy', 'khối lượng công việc', 'đánh giá giảng viên',
+                'thăng hạng', 'bổ nhiệm', 'thi đua giảng viên', 'khen thưởng giảng viên',
+                'nghiên cứu khoa học', 'công trình nghiên cứu', 'đề tài nghiên cứu',
+                'hội nghị khoa học', 'seminar', 'workshop', 'tập huấn giảng viên',
+                'phát triển năng lực', 'nâng cao trình độ', 'trao đổi học thuật'
+            ],
+
+            'international_cooperation': [
+                'hợp tác quốc tế', 'trao đổi sinh viên', 'chương trình liên kết',
+                'du học', 'học bổng quốc tế', 'đối tác nước ngoài',
+                'trao đổi giảng viên', 'nghiên cứu hợp tác', 'dự án quốc tế',
+                'hội nghị quốc tế', 'chứng chỉ quốc tế', 'chuẩn quốc tế',
+                'tiếng anh', 'ngoại ngữ', 'IELTS', 'TOEFL', 'TOEIC',
+                'văn hóa quốc tế', 'giao lưu văn hóa', 'sự kiện quốc tế'
+            ],
+
+            'library_resources': [
+                'thư viện', 'tài liệu tham khảo', 'sách giáo khoa', 'giáo trình',
+                'cơ sở dữ liệu', 'tài nguyên điện tử', 'sách điện tử', 'tạp chí điện tử',
+                'mượn sách', 'gia hạn sách', 'đặt chỗ sách', 'tìm kiếm tài liệu',
+                'phòng đọc', 'khu vực học tập', 'máy tính tra cứu',
+                'wifi thư viện', 'dịch vụ thư viện', 'hướng dẫn sử dụng',
+                'đào tạo kỹ năng', 'tra cứu thông tin', 'nghiên cứu tài liệu'
+            ],
+
         }
         
         logger.info("🎯 HybridReRanker initialized with α={}, β={}".format(self.alpha, self.beta))
@@ -245,8 +422,8 @@ class LecturerDecisionEngine:
         # ✅ BƯỚC 3: Tăng ngưỡng medium_trust lên 0.5
         self.confidence_thresholds = {
             'high_trust': 0.75,    # Slightly lower due to re-ranking boost
-            'medium_trust': 0.45,   # ✅ tăng 0.5
-            'low_trust': 0.25,      
+            'medium_trust': 0.5,   # ✅ tăng 0.5
+            'low_trust': 0.25,
             'no_trust': 0.1         
         }
         
@@ -283,7 +460,16 @@ class LecturerDecisionEngine:
             'ngân hàng đề thi', 'file mềm', 'báo cáo', 'nộp', 'hạn cuối',
             'kê khai', 'nhiệm vụ năm học', 'giờ chuẩn', 'thỉnh giảng', 
             'tạp chí', 'khoa học công nghệ', 'bài viết', 'nghiên cứu',
-            'thi đua', 'khen thưởng', 'danh hiệu', 'bằng khen'
+            'thi đua', 'khen thưởng', 'danh hiệu', 'bằng khen',
+            'điểm', 'rèn luyện', 'hạnh kiểm', 'xếp loại', 'kỷ luật', 'quyền lợi',
+            'thủ tục', 'hành chính', 'mẫu đơn', 'bảng điểm', 'thẻ',
+            'mật khẩu', 'tài khoản', 'email', 'hệ thống',
+            'thù lao', 'lương', 'hệ số', 'chế độ', 'phúc lợi', 'bảo hiểm',
+            'phúc khảo', 'chấm thi', 'điểm thi', 'bài thi', 'bài tập', 'đánh giá',
+            'học bổng', 'miễn giảm', 'hỗ trợ', 'khó khăn', 'ưu đãi',
+            'cơ sở vật chất', 'phòng học', 'thiết bị', 'thư viện', 'ký túc xá',
+            'wifi', 'phòng thí nghiệm', 'phòng máy tính', 'sân thể thao',
+            'bãi xe', 'căn tin', 'khu vực nghỉ ngơi',
         ]
         
         self.lecturer_keywords = [

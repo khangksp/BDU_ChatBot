@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: bdu_chatbot_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=bdu_chatbot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - chatbot_network
+
+  # Backend Django Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bdu_chatbot_backend
+    volumes:
+      - ./backend:/app
+      - media_volume:/app/media
+      - static_volume:/app/static
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/bdu_chatbot
+      - DJANGO_SETTINGS_MODULE=backend.settings
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - chatbot_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend React Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bdu_chatbot_frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - chatbot_network
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: bdu_chatbot_nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - static_volume:/var/www/static
+      - media_volume:/var/www/media
+    ports:
+      - "9000:80"
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+    networks:
+      - chatbot_network
+    profiles:
+      - with-nginx
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+
+networks:
+  chatbot_network:
+    driver: bridge
