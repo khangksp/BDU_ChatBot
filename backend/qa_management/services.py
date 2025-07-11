@@ -20,6 +20,7 @@ class GoogleDriveService:
     """
     Service hợp nhất để tương tác với Google Drive,
     hỗ trợ cả "My Drive" và "Shared Drives" (Bộ nhớ dùng chung).
+    FIXED VERSION - Proper Shared Drive support
     """
 
     def __init__(self):
@@ -61,7 +62,7 @@ class GoogleDriveService:
         try:
             query = f"name='{self.csv_filename}' and parents in '{self.folder_id}' and trashed=false"
             
-            # --- ✅ SỬA LỖI QUAN TRỌNG NHẤT CHO SHARED DRIVE ---
+            # ✅ PROPER SHARED DRIVE SUPPORT
             list_params = {
                 'q': query,
                 'fields': "files(id, name, modifiedTime, size)",
@@ -72,7 +73,6 @@ class GoogleDriveService:
             if self.drive_id:
                 list_params['driveId'] = self.drive_id
                 list_params['corpora'] = 'drive'
-            # ---------------------------------------------------
 
             results = self.service.files().list(**list_params).execute()
             files = results.get('files', [])
@@ -90,7 +90,11 @@ class GoogleDriveService:
     def _download_csv_content(self, file_id):
         """Tải nội dung CSV từ Google Drive."""
         try:
-            file_content = self.service.files().get_media(fileId=file_id).execute()
+            # ✅ FIX: Add supportsAllDrives for download as well
+            file_content = self.service.files().get_media(
+                fileId=file_id,
+                supportsAllDrives=True
+            ).execute()
             csv_content = file_content.decode('utf-8')
             logger.info(f"📥 Downloaded CSV content ({len(csv_content)} chars)")
             return csv_content
@@ -99,7 +103,10 @@ class GoogleDriveService:
             return None
 
     def _upload_csv_content(self, csv_content, file_id=None):
-        """Tải nội dung CSV lên Google Drive."""
+        """
+        Tải nội dung CSV lên Google Drive.
+        ✅ FIXED: Add supportsAllDrives=True for Shared Drive support
+        """
         try:
             media_body = MediaIoBaseUpload(
                 io.BytesIO(csv_content.encode('utf-8')),
@@ -108,15 +115,22 @@ class GoogleDriveService:
             )
             
             if file_id:
+                # ✅ CRITICAL FIX: Add supportsAllDrives=True
                 updated_file = self.service.files().update(
-                    fileId=file_id, media_body=media_body
+                    fileId=file_id, 
+                    media_body=media_body,
+                    supportsAllDrives=True  # ✅ This was missing!
                 ).execute()
                 logger.info(f"✅ Updated existing file: {updated_file.get('name')} (ID: {file_id})")
                 return updated_file
             else:
                 file_metadata = {'name': self.csv_filename, 'parents': [self.folder_id]}
+                # ✅ CRITICAL FIX: Add supportsAllDrives=True
                 new_file = self.service.files().create(
-                    body=file_metadata, media_body=media_body, fields='id,name'
+                    body=file_metadata, 
+                    media_body=media_body, 
+                    fields='id,name',
+                    supportsAllDrives=True  # ✅ This was missing!
                 ).execute()
                 logger.info(f"✅ Created new file: {new_file.get('name')} (ID: {new_file.get('id')})")
                 return new_file
@@ -200,14 +214,7 @@ class GoogleDriveService:
             if len(merged_entries) < len(existing_entries):
                 raise Exception("Critical: Data loss detected during merge!")
 
-            # Helper function to create CSV content
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(['STT', 'question', 'answer', '', ''])
-            for item in merged_entries:
-                writer.writerow([item.get('stt', ''), item.get('question', ''), item.get('answer', ''), '', ''])
-            merged_csv_content = output.getvalue()
-            output.close()
+            merged_csv_content = self._create_csv_from_entries(merged_entries)
 
             if self._upload_csv_content(merged_csv_content, file_info['id']):
                 entry.sync_status = 'synced'
@@ -324,8 +331,17 @@ class GoogleDriveService:
         if entries is None:
             entries = QAEntry.objects.filter(is_active=True).order_by('stt')
         
-        # This reuses the logic from _create_csv_from_entries
-        return self._create_csv_from_entries(entries)
+        # Convert QAEntry objects to dict format for _create_csv_from_entries
+        entry_dicts = []
+        for entry in entries:
+            entry_dicts.append({
+                'stt': entry.stt,
+                'question': entry.question,
+                'answer': entry.answer,
+                'category': getattr(entry, 'category', 'Giảng viên')
+            })
+        
+        return self._create_csv_from_entries(entry_dicts)
 
     def import_from_drive(self):
         """Import Q&A entries from Google Drive to database"""
@@ -414,13 +430,31 @@ class GoogleDriveService:
             media_body = MediaIoBaseUpload(io.BytesIO(csv_content.encode('utf-8')), mimetype='text/csv', resumable=True)
             file_metadata = {'name': backup_filename, 'parents': [self.folder_id]}
             
-            backup_file = self.service.files().create(body=file_metadata, media_body=media_body, fields='id,name').execute()
+            # ✅ FIX: Add supportsAllDrives for backup creation
+            backup_file = self.service.files().create(
+                body=file_metadata, 
+                media_body=media_body, 
+                fields='id,name',
+                supportsAllDrives=True
+            ).execute()
             
             logger.info(f"✅ Backup created: {backup_filename}")
             return {'success': True, 'backup_filename': backup_filename}
         except Exception as e:
             logger.error(f"❌ Error creating backup: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def clear_cache(self):
+        """Clear any cached data (for signal integration)"""
+        try:
+            # Clear internal caches if any
+            if hasattr(self, '_cached_data'):
+                self._cached_data = None
+            if hasattr(self, '_cache_timestamp'):
+                self._cache_timestamp = 0
+            logger.info("🗑️ Google Drive service cache cleared")
+        except Exception as e:
+            logger.error(f"❌ Error clearing cache: {str(e)}")
     
 # Tạo một instance duy nhất để toàn bộ hệ thống sử dụng
 drive_service = GoogleDriveService()
