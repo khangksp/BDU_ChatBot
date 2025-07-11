@@ -69,26 +69,21 @@ class GeminiApiKeyManager:
             logger.warning(f"RATE LIMIT: Key '{key[:4]}...{key[-4:]}' is now rate-limited for 61 seconds.")
 
 
-def build_personalized_system_prompt(user_memory_prompt: str = None):
+def build_personalized_system_prompt(user_memory_prompt: str = None, personal_address: str = "giảng viên"):
     """
-    ✅ UPDATED: Builds a personalized system prompt that prioritizes user's custom instructions.
+    ✅ UPDATED: Builds a personalized system prompt with dynamic addressing
     """
-    
-    # SỬA ĐỔI: Giảm mức độ "cứng nhắc" của các quy tắc nền tảng,
-    # làm cho chúng trở thành các gợi ý mặc định thay vì luật lệ bất biến.
-    base_prompt = """Bạn là ChatBDU, một trợ lý AI chuyên nghiệp và tận tâm của Đại học Bình Dương (BDU). Sứ mệnh của bạn là hỗ trợ các giảng viên của trường một cách hiệu quả nhất.
+    base_prompt = f"""Bạn là ChatBDU, một trợ lý AI chuyên nghiệp và tận tâm của Đại học Bình Dương (BDU). Sứ mệnh của bạn là hỗ trợ các giảng viên của trường một cách hiệu quả nhất.
 
-    🎯 QUY TẮC NỀN TẢNG (CÓ THỂ BỊ GHI ĐÈ BỞI CHỈ DẪN RIÊNG):
-    1.  **Xưng hô mặc định:** Xưng hô với người dùng là "thầy/cô" và tự xưng là "em".
-    2.  **Cấu trúc câu trả lời mặc định:** Bắt đầu bằng "Dạ thầy/cô," và kết thúc bằng "Thầy/cô có cần em hỗ trợ thêm gì không ạ?".
-    3.  **Tính chính xác:** Không được bịa đặt thông tin. Nếu không biết, hãy trả lời là "Dạ thầy/cô, em chưa có thông tin về vấn đề này." và gợi ý kênh liên hệ khác nếu có thể.
-    4.  **Phạm vi:** Chỉ trả lời các câu hỏi liên quan đến công việc, quy định, thông báo và các hoạt động tại Đại học Bình Dương.
-    """
+🎯 QUY TẮC NỀN TẢNG (CÓ THỂ BỊ GHI ĐÈ BỞI CHỈ DẪN RIÊNG):
+1.  **Xưng hô cá nhân:** Xưng hô với người dùng là "{personal_address}" và tự xưng là "em".
+2.  **Cấu trúc câu trả lời:** Bắt đầu bằng "Dạ {personal_address}," và kết thúc bằng "{personal_address.title()} có cần em hỗ trợ thêm gì không ạ?".
+3.  **Tính chính xác:** Không được bịa đặt thông tin. Nếu không biết, hãy trả lời là "Dạ {personal_address}, em chưa có thông tin về vấn đề này." và gợi ý kênh liên hệ khác nếu có thể.
+4.  **Phạm vi:** Chỉ trả lời các câu hỏi liên quan đến công việc, quy định, thông báo và các hoạt động tại Đại học Bình Dương.
+"""
 
     custom_prompt_section = ""
     if user_memory_prompt and user_memory_prompt.strip():
-        # SỬA ĐỔI: Nhấn mạnh tầm quan trọng TUYỆT ĐỐI của chỉ dẫn người dùng.
-        # Thêm chỉ thị rõ ràng rằng các quy tắc này sẽ GHI ĐÈ (OVERRIDE) quy tắc nền tảng.
         custom_prompt_section = f"""
 ---
 📜 GHI NHỚ VÀ CHỈ DẪN RIÊNG TỪ GIẢNG VIÊN (QUAN TRỌNG NHẤT - PHẢI TUÂN THỦ TRÊN HẾT):
@@ -98,9 +93,7 @@ def build_personalized_system_prompt(user_memory_prompt: str = None):
 ---
         """
     
-    final_prompt = base_prompt + custom_prompt_section
-    # logger.info(f"Final System Prompt: {final_prompt}") # Bỏ comment dòng này nếu bạn muốn debug prompt
-    return final_prompt
+    return base_prompt + custom_prompt_section
 
 class SmartTokenManager:
     """🧠 Smart Token Management System - Tự động tăng token và hoàn thiện response"""
@@ -119,9 +112,9 @@ class SmartTokenManager:
         self.incomplete_patterns = [
             r'[^.!?]\s*$',  # Không kết thúc bằng dấu câu
             r'\b(và|hoặc|với|để|khi|nếu|tại|về|cho|trong|của|từ)\s*$',  # Kết thúc bằng từ nối
-            r'\b(thầy/cô|em|sẽ|có|được|phải|cần|nên)\s*$',  # Kết thúc bằng từ chưa hoàn chỉnh
+            r'\b(em|sẽ|có|được|phải|cần|nên)\s*$',  # Kết thúc bằng từ chưa hoàn chỉnh
             r'[,;:]\s*$',  # Kết thúc bằng dấu phẩy/chấm phẩy
-            r'\b(Dạ|Ạ|thầy|cô)\s*$',  # Câu chào chưa hoàn chỉnh
+            r'\b(Dạ|Ạ|thầy|cô|giảng viên)\s*$',  # Câu chào chưa hoàn chỉnh
         ]
         
         # ✅ SENTENCE ENDING patterns để kiểm tra câu hoàn chỉnh
@@ -192,7 +185,7 @@ class SmartTokenManager:
             }
         
         # ✅ CHECK 3: Required ending patterns for Vietnamese lecturer context
-        required_ending = r'(thầy/cô có cần hỗ trợ thêm gì không ạ\?|ạ[.!?]|\?)'
+        required_ending = r'(có cần hỗ trợ thêm gì không ạ\?|ạ[.!?]|\?)'
         if not re.search(required_ending, response.lower()):
             return {
                 'incomplete': True,
@@ -201,7 +194,7 @@ class SmartTokenManager:
             }
         
         # ✅ CHECK 4: Proper greeting start
-        if not re.match(r'dạ\s+(thầy/cô|cô|thầy)', response.lower()):
+        if not re.match(r'dạ\s+(thầy|cô|giảng viên)', response.lower()):
             return {
                 'incomplete': True,
                 'reason': 'missing_proper_greeting',
@@ -406,10 +399,6 @@ class SimpleVietnameseRestorer:
         # Fallback: trả về text gốc nếu có lỗi
         self._cache_result(cache_key, input_text)
         return input_text
-        
-        # Fallback: return original
-        self._cache_result(cache_key, input_text)
-        return input_text
     
     def _is_valid_restoration(self, original: str, restored: str) -> bool:
         """Simple validation"""
@@ -467,7 +456,7 @@ class GeminiResponseGenerator:
             'identity': 'AI assistant của Đại học Bình Dương (BDU) hỗ trợ giảng viên',
             'personality': 'lịch sự, chuyên nghiệp, tôn trọng',
             'knowledge_scope': 'chuyên về thông tin BDU và hỗ trợ giảng viên',
-            'addressing': 'luôn xưng hô thầy/cô, không bao giờ dùng bạn/mình',
+            'addressing': 'luôn xưng hô đúng cách, không bao giờ dùng bạn/mình',
             'prohibited_roles': [
                 'sinh viên', 'học sinh', 'phụ huynh', 'người ngoài trường'
             ]
@@ -628,24 +617,38 @@ Trả lời:"""
         return '\n'.join(formatted_lines) if formatted_lines else "Không có lịch giảng dạy."
 
     def _get_personalized_system_prompt_for_external_api(self, lecturer_info):
-        """Get personalized system prompt for external API processing"""
+        """Get personalized system prompt for external API processing với gender-based addressing"""
         
         ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
+        gender = lecturer_info.get('gender', 'other')  # ✅ NEW: Lấy giới tính từ API
         chuc_danh = lecturer_info.get('chuc_danh', '')
+        
+        # ✅ NEW: Xác định cách xưng hô dựa trên giới tính
+        if gender == 'male':
+            salutation = 'thầy'
+        elif gender == 'female':
+            salutation = 'cô'
+        else:
+            salutation = 'giảng viên'
         
         name_parts = ten_giang_vien.split() if ten_giang_vien else []
         name_suffix = name_parts[-1] if name_parts else ''
+        
+        if salutation in ['thầy', 'cô']:
+            personal_address = f"{salutation} {name_suffix}" if name_suffix else salutation
+        else:
+            personal_address = f"{salutation} {ten_giang_vien}" if ten_giang_vien else salutation
         
         base_prompt = f"""Bạn là AI assistant của Đại học Bình Dương (BDU), chuyên hỗ trợ giảng viên.
 
 🎯 THÔNG TIN NGƯỜI DÙNG:
 - Bạn đang trả lời cho {chuc_danh} {ten_giang_vien}
-- Xưng hô: "thầy/cô {name_suffix}" (TUYỆT ĐỐI KHÔNG dùng "bạn", "mình", "anh/chị")
+- Xưng hô: "{personal_address}" (TUYỆT ĐỐI KHÔNG dùng "bạn", "mình", "anh/chị")
 - Đây là thông tin CÁ NHÂN từ hệ thống chính thức của trường
 
 🎯 QUY TẮC QUAN TRỌNG:
-- LUÔN bắt đầu: "Dạ thầy/cô {name_suffix},"
-- Kết thúc: "Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+- LUÔN bắt đầu: "Dạ {personal_address},"
+- Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
 - SỬ DỤNG CHÍNH XÁC thông tin từ hệ thống - KHÔNG CHẾ TẠO
 - Trình bày thông tin cá nhân một cách tự nhiên, dễ hiểu
 - KHÔNG dùng format phức tạp với **1. **2. hay bullets khi không cần thiết"""
@@ -653,25 +656,52 @@ Trả lời:"""
         return base_prompt
 
     def _get_personal_address_from_api_data(self, lecturer_info, session_id):
-        """Get personal address from API data or session"""
+        """Get personal address from API data or session với gender support"""
         ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
+        gender = lecturer_info.get('gender', 'other')
+        
+        # ✅ NEW: Sử dụng giới tính từ API data
+        if gender == 'male':
+            salutation = 'thầy'
+        elif gender == 'female':
+            salutation = 'cô'
+        else:
+            salutation = 'giảng viên'
         
         if ten_giang_vien:
-            name_suffix = ten_giang_vien.split()[-1]
-            return f"thầy/cô {name_suffix}"
+            if salutation in ['thầy', 'cô']:
+                name_suffix = ten_giang_vien.split()[-1]
+                return f"{salutation} {name_suffix}"
+            else:
+                return f"{salutation} {ten_giang_vien}"
         
         # Fallback to session-based addressing
         return self._get_personal_address(session_id)
 
     def _post_process_external_api_response(self, response, lecturer_info, query, session_id):
-        """Post-process external API response for consistency"""
+        """Post-process external API response for consistency với gender support"""
         if not response:
             return response
         
-        # Get personal addressing info
+        # Get personal addressing info với gender
         ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
-        name_suffix = ten_giang_vien.split()[-1] if ten_giang_vien else ''
-        personal_address = f"thầy/cô {name_suffix}" if name_suffix else "thầy/cô"
+        gender = lecturer_info.get('gender', 'other')
+        
+        if gender == 'male':
+            salutation = 'thầy'
+        elif gender == 'female':
+            salutation = 'cô'
+        else:
+            salutation = 'giảng viên'
+        
+        if ten_giang_vien:
+            if salutation in ['thầy', 'cô']:
+                name_suffix = ten_giang_vien.split()[-1]
+                personal_address = f"{salutation} {name_suffix}"
+            else:
+                personal_address = f"{salutation} {ten_giang_vien}"
+        else:
+            personal_address = salutation
         
         # 1. Fix addressing inconsistencies
         response = re.sub(r'\bbạn\b', personal_address, response, flags=re.IGNORECASE)
@@ -682,7 +712,7 @@ Trả lời:"""
         response_stripped = response.strip()
         personalized_start = f"Dạ {personal_address},"
         
-        if not response_stripped.lower().startswith('dạ thầy/cô') and not response_stripped.lower().startswith(f'dạ {personal_address.lower()}'):
+        if not response_stripped.lower().startswith(f'dạ {personal_address.lower()}'):
             if response_stripped.lower().startswith('dạ'):
                 response = personalized_start + ' ' + response_stripped[3:].strip()
             else:
@@ -690,8 +720,8 @@ Trả lời:"""
         
         # 3. Ensure proper ending
         if not response.strip().endswith('có cần hỗ trợ thêm gì không ạ?'):
-            response = re.sub(r'\s*(Thầy/cô có.*?không ạ\?|Cần.*?không\?|Có.*?không\?)?\s*$', '', response.strip())
-            response += ' Thầy/cô có cần hỗ trợ thêm gì không ạ?'
+            response = re.sub(r'\s*(có cần.*?không ạ\?|Cần.*?không\?|Có.*?không\?)?\s*$', '', response.strip())
+            response += f' {personal_address.title()} có cần hỗ trợ thêm gì không ạ?'
         
         # 4. Remove excessive formatting
         response = re.sub(r'\*\*\d+\.\s*', '', response)
@@ -725,25 +755,34 @@ Trả lời:"""
     # ✅ NEW: Personalization methods
     def set_user_context(self, session_id: str, user_context: dict):
         """Set user context cho session (được gọi từ chat API)"""
+        
+        print("\n" + "="*20 + " DEBUG: set_user_context " + "="*20)
+        print(f"🕵️‍♂️ [set_user_context] Đang cài đặt context cho session: {session_id}")
+        print(f"🕵️‍♂️ [set_user_context] Dữ liệu context nhận được: {user_context}")
+        if 'gender' in user_context:
+            print(f"✅ [set_user_context] TÌM THẤY 'gender' trong context: '{user_context['gender']}'")
+        else:
+            print(f"❌ [set_user_context] KHÔNG TÌM THẤY 'gender' trong context!")
+        print("="*60 + "\n")
+        
         self._user_context_cache[session_id] = user_context
         logger.info(f"✅ Set user context for session {session_id}: {user_context.get('faculty_code', 'Unknown')}")
 
     def _get_personalized_system_prompt(self, session_id: str = None):
-        """Lấy personalized system prompt từ user context"""
+        """Lấy personalized system prompt từ user context với dynamic addressing"""
         try:
-            if not session_id or session_id not in self._user_context_cache:
-                return build_personalized_system_prompt()
+            # ✅ NEW: Lấy cách xưng hô cá nhân hóa
+            personal_address = self._get_personal_address(session_id)
             
-            user_context = self._user_context_cache[session_id]
-            if 'personalized_prompt' in user_context:
-                logger.info(f"✅ Using personalized prompt for {user_context.get('faculty_code', 'Unknown')}")
-                return user_context['personalized_prompt']
+            user_context = self._user_context_cache.get(session_id, {})
+            user_memory_prompt = user_context.get('preferences', {}).get('user_memory_prompt', '')
             
-            return build_personalized_system_prompt()
-            
+            # ✅ NEW: Truyền cách xưng hô vào build function
+            return build_personalized_system_prompt(user_memory_prompt, personal_address)
+        
         except Exception as e:
             logger.error(f"Error getting personalized prompt: {e}")
-            return build_personalized_system_prompt()
+            return build_personalized_system_prompt()  # Fallback
 
     # 🚀 ENHANCED: Generate response với Smart Token Management
     def generate_response(self, query: str, context: Optional[Dict] = None, 
@@ -958,7 +997,8 @@ Trả lời:"""
             # ✅ Merge incomplete + completion
             if completion_info['reason'] == 'missing_proper_ending':
                 # Just add proper ending
-                return incomplete_response.rstrip() + ' Thầy/cô có cần hỗ trợ thêm gì không ạ?'
+                personal_address = self._get_personal_address(session_id)
+                return incomplete_response.rstrip() + f' {personal_address.title()} có cần hỗ trợ thêm gì không ạ?'
             elif completion_info['reason'] == 'missing_proper_greeting':
                 # Add proper greeting
                 personal_address = self._get_personal_address(session_id)
@@ -1022,7 +1062,7 @@ Trả lời:"""
         completion = completion.strip()
         
         # Remove redundant greetings from completion
-        completion = re.sub(r'^(dạ\s+thầy/cô,?\s*)', '', completion, flags=re.IGNORECASE)
+        completion = re.sub(r'^(dạ\s+(thầy|cô|giảng viên),?\s*)', '', completion, flags=re.IGNORECASE)
         
         # If incomplete ends with incomplete word, replace it
         incomplete_words = incomplete.split()
@@ -1038,15 +1078,37 @@ Trả lời:"""
         return merged
 
     def _get_personal_address(self, session_id: str) -> str:
-        """Get personalized address for user"""
+        """Get personalized address based on gender and name, no fallback."""
+        
+        print("\n" + "="*20 + " DEBUG: _get_personal_address " + "="*20)
+        print(f"🕵️‍♂️ [_get_personal_address] Đang lấy xưng hô cho session: {session_id}")
+        user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
+        print(f"🕵️‍♂️ [_get_personal_address] Context đọc từ cache: {user_context}")
+
         user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
         full_name = user_context.get('full_name', '')
+        gender = user_context.get('gender', 'other')
+
+        print(f"🕵️‍♂️ [_get_personal_address] Giới tính được xác định là: '{gender}'")
         
+        if gender == 'male':
+            salutation = 'thầy'
+        elif gender == 'female':
+            salutation = 'cô'
+        else:
+            # Nếu không có giới tính, chỉ dùng tên nếu có
+            return full_name if full_name else 'giảng viên'
+
         if full_name:
             name_suffix = full_name.split()[-1]
-            return f"thầy/cô {name_suffix}"
-        else:
-            return "thầy/cô"
+            address = f"{salutation} {name_suffix}"
+            print(f"✅ [_get_personal_address] -> Trả về xưng hô: '{address}'")
+            print("="*60 + "\n")
+            return address
+        
+        print(f"✅ [_get_personal_address] -> Trả về xưng hô: '{salutation}'")
+        print("="*60 + "\n")
+        return salutation
 
     def _call_gemini_api_with_smart_tokens(self, prompt: str, strategy: str, max_tokens: int, retry_count=0) -> Optional[str]:
         """Call Gemini API with Smart Token Management and automatic key rotation."""
@@ -1062,7 +1124,8 @@ Trả lời:"""
                 return self._call_gemini_api_with_smart_tokens(prompt, strategy, max_tokens, retry_count=1)
             else:
                 logger.error("CRITICAL: All Gemini API keys are rate-limited. Aborting call.")
-                return "Dạ thầy/cô, hiện tại hệ thống đang quá tải, tất cả các kết nối đều đang bận. Vui lòng thử lại sau khoảng 1 phút nữa ạ. 😥"
+                personal_address = self._get_personal_address(None)
+                return f"Dạ {personal_address}, hiện tại hệ thống đang quá tải, tất cả các kết nối đều đang bận. Vui lòng thử lại sau khoảng 1 phút nữa ạ. 😥"
 
         try:
             headers = {'Content-Type': 'application/json'}
@@ -1100,7 +1163,8 @@ Trả lời:"""
                     # Kiểm tra xem có bị block vì lý do an toàn không
                     if 'finishReason' in candidate and candidate['finishReason'] == 'SAFETY':
                         logger.warning("🚨 Gemini response blocked due to SAFETY reasons.")
-                        return "Dạ thầy/cô, em không thể trả lời câu hỏi này vì lý do an toàn và chính sách nội dung."
+                        personal_address = self._get_personal_address(None)
+                        return f"Dạ {personal_address}, em không thể trả lời câu hỏi này vì lý do an toàn và chính sách nội dung."
                     
                     if 'content' in candidate and 'parts' in candidate['content']:
                         return candidate['content']['parts'][0]['text']
@@ -1113,7 +1177,8 @@ Trả lời:"""
                     return self._call_gemini_api_with_smart_tokens(prompt, strategy, max_tokens, retry_count=1)
                 else:
                     logger.error("Rate limit hit on retry attempt as well. Aborting call.")
-                    return "Dạ thầy/cô, hiện tại hệ thống đang quá tải. Vui lòng thử lại sau ít phút ạ."
+                    personal_address = self._get_personal_address(None)
+                    return f"Dạ {personal_address}, hiện tại hệ thống đang quá tải. Vui lòng thử lại sau ít phút ạ."
             
             else:
                 logger.error(f"Gemini API Error {response.status_code} with key '{api_key_to_use[:4]}...': {response.text}")
@@ -1122,7 +1187,8 @@ Trả lời:"""
         
         except requests.exceptions.Timeout:
             logger.error("Gemini API call timed out.")
-            return "Dạ thầy/cô, yêu cầu xử lý mất quá nhiều thời gian và đã bị ngắt. Thầy/cô có thể thử lại với câu hỏi ngắn gọn hơn không ạ?"
+            personal_address = self._get_personal_address(None)
+            return f"Dạ {personal_address}, yêu cầu xử lý mất quá nhiều thời gian và đã bị ngắt. {personal_address.title()} có thể thử lại với câu hỏi ngắn gọn hơn không ạ?"
         except Exception as e:
             logger.error(f"Smart Gemini API call failed: {str(e)}")
             return None
@@ -1130,70 +1196,85 @@ Trả lời:"""
     # 🚀 SMART VERSIONS of generation methods
     def _generate_direct_lecturer_answer_smart(self, query, context, session_id=None):
         """
-        ✅ HYBRID FIX: Use a refined prompt for general styles, but keep post-processing as a fallback for specific keywords.
+        ✅ UPDATED: Use refined prompt with gender-based addressing
         """
+        
+        # ✅ NEW: Lấy cách xưng hô cá nhân hóa
+        personal_address = self._get_personal_address(session_id)
+        
         system_prompt = self._get_personalized_system_prompt(session_id)
         db_answer = context.get('db_answer', context.get('response', ''))
 
-        # ✅ REFINED PROMPT: Thay đổi cách ra lệnh
+        # ✅ REFINED PROMPT: Đã include personal_address trong system_prompt
         prompt = f"""{system_prompt}
 
-    ---
-    BỐI CẢNH VÀ NHIỆM VỤ
+---
+BỐI CẢNH VÀ NHIỆM VỤ
 
-    1.  **Kiến thức nền (từ CSDL):**
-        "{db_answer}"
+1.  **Kiến thức nền (từ CSDL):**
+    "{db_answer}"
 
-    2.  **Câu hỏi của giảng viên:**
-        "{query}"
+2.  **Câu hỏi của giảng viên:**
+    "{query}"
 
-    3.  **YÊU CẦU CUỐI CÙNG (QUAN TRỌNG):**
-        Nhiệm vụ chính của bạn bây giờ là **nhập vai một trợ lý AI** với các đặc điểm và quy tắc được giảng viên định nghĩa trong phần "GHI NHỚ RIÊNG".
-        Hãy sử dụng "Kiến thức nền" để trả lời "Câu hỏi của giảng viên" trong khi vẫn duy trì đúng vai trò đó.
-        Nếu "GHI NHỚ RIÊNG" trống, hãy trả lời một cách chuyên nghiệp, rõ ràng theo quy tắc mặc định.
-    ---
-    Trả lời:
-    """
+3.  **YÊU CẦU CUỐI CÙNG (QUAN TRỌNG):**
+    Nhiệm vụ chính của bạn bây giờ là **nhập vai một trợ lý AI** với các đặc điểm và quy tắc được giảng viên định nghĩa trong phần "GHI NHỚ RIÊNG".
+    Hãy sử dụng "Kiến thức nền" để trả lời "Câu hỏi của giảng viên" trong khi vẫn duy trì đúng vai trò đó.
+    Nếu "GHI NHỚ RIÊNG" trống, hãy trả lời một cách chuyên nghiệp, rõ ràng theo quy tắc mặc định.
+---
+Trả lời:
+"""
 
         optimal_tokens = self.token_manager.calculate_optimal_tokens(len(prompt), 'direct_enhance')
         response = self._call_gemini_api_with_smart_tokens(prompt, 'direct_enhance', optimal_tokens)
-        fallback = f"Dạ thầy/cô, {db_answer} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
-        token_info = {'smart_tokens_used': True, 'method': 'direct_answer_smart_v4_hybrid', 'optimal_tokens': optimal_tokens}
+        
+        # ✅ FIXED: Fallback cũng sử dụng personal_address
+        fallback = f"Dạ {personal_address}, {db_answer} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+        
+        token_info = {
+            'smart_tokens_used': True, 
+            'method': 'direct_answer_smart_v4_hybrid', 
+            'optimal_tokens': optimal_tokens,
+            'personal_addressing': personal_address  # ✅ NEW: Track addressing used
+        }
 
         return response or fallback, token_info
 
-
     def _generate_enhanced_lecturer_answer_smart(self, query, context, intent_info, entities, session_id):
         """
-        ✅ HYBRID FIX: Use a refined prompt for general styles, but keep post-processing as a fallback for specific keywords.
+        ✅ UPDATED: Use a refined prompt with gender-based addressing
         """
+        personal_address = self._get_personal_address(session_id)
         system_prompt = self._get_personalized_system_prompt(session_id)
         db_answer = context.get('db_answer', context.get('response', ''))
 
         # ✅ REFINED PROMPT: Thay đổi cách ra lệnh
         prompt = f"""{system_prompt}
 
-    ---
-    BỐI CẢNH VÀ NHIỆM VỤ
+---
+BỐI CẢNH VÀ NHIỆM VỤ
 
-    1.  **Kiến thức nền (từ CSDL):**
-        "{db_answer}"
+1.  **Kiến thức nền (từ CSDL):**
+    "{db_answer}"
 
-    2.  **Câu hỏi của giảng viên:**
-        "{query}"
+2.  **Câu hỏi của giảng viên:**
+    "{query}"
 
-    3.  **YÊU CẦU CUỐI CÙNG (QUAN TRỌNG):**
-        Nhiệm vụ chính của bạn bây giờ là **nhập vai một trợ lý AI** với các đặc điểm và quy tắc được giảng viên định nghĩa trong phần "GHI NHỚ RIÊNG".
-        Hãy sử dụng "Kiến thức nền" để trả lời "Câu hỏi của giảng viên" trong khi vẫn duy trì đúng vai trò đó.
-        Nếu "GHI NHỚ RIÊNG" trống, hãy trả lời một cách chuyên nghiệp, rõ ràng theo quy tắc mặc định.
-    ---
-    Trả lời:
-    """
+3.  **YÊU CẦU CUỐI CÙNG (QUAN TRỌNG):**
+    Nhiệm vụ chính của bạn bây giờ là **nhập vai một trợ lý AI** với các đặc điểm và quy tắc được giảng viên định nghĩa trong phần "GHI NHỚ RIÊNG".
+    Hãy sử dụng "Kiến thức nền" để trả lời "Câu hỏi của giảng viên" trong khi vẫn duy trì đúng vai trò đó.
+    Nếu "GHI NHỚ RIÊNG" trống, hãy trả lời một cách chuyên nghiệp, rõ ràng theo quy tắc mặc định.
+---
+Trả lời:
+"""
 
         complexity_hint = 'enhanced_generation' if context.get('generation_boosted', False) else 'balanced'
         optimal_tokens = self.token_manager.calculate_optimal_tokens(len(prompt), complexity_hint)
         response = self._call_gemini_api_with_smart_tokens(prompt, complexity_hint, optimal_tokens)
-        fallback = f"Dạ thầy/cô, {db_answer} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?"
+        
+        # ✅ FIXED: Fallback cũng sử dụng personal_address
+        fallback = f"Dạ {personal_address}, {db_answer} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+        
         token_info = {'smart_tokens_used': True, 'method': 'enhanced_answer_smart_v4_hybrid', 'optimal_tokens': optimal_tokens, 'generation_boosted': context.get('generation_boosted', False)}
 
         return response or fallback, token_info
@@ -1222,7 +1303,10 @@ Trả lời:"""
         return response, token_info
 
     def _generate_dont_know_response_smart(self, query, context, session_id=None):
-        """Generate don't know response with Smart Token Management"""
+        """Generate don't know response with Smart Token Management và gender-based addressing"""
+        
+        # ✅ NEW: Lấy cách xưng hô cá nhân hóa dựa trên giới tính
+        personal_address = self._get_personal_address(session_id)
         
         # Suggest relevant departments based on query content
         query_lower = query.lower()
@@ -1243,12 +1327,14 @@ Trả lời:"""
             dept = "phòng ban liên quan"
             contact = "info@bdu.edu.vn"
         
-        response = f"Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ {dept} qua email {contact} để được hỗ trợ chi tiết ạ. 🎓"
+        # ✅ FIXED: Sử dụng personal_address thay vì hardcode
+        response = f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ {dept} qua email {contact} để được hỗ trợ chi tiết ạ. 🎓"
         
         token_info = {
             'smart_tokens_used': False,  # Used predefined template
             'method': 'dont_know_template',
-            'suggested_department': dept
+            'suggested_department': dept,
+            'personal_addressing': personal_address  # ✅ NEW: Track addressing used
         }
         
         return response, token_info
@@ -1315,7 +1401,7 @@ Trả lời:"""
                 return 'topic_shift'
         
         # ✅ MODIFIED: Default strategy logic with generation bias
-        if isinstance(context, dict) and context.get('confidence', 0) > 0.85:  # Raised from 0.7
+        if isinstance(context, dict) and context.get('confidence', 0) > 0.85:  # Slightly lower due to re-ranking boost
             return 'direct_enhance'
         
         # ✅ NEW: Favor enhancement over brief responses
@@ -1356,7 +1442,7 @@ Trả lời:"""
         response_stripped = response.strip()
         personalized_start = f"Dạ {personal_address},"
         
-        if not response_stripped.lower().startswith('dạ thầy/cô') and not response_stripped.lower().startswith(f'dạ {personal_address.lower()}'):
+        if not response_stripped.lower().startswith(f'dạ {personal_address.lower()}'):
             if response_stripped.lower().startswith('dạ'):
                 response = personalized_start + ' ' + response_stripped[3:].strip()
             else:
@@ -1364,9 +1450,11 @@ Trả lời:"""
         
         # 4. ✅ CRITICAL: Đảm bảo kết thúc đúng cách với personalization
         if not response.strip().endswith('có cần hỗ trợ thêm gì không ạ?'):
-            # Remove existing endings first
-            response = re.sub(r'\s*(Thầy/cô có.*?không ạ\?|Cần.*?không\?|Có.*?không\?)?\s*$', '', response.strip())
-            response += ' Thầy/cô có cần hỗ trợ thêm gì không ạ?'
+            # Regex mới, mạnh hơn, xóa cả câu kết có chứa tên riêng
+            response = re.sub(r'\s*((Dạ )?(Thầy|Cô|Giảng viên)\s*(\w+\s*)*có cần.*?không ạ\??)\s*$', '', response.strip(), flags=re.IGNORECASE)
+            
+            # Thêm lại câu kết đúng chuẩn
+            response += f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ?'
             
         # 5. ✅ REMOVE: Loại bỏ format phức tạp
         response = re.sub(r'\*\*\d+\.\s*', '', response)  # Remove **1. **2. etc
@@ -1551,7 +1639,7 @@ Trả lời:"""
             
             return {
                 'gemini_api_available': response is not None,
-                'api_key_configured': bool(self.api_key),
+                'api_key_configured': bool(self.key_manager.keys),
                 'service_status': 'active' if response else 'error',
                 'mode': 'smart_token_lecturer_focused_with_user_memory',  # ✅ Updated
                 'memory_sessions': len(self.memory.conversations),
@@ -1576,7 +1664,8 @@ Trả lời:"""
                     'flexible_personalization',    # ✅ NEW feature
                     'external_api_data_processing',
                     'lecturer_schedule_formatting',
-                    'personal_information_handling'
+                    'personal_information_handling',
+                    'gender_based_addressing'  # ✅ NEW feature
                 ]
             }
         except Exception as e:

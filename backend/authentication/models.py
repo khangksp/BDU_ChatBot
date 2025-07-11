@@ -53,6 +53,22 @@ class Faculty(AbstractUser):
     )
     full_name = models.CharField(max_length=100, help_text="Họ và tên đầy đủ")
     
+    # ✅ NEW: Thêm trường giới tính
+    GENDER_CHOICES = [
+        ('male', 'Nam'),
+        ('female', 'Nữ'), 
+        ('other', 'Khác'),
+    ]
+
+    gender = models.CharField(
+        max_length=10,
+        choices=GENDER_CHOICES,
+        default='other',
+        blank=True,
+        verbose_name="Giới tính",
+        help_text="Giới tính để xác định cách xưng hô (thầy/cô)"
+    )
+    
     department = models.CharField(
         max_length=20, 
         choices=DEPARTMENT_CHOICES, 
@@ -208,9 +224,8 @@ class Faculty(AbstractUser):
         response_style = self.chatbot_preferences.get('response_style', 'professional')
         department_priority = self.chatbot_preferences.get('department_priority', True)
         
-        # Personal addressing
-        name_suffix = self.full_name.split()[-1] if self.full_name else self.faculty_code
-        personal_address = f"thầy/cô {name_suffix}"
+        # ✅ FIXED: Personal addressing - sử dụng self.get_personal_address()
+        personal_address = self.get_personal_address()
         
         base_prompt = f"""Bạn là AI assistant chuyên nghiệp của Đại học Bình Dương (BDU).
 
@@ -320,6 +335,7 @@ class Faculty(AbstractUser):
             'user_id': self.id,
             'faculty_code': self.faculty_code,
             'full_name': self.full_name,
+            'gender': self.gender,  # ✅ NEW: Thêm giới tính
             'department': self.department,
             'department_name': self.get_department_display(),
             'position': self.position,
@@ -339,7 +355,26 @@ class Faculty(AbstractUser):
         self.save(update_fields=['chatbot_preferences'])
         return self.chatbot_preferences
 
+    def get_salutation(self):
+        """Xác định cách xưng hô dựa trên giới tính, không fallback."""
+        if self.gender == 'male':
+            return 'thầy'
+        elif self.gender == 'female':
+            return 'cô'
+        else:
+            return 'giảng viên'  # Dùng từ trung tính, không dùng "thầy/cô"
 
+    def get_personal_address(self):
+        """Lấy cách xưng hô kèm tên, xử lý trường hợp trung tính."""
+        salutation = self.get_salutation()
+        if self.full_name:
+            name_suffix = self.full_name.split()[-1]
+            # Nếu là thầy/cô thì đi kèm tên, nếu là "giảng viên" thì không cần
+            if salutation in ['thầy', 'cô']:
+                return f"{salutation} {name_suffix}"
+            return f"{salutation} {self.full_name}"  # Trả về "giảng viên" + tên đầy đủ
+        return salutation
+    
 # Existing models remain unchanged
 class PasswordResetToken(models.Model):
     """

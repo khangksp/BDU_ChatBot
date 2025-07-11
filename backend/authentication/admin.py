@@ -15,6 +15,22 @@ class FacultyAdmin(UserAdmin):
         'is_active_faculty', 'last_login', 'login_count', 'has_chatbot_preferences'
     ]
     
+    # ✅ NEW: Thêm method hiển thị giới tính
+    def gender_display(self, obj):
+        """Hiển thị giới tính với icon"""
+        icons = {
+            'male': '👨',
+            'female': '👩',
+            'other': '👤'
+        }
+        icon = icons.get(obj.gender, '👤')
+        return format_html(
+            '{} {}',
+            icon,
+            obj.get_gender_display()
+        )
+    gender_display.short_description = 'Giới tính'
+    
     # ✅ NÂNG CẤP: Thêm filter theo department và position
     list_filter = [
         'is_active', 'is_active_faculty', 'department', 'position',
@@ -30,7 +46,7 @@ class FacultyAdmin(UserAdmin):
             'fields': ('faculty_code', 'password')
         }),
         ('Thông tin cá nhân', {
-            'fields': ('full_name', 'email', 'phone', 'office_room')
+            'fields': ('full_name', 'email', 'gender', 'phone', 'office_room')
         }),
         ('Thông tin vai trò & chuyên môn', {
             'fields': ('department', 'position', 'specialization'),
@@ -54,7 +70,7 @@ class FacultyAdmin(UserAdmin):
     add_fieldsets = (
         ('Tạo tài khoản mới', {
             'classes': ('wide',),
-            'fields': ('faculty_code', 'full_name', 'email', 'password1', 'password2')
+            'fields': ('faculty_code', 'full_name', 'email', 'gender', 'password1', 'password2')
         }),
         ('Thông tin vai trò', {
             'classes': ('wide',),

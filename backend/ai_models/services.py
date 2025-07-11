@@ -19,15 +19,6 @@ from .google_drive_service import google_drive_service
 logger = logging.getLogger(__name__)
 
 class HybridReRanker:
-    """
-    🚀 NEW: Hybrid Re-Ranking Engine for Enhanced Information Retrieval
-    
-    This class implements intelligent re-ranking by combining:
-    - Semantic similarity scores from vector search
-    - Keyword matching scores based on intent analysis
-    - Context-aware scoring for lecturer-specific queries
-    """
-    
     def __init__(self):
         # Trọng số cho công thức final_score = α × semantic_score + β × keyword_score
         self.alpha = 0.6  # Trọng số cho semantic score
@@ -413,11 +404,6 @@ class HybridReRanker:
 
 
 class LecturerDecisionEngine:
-    """
-    Enhanced Decision Engine specifically for BDU Lecturers
-    MODIFIED: Updated to work with hybrid re-ranking results
-    """
-    
     def __init__(self):
         # ✅ BƯỚC 3: Tăng ngưỡng medium_trust lên 0.5
         self.confidence_thresholds = {
@@ -567,13 +553,8 @@ class LecturerDecisionEngine:
         return should_boost
     
     def needs_external_api(self, query: str, confidence: float, recent_intent: str = None) -> bool:
-        """
-        ✅ BƯỚC 1: Sửa logic cốt lõi - Loại bỏ hoàn toàn biến low_confidence khỏi điều kiện quyết định
-        Determine if query should use external API
-        """
+        """Determine if query should use external API"""
         query_lower = query.lower()
-        
-        # ✅ REMOVED: low_confidence = confidence < self.external_api_config['low_confidence_threshold']
         
         has_personal_keywords = any(
             keyword in query_lower 
@@ -584,41 +565,34 @@ class LecturerDecisionEngine:
             for keyword in self.external_api_config['time_context_keywords']
         )
 
-        # ✅ BƯỚC 1: Chỉ được phép gọi API khi có tín hiệu tích cực và rõ ràng
         # Kiểm tra intent có độ tin cậy cao
         intent_confidence = 0
         intent_is_personal = False
         if recent_intent:
-            # Giả sử recent_intent là string, nếu là dict thì cần extract
             if isinstance(recent_intent, str):
                 intent_is_personal = recent_intent in ['personal_schedule', 'personal_info']
-                intent_confidence = 0.7  # Mặc định nếu không có thông tin
+                intent_confidence = 0.7
             elif isinstance(recent_intent, dict):
                 intent_name = recent_intent.get('intent', '')
                 intent_confidence = recent_intent.get('confidence', 0)
                 intent_is_personal = intent_name in ['personal_schedule', 'personal_info']
         
         high_confidence_personal_intent = intent_is_personal and intent_confidence > 0.6
-        
         schedule_related_intent = recent_intent in ['personal_schedule', 'teaching_schedule', 'schedule_general']
         contextual_schedule_query = has_time_context and schedule_related_intent
         
-        # ✅ BƯỚC 1: Logic mới - CHỈ gọi API khi có tín hiệu tích cực, KHÔNG bao giờ vì low_confidence
         needs_api = (
             has_personal_keywords or 
             contextual_schedule_query or 
             high_confidence_personal_intent
         )
-        # ✅ ĐÃ REMOVED: or low_confidence
 
-        logger.info(f"🔍 FIXED External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, recent_intent='{recent_intent}', high_conf_personal={high_confidence_personal_intent}, needs_api={needs_api}")
+        logger.info(f"🔍 External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, recent_intent='{recent_intent}', high_conf_personal={high_confidence_personal_intent}, needs_api={needs_api}")
         
         return needs_api
 
     def make_decision(self, query, best_candidate, intent_result, session_memory=None, jwt_token=None):
-        """
-        ✅ UPDATED: Enhanced decision making using hybrid re-ranking results, with fixes for first-message issues.
-        """
+        """Enhanced decision making using hybrid re-ranking results"""
         
         # Xác định đây có phải tin nhắn đầu tiên không
         is_first_message = not session_memory or len(session_memory) == 0
@@ -642,7 +616,7 @@ class LecturerDecisionEngine:
                     context_override = True
                     logger.info("🧠 MEMORY OVERRIDE: Recent education context detected")
         
-        # ✅ FIX 1: Bỏ qua kiểm tra "có liên quan giáo dục không" cho tin nhắn đầu tiên.
+        # Bỏ qua kiểm tra "có liên quan giáo dục không" cho tin nhắn đầu tiên
         is_education = self.is_education_related(query) or context_override or is_first_message
         if not is_education:
             logger.info("Decision: Rejecting non-education query on a non-first message.")
@@ -652,19 +626,13 @@ class LecturerDecisionEngine:
         final_score = best_candidate.get('final_score', 0) if best_candidate else 0
         confidence_level = self.categorize_confidence(final_score)
         
-        # ✅ FIX 2: Tăng độ tin cậy cho tin nhắn đầu tiên nếu nó quá thấp, để ép chatbot phải trả lời.
-        # Việc này giải quyết vấn đề chatbot "từ chối trả lời" dù đã tìm thấy thông tin.
-        # if is_first_message and confidence_level in ['low_trust', 'no_trust'] and best_candidate:
-        #     logger.info(f"🧠 FIRST MESSAGE BOOST: Elevating confidence from '{confidence_level}' to 'medium_trust' to force generation.")
-        #     confidence_level = 'medium_trust'
-
-        # ✅ BƯỚC 1: Logic kiểm tra API và token (ĐÃ SỬA ĐỔI)
+        # Logic kiểm tra API và token
         needs_api = self.needs_external_api(query, final_score, intent_result)
         has_jwt_token = bool(jwt_token and jwt_token.strip())
         
-        logger.info(f"🤖 FIXED Hybrid Decision: final_score={final_score:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
+        logger.info(f"🤖 Hybrid Decision: final_score={final_score:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
         
-        # Ưu tiên logic API (giữ nguyên)
+        # Ưu tiên logic API
         if needs_api and has_jwt_token:
             return 'use_external_api', {
                 'instruction': 'external_api_lecturer',
@@ -683,7 +651,7 @@ class LecturerDecisionEngine:
                 'message': 'Personal information requires authentication'
             }, True
         
-        # Kiểm tra nhu cầu làm rõ (giữ nguyên)
+        # Kiểm tra nhu cầu làm rõ
         needs_clarification = self.needs_clarification(query, final_score)
         if needs_clarification and confidence_level != 'medium_trust':
             return 'ask_clarification', {
@@ -693,13 +661,13 @@ class LecturerDecisionEngine:
                 'message': 'Question is too vague, need clarification'
             }, True
         
-        # Áp dụng generation boost (giữ nguyên)
+        # Áp dụng generation boost
         should_boost = self._should_boost_generation(query, confidence_level)
         if should_boost and confidence_level == 'high_trust':
             confidence_level = 'medium_trust'
             logger.info("🚀 GENERATION BOOST: Downgraded high_trust to medium_trust")
         
-        # Logic ra quyết định cuối cùng dựa trên độ tin cậy (giữ nguyên)
+        # Logic ra quyết định cuối cùng dựa trên độ tin cậy
         if confidence_level == 'high_trust':
             decision = 'use_db_direct'
             context = {
@@ -733,35 +701,23 @@ class LecturerDecisionEngine:
                 'message': 'No relevant information - say dont know'
             }
         
-        logger.info(f"🎯 FIXED Hybrid Decision made: {decision} (final_score: {final_score:.3f})")
+        logger.info(f"🎯 Hybrid Decision made: {decision} (final_score: {final_score:.3f})")
         return decision, context, True
 
 
 class HybridChatbotAI:
-    """
-    ✅ ENHANCED: Hybrid Chatbot with Re-ranking for BDU Lecturers
-    """
+    """Enhanced Hybrid Chatbot with Re-ranking for BDU Lecturers"""
     
     def __init__(self, shared_response_generator):
-        """
-        ✅ SỬA ĐỔI: Chấp nhận một response_generator được chia sẻ
-        """
-        # Initialize components with hybrid enhancements
+        # Initialize components với shared response_generator
         self.sbert_retriever = ChatbotAI(shared_response_generator=shared_response_generator)
         self.intent_classifier = PhoBERTIntentClassifier()
-        
-        # FIX: Không tạo mới, mà sử dụng response_generator được truyền vào
         self.response_generator = shared_response_generator
-        
         self.decision_engine = LecturerDecisionEngine()
-        
-        # NEW: Initialize hybrid re-ranker
         self.reranker = HybridReRanker()
-        
-        # Enhanced conversation memory
         self.conversation_memory = {}
         
-        logger.info("🚀 HybridChatbotAI initialized with a SHARED Response Generator")
+        logger.info("🚀 HybridChatbotAI initialized with SHARED Response Generator")
     
     @property
     def model(self):
@@ -798,7 +754,7 @@ class HybridChatbotAI:
                 'error': str(e)
             }
         
-        status = {
+        return {
             'sbert_model': bool(self.sbert_retriever.model),
             'faiss_index': bool(self.sbert_retriever.index),
             'phobert_available': not self.intent_classifier.fallback_mode,
@@ -806,6 +762,8 @@ class HybridChatbotAI:
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
             'mode': 'hybrid_retrieval_reranking_lecturer_with_user_memory',
             'memory_sessions': gemini_status.get('memory_sessions', 0),
+            'personalization_sessions': gemini_status.get('personalization_sessions', 0),
+            'adaptive_token_range': self.response_generator.token_manager.adaptive_token_range,
             'confidence_thresholds': self.decision_engine.confidence_thresholds,
             'hybrid_reranking': {
                 'enabled': True,
@@ -814,62 +772,40 @@ class HybridChatbotAI:
                 'intent_categories': len(self.reranker.intent_keywords)
             },
             'lecturer_features': [
-            'hybrid_retrieval_reranking',
-            'semantic_keyword_fusion', 
-            'context_aware_boosting',
-            'intent_based_reranking',
-            'lecturer_keyword_detection',
-            'clarification_requests', 
-            'department_suggestions',
-            'formal_addressing',
-            'enhanced_generation_boost',
-            'qa_management_integration',
-            'external_api_integration',
-            'jwt_token_authentication',
-            'lecturer_schedule_access',
-            'personal_information_queries',
-            'user_memory_prompt_support',      # ✅ THÊM DÒNG NÀY
-            'flexible_personalization',        # ✅ THÊM DÒNG NÀY
-            'dynamic_system_prompts',          # ✅ THÊM DÒNG NÀY
-            'custom_user_instructions'         # ✅ THÊM DÒNG NÀY
-        ],
+                'hybrid_retrieval_reranking', 'semantic_keyword_fusion', 'context_aware_boosting',
+                'intent_based_reranking', 'lecturer_keyword_detection', 'clarification_requests', 
+                'department_suggestions', 'formal_addressing', 'enhanced_generation_boost',
+                'qa_management_integration', 'external_api_integration', 'jwt_token_authentication',
+                'lecturer_schedule_access', 'personal_information_queries', 'user_memory_prompt_support',
+                'flexible_personalization', 'dynamic_system_prompts', 'custom_user_instructions',
+                'gender_based_addressing', 'no_fallback_addressing'
+            ],
             'gemini_status': gemini_status,
             'external_api_status': external_api_status,
             'qa_management_status': qa_management_status
         }
-        
-        return status
 
     def _is_valid_short_query(self, query):
-        """
-        ✅ BƯỚC 2: Kiểm tra query ngắn có hợp lệ không
-        Kiểm tra xem query ngắn có phải là từ hợp lệ như "hi", "ok", "dạ" không
-        """
+        """Kiểm tra query ngắn có hợp lệ không"""
         if not query:
             return False
             
         query_clean = query.strip().lower()
         
-        # Danh sách các từ ngắn hợp lệ
         valid_short_words = [
-            'hi', 'hello', 'chào', 'xin chào',
-            'ok', 'okay', 'được', 'ừ', 'uh', 'uhm',
-            'dạ', 'vâng', 'yes', 'no', 'không',
-            'à', 'ờ', 'ô', 'ơ', 'hả', 'hả?',
-            'cảm ơn', 'thanks', 'thank you', 'cam on',
-            'tạm biệt', 'bye', 'goodbye', 'tam biet'
+            'hi', 'hello', 'chào', 'xin chào', 'ok', 'okay', 'được', 'ừ', 'uh', 'uhm',
+            'dạ', 'vâng', 'yes', 'no', 'không', 'à', 'ờ', 'ô', 'ơ', 'hả', 'hả?',
+            'cảm ơn', 'thanks', 'thank you', 'cam on', 'tạm biệt', 'bye', 'goodbye', 'tam biet'
         ]
         
-        # Kiểm tra query có trong danh sách từ hợp lệ không
         for valid_word in valid_short_words:
             if query_clean == valid_word or query_clean.startswith(valid_word + ' '):
                 return True
         
-        # Kiểm tra pattern câu chào cơ bản
         greeting_patterns = [
-            r'^(xin )?chào( .+)?$',
-            r'^hi( .+)?$',
-            r'^hello( .+)?$'
+            r'^(xin )?chào( .+)?',
+            r'^hi( .+)?',
+            r'^hello( .+)?'
         ]
         
         for pattern in greeting_patterns:
@@ -879,40 +815,36 @@ class HybridChatbotAI:
         return False
     
     def process_query(self, query, session_id=None, jwt_token=None):
-        """
-        ✅ ENHANCED: Main query processing with Hybrid Re-ranking
-        ✅ BƯỚC 2: Thêm validation input ngay từ đầu
-        """
+        """Main query processing with Hybrid Re-ranking"""
         start_time = time.time()
         
         logger.info(f"👨‍🏫 Processing hybrid query: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
         
         try:
-            # ✅ BƯỚC 2: VALIDATE INPUT NGAY TỪ ĐẦU
+            # VALIDATE INPUT NGAY TỪ ĐẦU
             query = self._clean_query(query)
             if not query:
                 return self._get_empty_query_response_lecturer()
             
-            # ✅ BƯỚC 2: Kiểm tra query quá ngắn và không hợp lệ
+            # Kiểm tra query quá ngắn và không hợp lệ
             if len(query.strip()) < 3 and not self._is_valid_short_query(query):
                 logger.info(f"🚫 EARLY VALIDATION: Query too short and invalid: '{query}'")
                 return {
-                    'response': "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",
+                    'response': self._get_personal_short_clarification_response(session_id),
                     'confidence': 0.1,
                     'method': 'early_validation_failed',
                     'decision_type': 'ask_clarification',
                     'processing_time': time.time() - start_time,
                     'is_education': True,
                     'lecturer_optimized': True,
-                    'early_validation_triggered': True  # ✅ Flag để tracking
+                    'early_validation_triggered': True
                 }
             
-            # Step 2: Get intent and entities
+            # Get intent and entities
             intent_result = self.intent_classifier.classify_intent(query)
             entities = self.intent_classifier.extract_entities(query)
             
-            # ✅ STEP 3: HYBRID RETRIEVAL & RE-RANKING
-            # Get top 5 candidates from semantic search
+            # HYBRID RETRIEVAL & RE-RANKING
             candidates = self.sbert_retriever.semantic_search_top_k(query, top_k=5)
             
             if not candidates:
@@ -931,15 +863,15 @@ class HybridChatbotAI:
             
             logger.info(f"🎯 Best candidate after re-ranking: final_score={best_candidate.get('final_score', 0):.3f}")
             
-            # ✅ STEP 4: DECISION MAKING with hybrid result
+            # DECISION MAKING với hybrid result
             session_memory = self.get_conversation_context(session_id) if session_id else None
             decision_type, gemini_context, should_respond = self.decision_engine.make_decision(
                 query, best_candidate, intent_result, session_memory, jwt_token
             )
             
-            # Step 5: Execute decision
+            # Execute decision
             if not should_respond:
-                response_text = "Dạ thầy/cô, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ. 🎓 Thầy/cô có câu hỏi nào khác về trường không ạ?"
+                response_text = self._get_personal_out_of_scope_response(session_id)
                 method = 'rejected_non_education'
             else:
                 response_text = self._execute_lecturer_decision(
@@ -947,7 +879,7 @@ class HybridChatbotAI:
                 )
                 method = decision_type
             
-            # Step 6: Update memory
+            # Update memory
             if session_id and should_respond:
                 self._update_memory(session_id, query, intent_result, best_candidate.get('final_score', 0), decision_type, should_respond)
             
@@ -967,8 +899,8 @@ class HybridChatbotAI:
                 'lecturer_optimized': True,
                 'reference_links': best_candidate.get('reference_links', []),
                 'external_api_used': decision_type == 'use_external_api',
-                'hybrid_reranking_used': True,  # ✅ NEW field
-                'reranking_stats': {           # ✅ NEW field
+                'hybrid_reranking_used': True,
+                'reranking_stats': {
                     'semantic_score': best_candidate.get('semantic_score', 0),
                     'keyword_score': best_candidate.get('keyword_score', 0),
                     'context_boost': best_candidate.get('context_boost', 0),
@@ -979,17 +911,38 @@ class HybridChatbotAI:
         except Exception as e:
             logger.error(f"❌ Hybrid processing error: {str(e)}")
             return {
-                'response': "Dạ thầy/cô, em gặp khó khăn kỹ thuật. Thầy/cô có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓",
+                'response': self._get_personal_error_response(session_id),
                 'confidence': 0.0,
                 'method': 'error_fallback',
                 'processing_time': time.time() - start_time,
                 'error': str(e)
             }
     
+    def _get_personal_address(self, session_id):
+        """Helper method để lấy personal address từ response generator"""
+        if hasattr(self.response_generator, '_get_personal_address'):
+            return self.response_generator._get_personal_address(session_id)
+        return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
+    
+    def _get_personal_short_clarification_response(self, session_id):
+        """Response for short invalid queries với personalization"""
+        personal_address = self._get_personal_address(session_id)
+        return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+    
+    def _get_personal_out_of_scope_response(self, session_id):
+        """Out of scope response với personalization"""
+        personal_address = self._get_personal_address(session_id)
+        return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về trường không ạ?"
+    
+    def _get_personal_error_response(self, session_id):
+        """Error response với personalization"""
+        personal_address = self._get_personal_address(session_id)
+        return f"Dạ {personal_address}, em gặp khó khăn kỹ thuật. {personal_address.title()} có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓"
+    
     def _get_no_match_response(self):
         """Response when no matches found"""
         return {
-            'response': "Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ phòng ban liên quan để được hỗ trợ chi tiết ạ. 🎓",
+            'response': "Dạ giảng viên, em chưa có thông tin về vấn đề này. Giảng viên có thể liên hệ phòng ban liên quan để được hỗ trợ chi tiết ạ. 🎓",
             'confidence': 0.1,
             'method': 'no_match_hybrid',
             'decision_type': 'say_dont_know',
@@ -998,11 +951,10 @@ class HybridChatbotAI:
         }
     
     def _execute_lecturer_decision(self, decision_type, query, gemini_context, intent_result, entities, session_id):
-        """Execute lecturer-specific decisions with generation support and debugging"""
+        """Execute lecturer-specific decisions với gender-based addressing"""
         
         logger.info(f"🎯 Executing hybrid decision: {decision_type}")
         
-        # Khởi tạo biến response_text để lưu kết quả từ các nhánh
         response_text = ""
         
         # Lấy response từ Gemini như bình thường
@@ -1010,13 +962,14 @@ class HybridChatbotAI:
             response_text = self._handle_external_api_decision(query, gemini_context, intent_result, entities, session_id)
         
         elif decision_type == 'require_authentication':
-            response_text = self._handle_authentication_required(query, gemini_context)
+            response_text = self._handle_authentication_required(session_id)
         
         elif decision_type == 'use_db_direct':
             response = self.response_generator.generate_response(
                 query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
             )
-            response_text = response.get('response', f"Dạ thầy/cô, {gemini_context.get('db_answer', '')} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?")
+            personal_address = self._get_personal_address(session_id)
+            response_text = response.get('response', f"Dạ {personal_address}, {gemini_context.get('db_answer', '')} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?")
         
         elif decision_type == 'enhance_db_answer':
             is_boosted = gemini_context.get('generation_boosted', False)
@@ -1028,24 +981,27 @@ class HybridChatbotAI:
             response = self.response_generator.generate_response(
                 query=query, context=enhanced_context, intent_info=intent_result, entities=entities, session_id=session_id
             )
-            response_text = response.get('response', f"Dạ thầy/cô, {gemini_context.get('db_answer', '')} 🎓 Thầy/cô có cần hỗ trợ thêm gì không ạ?")
+            personal_address = self._get_personal_address(session_id)
+            response_text = response.get('response', f"Dạ {personal_address}, {gemini_context.get('db_answer', '')} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?")
         
         elif decision_type == 'ask_clarification':
             response = self.response_generator.generate_response(
                 query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
             )
-            response_text = response.get('response', self._get_default_clarification_request(query))
+            response_text = response.get('response', self._get_default_clarification_request(query, session_id))
         
         elif decision_type == 'say_dont_know':
             response = self.response_generator.generate_response(
                 query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
             )
-            response_text = response.get('response', self._get_default_dont_know_response(query))
+            response_text = response.get('response', self._get_default_dont_know_response(query, session_id))
         
         else:
             logger.warning(f"⚠️ Unknown decision type: {decision_type}")
-            response_text = "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+            personal_address = self._get_personal_address(session_id)
+            response_text = f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
 
+        # Debugging personalization filter (keep existing logic)
         print("\n--- DEBUGGING PERSONALIZATION FILTER ---")
         print(f"1. Raw response from Gemini: '{response_text}'")
 
@@ -1060,11 +1016,9 @@ class HybridChatbotAI:
                     
                     # Cắt bỏ các đuôi câu mặc định
                     default_endings = [
-                        "Thầy/cô có cần em hỗ trợ thêm gì không ạ? 🎓",
-                        "Thầy/cô có cần em hỗ trợ thêm gì không ạ?",
-                        "ạ. 🎓",
-                        "ạ?",
-                        "ạ."
+                        "có cần em hỗ trợ thêm gì không ạ? 🎓",
+                        "có cần em hỗ trợ thêm gì không ạ?",
+                        "ạ. 🎓", "ạ?", "ạ."
                     ]
                     processed_text = response_text
                     for ending in default_endings:
@@ -1088,11 +1042,10 @@ class HybridChatbotAI:
             return response_text
 
         print("--- END DEBUGGING (No override applied) ---\n")
-        # Trả về response gốc nếu không có quy tắc nào được áp dụng
         return response_text
     
     def _handle_external_api_decision(self, query, gemini_context, intent_result, entities, session_id):
-        """Handle decision to use external API"""
+        """Handle decision to use external API với gender support"""
         try:
             jwt_token = gemini_context.get('jwt_token')
             
@@ -1117,94 +1070,117 @@ class HybridChatbotAI:
                     session_id=session_id
                 )
                 
-                return response.get('response', self._get_external_api_fallback(api_result))
+                return response.get('response', self._get_external_api_fallback(api_result, session_id))
             
             else:
                 error_type = api_result.get('error_type', 'unknown')
-                return self._get_external_api_error_response(error_type, api_result.get('error', ''), gemini_context.get('fallback_qa_answer', ''))
+                return self._get_external_api_error_response(error_type, session_id, gemini_context.get('fallback_qa_answer', ''))
                 
         except Exception as e:
             logger.error(f"❌ Error handling external API decision: {str(e)}")
-            return "Dạ thầy/cô, em gặp khó khăn khi truy xuất thông tin cá nhân. Thầy/cô có thể thử lại sau hoặc liên hệ bộ phận IT để được hỗ trợ ạ. 🎓"
+            personal_address = self._get_personal_address(session_id)
+            return f"Dạ {personal_address}, em gặp khó khăn khi truy xuất thông tin cá nhân. {personal_address.title()} có thể thử lại sau hoặc liên hệ bộ phận IT để được hỗ trợ ạ. 🎓"
     
-    def _handle_authentication_required(self, query, gemini_context):
+    def _handle_authentication_required(self, session_id):
         """Handle case where external API is needed but no token provided"""
-        return """Dạ thầy/cô, để em có thể cung cấp thông tin cá nhân như lịch giảng dạy, thầy/cô cần đăng nhập vào ứng dụng trước ạ. 🔐
+        personal_address = self._get_personal_address(session_id)
+        return f"""Dạ {personal_address}, để em có thể cung cấp thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng trước ạ. 🔐
 
-Thầy/cô có thể:
+{personal_address.title()} có thể:
 • Đăng nhập lại vào ứng dụng BDU
 • Kiểm tra kết nối mạng
 • Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
 
-Sau khi đăng nhập, thầy/cô có thể hỏi lại em về lịch giảng dạy nhé! 🎓"""
+Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch giảng dạy nhé! 🎓"""
     
-    def _get_external_api_fallback(self, api_result):
+    def _get_external_api_fallback(self, api_result, session_id):
         """Get fallback response when external API data is available but Gemini fails"""
         lecturer_info = api_result.get('lecturer_info', {})
-        ten_giang_vien = lecturer_info.get('ten_giang_vien', 'thầy/cô')
+        ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
+        
+        # Determine personal address from API data or session
+        if ten_giang_vien:
+            gender = lecturer_info.get('gender', 'other')
+            if gender == 'male':
+                salutation = 'thầy'
+            elif gender == 'female':
+                salutation = 'cô'
+            else:
+                salutation = 'giảng viên'
+                
+            if salutation in ['thầy', 'cô']:
+                name_suffix = ten_giang_vien.split()[-1] if ten_giang_vien else ''
+                personal_address = f"{salutation} {name_suffix}" if name_suffix else salutation
+            else:
+                personal_address = f"{salutation} {ten_giang_vien}" if ten_giang_vien else salutation
+        else:
+            personal_address = self._get_personal_address(session_id)
         
         schedule_summary = api_result.get('schedule_summary', {})
         total_classes = schedule_summary.get('total_classes', 0)
         
-        return f"""Dạ {ten_giang_vien}, em đã tìm thấy thông tin lịch giảng dạy của thầy/cô với {total_classes} buổi học. 
+        return f"""Dạ {personal_address}, em đã tìm thấy thông tin lịch giảng dạy của {personal_address} với {total_classes} buổi học. 
 
-Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. Thầy/cô có thể:
+Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_address.title()} có thể:
 • Truy cập hệ thống quản lý đào tạo của trường
 • Liên hệ phòng Đào tạo để được hỗ trợ
 • Thử hỏi lại với câu hỏi cụ thể hơn
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
     
-    def _get_external_api_error_response(self, error_type, error_message, fallback_qa=''):
-        """Get appropriate error response based on error type"""
+    def _get_external_api_error_response(self, error_type, session_id, fallback_qa=''):
+        """Get appropriate error response based on error type với gender support"""
+        personal_address = self._get_personal_address(session_id)
+        
         if error_type == 'token_decode_failed':
-            return """Dạ thầy/cô, phiên đăng nhập đã hết hạn. Thầy/cô vui lòng đăng nhập lại vào ứng dụng BDU để em có thể hỗ trợ thông tin cá nhân ạ. 🔐
+            return f"""Dạ {personal_address}, phiên đăng nhập đã hết hạn. {personal_address.title()} vui lòng đăng nhập lại vào ứng dụng BDU để em có thể hỗ trợ thông tin cá nhân ạ. 🔐
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         elif error_type == 'authentication_failed':
-            return """Dạ thầy/cô, thông tin đăng nhập không hợp lệ hoặc đã hết hạn. Thầy/cô vui lòng:
+            return f"""Dạ {personal_address}, thông tin đăng nhập không hợp lệ hoặc đã hết hạn. {personal_address.title()} vui lòng:
 • Đăng xuất và đăng nhập lại
 • Kiểm tra kết nối mạng
 • Liên hệ bộ phận IT nếu vẫn gặp khó khăn: it@bdu.edu.vn
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         elif error_type == 'network_error':
-            return """Dạ thầy/cô, hiện tại có vấn đề kết nối đến hệ thống của trường. Thầy/cô vui lòng:
+            return f"""Dạ {personal_address}, hiện tại có vấn đề kết nối đến hệ thống của trường. {personal_address.title()} vui lòng:
 • Kiểm tra kết nối mạng
 • Thử lại sau vài phút
 • Liên hệ bộ phận IT nếu vấn đề kéo dài: it@bdu.edu.vn
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         else:
             if fallback_qa:
-                return f"""Dạ thầy/cô, em gặp khó khăn khi truy xuất thông tin cá nhân, nhưng em có thể chia sẻ thông tin chung: {fallback_qa}
+                return f"""Dạ {personal_address}, em gặp khó khăn khi truy xuất thông tin cá nhân, nhưng em có thể chia sẻ thông tin chung: {fallback_qa}
 
-Để biết thông tin cá nhân chi tiết, thầy/cô có thể truy cập hệ thống quản lý đào tạo của trường ạ. 🎓
+Để biết thông tin cá nhân chi tiết, {personal_address} có thể truy cập hệ thống quản lý đào tạo của trường ạ. 🎓
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ?"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"""
             else:
-                return """Dạ thầy/cô, em gặp khó khăn kỹ thuật khi truy xuất thông tin. Thầy/cô có thể:
+                return f"""Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin. {personal_address.title()} có thể:
 • Thử lại sau vài phút
 • Truy cập trực tiếp hệ thống quản lý đào tạo
 • Liên hệ bộ phận IT: it@bdu.edu.vn
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
     
-    def _get_default_dont_know_response(self, query):
-        """Default don't know response with department suggestion"""
+    def _get_default_dont_know_response(self, query, session_id):
+        """Default don't know response với department suggestion và gender support"""
+        personal_address = self._get_personal_address(session_id)
         query_lower = query.lower()
         
         if any(word in query_lower for word in ['ngân hàng đề', 'đề thi', 'khảo thí']):
-            return "Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ Phòng Đảm bảo chất lượng và Khảo thí qua email ldkham@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
+            return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ Phòng Đảm bảo chất lượng và Khảo thí qua email ldkham@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
         elif any(word in query_lower for word in ['kê khai', 'nhiệm vụ', 'giờ chuẩn']):
-            return "Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ Phòng Tổ chức - Cán bộ qua email tcccb@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
+            return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ Phòng Tổ chức - Cán bộ qua email tcccb@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
         elif any(word in query_lower for word in ['tạp chí', 'nghiên cứu', 'khoa học']):
-            return "Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ Phòng Nghiên cứu - Hợp tác qua email nghiencuu@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
+            return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ Phòng Nghiên cứu - Hợp tác qua email nghiencuu@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
         else:
-            return "Dạ thầy/cô, em chưa có thông tin về vấn đề này. Thầy/cô có thể liên hệ phòng ban liên quan qua email info@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
+            return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ phòng ban liên quan qua email info@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
     
     def _clean_query(self, query):
         """Clean and prepare query for lecturers"""
@@ -1231,7 +1207,7 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
             'decision_type': decision_type,
             'was_education_related': was_education,
             'is_education_query': self.decision_engine.is_education_related(query),
-            'hybrid_processed': True  # ✅ NEW field
+            'hybrid_processed': True
         })
         
         self.conversation_memory[session_id] = self.conversation_memory[session_id][-10:]
@@ -1241,7 +1217,7 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
     def _get_empty_query_response_lecturer(self):
         """Response for empty queries from lecturers"""
         return {
-            'response': "Dạ chào thầy/cô! Em có thể hỗ trợ gì cho thầy/cô về công việc tại BDU ạ? 🎓",
+            'response': "Dạ chào giảng viên! Em có thể hỗ trợ gì cho giảng viên về công việc tại BDU ạ? 🎓",
             'confidence': 0.9,
             'method': 'empty_query_lecturer',
             'processing_time': 0.01,
@@ -1266,8 +1242,9 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
             self.response_generator.clear_conversation_memory()
             self.conversation_memory.clear()
 
-    def _get_default_clarification_request(self, query):
-        """Default clarification request if Gemini fails"""
+    def _get_default_clarification_request(self, query, session_id):
+        """Default clarification request if Gemini fails với gender support"""
+        personal_address = self._get_personal_address(session_id)
         query_words = query.lower().split()
         
         topic_keywords = {
@@ -1281,9 +1258,9 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         for topic, keywords in topic_keywords.items():
             if any(kw in query_words for kw in keywords):
-                return f"Dạ thầy/cô, để em hỗ trợ chính xác về {topic}, thầy/cô có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
+                return f"Dạ {personal_address}, để em hỗ trợ chính xác về {topic}, {personal_address} có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
         
-        return "Dạ thầy/cô, để em hỗ trợ chính xác nhất, thầy/cô có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+        return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
     
     def reload_after_qa_update(self):
         """Reload knowledge base after QA Management updates"""
@@ -1315,7 +1292,7 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
         return sources
 
 
-# ✅ ENHANCED: ChatbotAI class with top-k semantic search
+# ChatbotAI class with top-k semantic search
 class ChatbotAI:
     def __init__(self, shared_response_generator):
         self.model = None
@@ -1334,12 +1311,6 @@ class ChatbotAI:
             self.model = SentenceTransformer('keepitreal/vietnamese-sbert')
             logger.info("✅ Vietnamese SBERT loaded for lecturers")
             
-            # try:
-            #     self.vietnamese_restorer = SimpleVietnameseRestorer(settings.GEMINI_API_KEY)
-            #     logger.info("✅ Vietnamese Restorer loaded for search")
-            # except Exception as e:
-            #     logger.warning(f"⚠️ Vietnamese Restorer failed to load: {e}")
-            #     self.vietnamese_restorer = None
             if self.vietnamese_restorer:
                  logger.info("✅ Vietnamese Restorer linked successfully for search.")
             else:
@@ -1351,7 +1322,7 @@ class ChatbotAI:
             self.model = None
     
     def load_link_mapping(self):
-        """Load link mapping with reduced logging"""
+        """Load link mapping với reduced logging"""
         try:
             link_csv_path = os.path.join(settings.BASE_DIR, 'data', 'link.csv')
             logger.info(f"🔗 Loading reference links from: {link_csv_path}")
@@ -1359,9 +1330,6 @@ class ChatbotAI:
             if os.path.exists(link_csv_path):
                 df_links = pd.read_csv(link_csv_path, encoding='utf-8')
                 logger.info(f"🔗 CSV loaded successfully. Shape: {df_links.shape}")
-                
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f"🔗 First 3 rows:\n{df_links.head(3).to_string()}")
                 
                 for index, row in df_links.iterrows():
                     stt = str(row['STT']).strip()
@@ -1372,11 +1340,6 @@ class ChatbotAI:
                 
                 logger.info(f"✅ Total loaded: {len(self.link_mapping)} reference links")
                 
-                if logger.isEnabledFor(logging.DEBUG) and self.link_mapping:
-                    sample_keys = list(self.link_mapping.keys())[:3]
-                    sample_mappings = {k: self.link_mapping[k] for k in sample_keys}
-                    logger.debug(f"🔗 Sample mappings: {sample_mappings}")
-                
             else:
                 logger.error(f"❌ link.csv not found at {link_csv_path}")
                 
@@ -1385,7 +1348,7 @@ class ChatbotAI:
             self.link_mapping = {}
     
     def get_reference_links(self, qa_item):
-        """Get reference links with reduced logging"""
+        """Get reference links với reduced logging"""
         reference_links = []
         
         stt_value = qa_item.get('STT', '')
@@ -1531,12 +1494,7 @@ class ChatbotAI:
             self.index = None
     
     def semantic_search_top_k(self, query, top_k=5):
-        """
-        ✅ NEW: Enhanced semantic search returning top-k candidates
-        
-        This is the key method for hybrid retrieval - returns multiple candidates
-        instead of just the best one, enabling re-ranking.
-        """
+        """Enhanced semantic search returning top-k candidates"""
         try:
             if not self.model or not self.index:
                 logger.warning("⚠️ Model or index not available, falling back to keyword search")
@@ -1574,9 +1532,7 @@ class ChatbotAI:
             return self.keyword_search_top_k(query, top_k)
     
     def keyword_search_top_k(self, query, top_k=5):
-        """
-        ✅ NEW: Enhanced keyword search returning top-k candidates
-        """
+        """Enhanced keyword search returning top-k candidates"""
         query_words = set(query.lower().split())
         candidates = []
         
@@ -1604,11 +1560,7 @@ class ChatbotAI:
         return candidates[:top_k]
     
     def semantic_search(self, query, top_k=3):
-        """
-        ✅ MODIFIED: Updated to use new top-k search method
-        
-        This method maintains backward compatibility while using the new hybrid approach.
-        """
+        """Maintains backward compatibility while using the new hybrid approach"""
         candidates = self.semantic_search_top_k(query, top_k)
         
         if candidates:
@@ -1622,7 +1574,7 @@ class ChatbotAI:
         try:
             if not query.strip():
                 return {
-                    'response': 'Dạ thầy/cô, vui lòng nhập câu hỏi cụ thể ạ. 🎓',
+                    'response': 'Dạ giảng viên, vui lòng nhập câu hỏi cụ thể ạ. 🎓',
                     'confidence': 0.1,
                     'method': 'empty_query',
                     'sources': [],
@@ -1692,32 +1644,20 @@ class ChatbotAI:
 
 
 class BDUChatbotService:
-    """
-    🚀 ENHANCED: Primary Service Layer for BDU Chatbot with API Priority
-    
-    This service acts as the main orchestrator that prioritizes:
-    1. External API calls for personal/schedule queries (HIGHEST PRIORITY)
-    2. Hybrid retrieval & re-ranking for general knowledge (FALLBACK)
-    
-    Fixes the "API Nerve Disconnection" issue after hybrid upgrade.
-    """
+    """Primary Service Layer for BDU Chatbot with API Priority"""
     
     def __init__(self):
-        """
-        ✅ SỬA ĐỔI: Khởi tạo các đối tượng theo đúng thứ tự
-        """
-        # FIX 1: Tạo ra 'bộ não' response_generator TRƯỚC TIÊN
+        # Tạo shared response_generator trước tiên
         self.response_generator = GeminiResponseGenerator()
         
-        # FIX 2: SAU ĐÓ, truyền 'bộ não' đó vào cho hybrid_chatbot để dùng chung
+        # Truyền shared response_generator vào hybrid_chatbot
         self.hybrid_chatbot = HybridChatbotAI(shared_response_generator=self.response_generator)
         
         self.intent_classifier = PhoBERTIntentClassifier()
         
-        # NEW: API priority configuration
+        # API priority configuration
         self.api_priority_config = {
             'personal_info_keywords': [
-                # ... (giữ nguyên danh sách keywords) ...
                 'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
                 'lịch giảng của tôi', 'lich giang cua toi', 'lịch dạy của tôi', 'lich day cua toi',
                 'tôi giảng', 'toi giang', 'tôi dạy', 'toi day', 'môn của tôi', 'mon cua toi',
@@ -1733,7 +1673,6 @@ class BDUChatbotService:
                 'lịch tuần', 'lich tuan', 'lịch ngày', 'lich ngay'
             ],
             'time_context_keywords': [
-                # ... (giữ nguyên danh sách keywords) ...
                 'hôm nay', 'hom nay', 'today', 'ngày mai', 'ngay mai', 'tomorrow',
                 'tuần này', 'tuan nay', 'this week', 'tuần tới', 'tuan toi', 'next week',
                 'thứ 2', 'thu 2', 'thứ 3', 'thu 3', 'thứ 4', 'thu 4', 'thứ 5', 'thu 5',
@@ -1744,17 +1683,10 @@ class BDUChatbotService:
             ]
         }
         
-        logger.info("🚀 BDUChatbotService initialized with API Priority and a SHARED Response Generator")
+        logger.info("🚀 BDUChatbotService initialized with API Priority and SHARED Response Generator")
     
     def _needs_external_api(self, query: str, intent_result: dict) -> bool:
-        """
-        🔧 RESTORED: Check if query needs external API call (was missing after hybrid upgrade)
-        
-        This method restores the "API Nerve" by checking:
-        1. Personal information keywords in query
-        2. Schedule-related intent classification
-        3. Time context indicators
-        """
+        """Check if query needs external API call"""
         if not query:
             return False
         
@@ -1796,9 +1728,7 @@ class BDUChatbotService:
         return needs_api
     
     def _handle_external_api_call(self, query: str, intent_result: dict, entities: dict, session_id: str, jwt_token: str) -> dict:
-        """
-        🌐 Handle external API call and response processing
-        """
+        """Handle external API call and response processing"""
         try:
             logger.info("🌐 PRIORITY: Calling external API for personal/schedule information")
             
@@ -1823,7 +1753,7 @@ class BDUChatbotService:
                 )
                 
                 return {
-                    'response': response.get('response', self._get_api_fallback_response(api_result)),
+                    'response': response.get('response', self._get_api_fallback_response(api_result, session_id)),
                     'confidence': 0.95,
                     'method': 'external_api_success',
                     'decision_type': 'use_external_api',
@@ -1835,14 +1765,14 @@ class BDUChatbotService:
                     'lecturer_optimized': True,
                     'external_api_used': True,
                     'hybrid_reranking_used': False,  # API call bypassed hybrid system
-                    'api_priority_activated': True   # ✅ NEW: Flag showing API priority worked
+                    'api_priority_activated': True   # Flag showing API priority worked
                 }
             
             else:
                 # API failed, return error response
                 error_type = api_result.get('error_type', 'unknown')
                 return {
-                    'response': self._get_api_error_response(error_type, api_result.get('error', '')),
+                    'response': self._get_api_error_response(error_type, api_result.get('error', ''), session_id),
                     'confidence': 0.1,
                     'method': 'external_api_failed',
                     'decision_type': 'api_error',
@@ -1854,8 +1784,9 @@ class BDUChatbotService:
                 
         except Exception as e:
             logger.error(f"❌ Error in external API call: {str(e)}")
+            personal_address = self._get_personal_address(session_id)
             return {
-                'response': "Dạ thầy/cô, em gặp khó khăn khi truy xuất thông tin cá nhân. Thầy/cô có thể thử lại sau hoặc liên hệ bộ phận IT để được hỗ trợ ạ. 🎓",
+                'response': f"Dạ {personal_address}, em gặp khó khăn khi truy xuất thông tin cá nhân. {personal_address.title()} có thể thử lại sau hoặc liên hệ bộ phận IT để được hỗ trợ ạ. 🎓",
                 'confidence': 0.1,
                 'method': 'external_api_error',
                 'processing_time': 0.2,
@@ -1863,19 +1794,18 @@ class BDUChatbotService:
                 'api_priority_activated': True
             }
     
-    def _handle_authentication_required(self, query: str) -> dict:
-        """
-        🔐 Handle case where API is needed but no JWT token provided
-        """
+    def _handle_authentication_required(self, session_id: str) -> dict:
+        """Handle case where API is needed but no JWT token provided với gender support"""
+        personal_address = self._get_personal_address(session_id)
         return {
-            'response': """Dạ thầy/cô, để em có thể cung cấp thông tin cá nhân như lịch giảng dạy, thầy/cô cần đăng nhập vào ứng dụng trước ạ. 🔐
+            'response': f"""Dạ {personal_address}, để em có thể cung cấp thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng trước ạ. 🔐
 
-Thầy/cô có thể:
+{personal_address.title()} có thể:
 • Đăng nhập lại vào ứng dụng BDU
 • Kiểm tra kết nối mạng
 • Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
 
-Sau khi đăng nhập, thầy/cô có thể hỏi lại em về lịch giảng dạy nhé! 🎓""",
+Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch giảng dạy nhé! 🎓""",
             'confidence': 0.9,
             'method': 'authentication_required',
             'decision_type': 'require_authentication',
@@ -1885,34 +1815,32 @@ Sau khi đăng nhập, thầy/cô có thể hỏi lại em về lịch giảng d
             'authentication_required': True
         }
     
+    def _get_personal_address(self, session_id):
+        """Helper method để lấy personal address từ response generator"""
+        if hasattr(self.response_generator, '_get_personal_address'):
+            return self.response_generator._get_personal_address(session_id)
+        return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
+    
     def process_query(self, query: str, session_id: str = None, jwt_token: str = None) -> dict:
-        """
-        🎯 MAIN METHOD: Enhanced response generation with API Priority
-        
-        Priority Flow:
-        1. Intent Classification
-        2. ✅ NEW: API Priority Check (HIGHEST PRIORITY)
-        3. Hybrid Retrieval & Re-ranking (FALLBACK)
-        """
+        """Main method với API Priority"""
         start_time = time.time()
         
         logger.info(f"🎯 BDU Service Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
         
         try:
-            # Step 1: Clean and validate input
             if not query or len(query.strip()) < 2:
                 return {
-                    'response': "Dạ chào thầy/cô! Em có thể hỗ trợ gì cho thầy/cô về công việc tại BDU ạ? 🎓",
+                    'response': "Dạ chào giảng viên! Em có thể hỗ trợ gì cho giảng viên về công việc tại BDU ạ? 🎓",
                     'confidence': 0.9,
                     'method': 'empty_query',
                     'processing_time': time.time() - start_time
                 }
             
-            # Step 2: Intent Classification
+            # Intent Classification
             intent_result = self.intent_classifier.classify_intent(query)
             entities = self.intent_classifier.extract_entities(query)
             
-            # ✅ STEP 3: API PRIORITY CHECK (RESTORED FUNCTIONALITY)
+            # API PRIORITY CHECK (RESTORED FUNCTIONALITY)
             if self._needs_external_api(query, intent_result):
                 logger.info("🚨 API PRIORITY ACTIVATED: Personal/Schedule query detected")
                 
@@ -1923,9 +1851,9 @@ Sau khi đăng nhập, thầy/cô có thể hỏi lại em về lịch giảng d
                     )
                 else:
                     # No token -> Require authentication
-                    return self._handle_authentication_required(query)
+                    return self._handle_authentication_required(session_id)
             
-            # ✅ STEP 4: FALLBACK TO HYBRID SYSTEM (for general knowledge)
+            # FALLBACK TO HYBRID SYSTEM (for general knowledge)
             logger.info("📚 Using Hybrid Retrieval for general knowledge query")
             result = self.hybrid_chatbot.process_query(query, session_id, jwt_token)
             
@@ -1937,63 +1865,84 @@ Sau khi đăng nhập, thầy/cô có thể hỏi lại em về lịch giảng d
             
         except Exception as e:
             logger.error(f"❌ BDU Service Error: {str(e)}")
+            personal_address = self._get_personal_address(session_id)
             return {
-                'response': "Dạ thầy/cô, em gặp khó khăn kỹ thuật. Thầy/cô có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓",
+                'response': f"Dạ {personal_address}, em gặp khó khăn kỹ thuật. {personal_address.title()} có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓",
                 'confidence': 0.0,
                 'method': 'service_error',
                 'processing_time': time.time() - start_time,
                 'error': str(e)
             }
     
-    def _get_api_fallback_response(self, api_result: dict) -> str:
-        """Fallback response when API data is available but Gemini fails"""
+    def _get_api_fallback_response(self, api_result: dict, session_id: str) -> str:
+        """Fallback response when API data is available but Gemini fails với gender support"""
         lecturer_info = api_result.get('lecturer_info', {})
-        ten_giang_vien = lecturer_info.get('ten_giang_vien', 'thầy/cô')
+        ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
+        
+        # Determine personal address từ API data hoặc session
+        if ten_giang_vien:
+            gender = lecturer_info.get('gender', 'other')
+            if gender == 'male':
+                salutation = 'thầy'
+            elif gender == 'female':
+                salutation = 'cô'
+            else:
+                salutation = 'giảng viên'
+                
+            if salutation in ['thầy', 'cô']:
+                name_suffix = ten_giang_vien.split()[-1] if ten_giang_vien else ''
+                personal_address = f"{salutation} {name_suffix}" if name_suffix else salutation
+            else:
+                personal_address = f"{salutation} {ten_giang_vien}" if ten_giang_vien else salutation
+        else:
+            personal_address = self._get_personal_address(session_id)
         
         schedule_summary = api_result.get('schedule_summary', {})
         total_classes = schedule_summary.get('total_classes', 0)
         
-        return f"""Dạ {ten_giang_vien}, em đã tìm thấy thông tin lịch giảng dạy của thầy/cô với {total_classes} buổi học. 
+        return f"""Dạ {personal_address}, em đã tìm thấy thông tin lịch giảng dạy của {personal_address} với {total_classes} buổi học. 
 
-Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. Thầy/cô có thể:
+Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_address.title()} có thể:
 • Truy cập hệ thống quản lý đào tạo của trường
 • Liên hệ phòng Đào tạo để được hỗ trợ
 • Thử hỏi lại với câu hỏi cụ thể hơn
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
     
-    def _get_api_error_response(self, error_type: str, error_message: str) -> str:
-        """Get appropriate error response based on error type"""
+    def _get_api_error_response(self, error_type: str, error_message: str, session_id: str) -> str:
+        """Get appropriate error response based on error type với gender support"""
+        personal_address = self._get_personal_address(session_id)
+        
         if error_type == 'token_decode_failed':
-            return """Dạ thầy/cô, phiên đăng nhập đã hết hạn. Thầy/cô vui lòng đăng nhập lại vào ứng dụng BDU để em có thể hỗ trợ thông tin cá nhân ạ. 🔐
+            return f"""Dạ {personal_address}, phiên đăng nhập đã hết hạn. {personal_address.title()} vui lòng đăng nhập lại vào ứng dụng BDU để em có thể hỗ trợ thông tin cá nhân ạ. 🔐
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         elif error_type == 'authentication_failed':
-            return """Dạ thầy/cô, thông tin đăng nhập không hợp lệ hoặc đã hết hạn. Thầy/cô vui lòng:
+            return f"""Dạ {personal_address}, thông tin đăng nhập không hợp lệ hoặc đã hết hạn. {personal_address.title()} vui lòng:
 • Đăng xuất và đăng nhập lại
 • Kiểm tra kết nối mạng
 • Liên hệ bộ phận IT nếu vẫn gặp khó khăn: it@bdu.edu.vn
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         elif error_type == 'network_error':
-            return """Dạ thầy/cô, hiện tại có vấn đề kết nối đến hệ thống của trường. Thầy/cô vui lòng:
+            return f"""Dạ {personal_address}, hiện tại có vấn đề kết nối đến hệ thống của trường. {personal_address.title()} vui lòng:
 • Kiểm tra kết nối mạng
 • Thử lại sau vài phút
 • Liên hệ bộ phận IT nếu vấn đề kéo dài: it@bdu.edu.vn
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
         
         else:
-            return """Dạ thầy/cô, em gặp khó khăn kỹ thuật khi truy xuất thông tin. Thầy/cô có thể:
+            return f"""Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin. {personal_address.title()} có thể:
 • Thử lại sau vài phút
 • Truy cập trực tiếp hệ thống quản lý đào tạo
 • Liên hệ bộ phận IT: it@bdu.edu.vn
 
-Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
+{personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
     
-    # ✅ Delegate other methods to hybrid chatbot
+    # Delegate methods to hybrid chatbot
     def get_system_status(self):
         """Get comprehensive system status including API priority status"""
         hybrid_status = self.hybrid_chatbot.get_system_status()
@@ -2014,7 +1963,8 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
                 '2. API Priority Check (RESTORED)', 
                 '3. External API Call (if needed)',
                 '4. Hybrid Retrieval & Re-ranking (fallback)',
-                '5. User Memory Prompt Integration'    # ✅ THÊM DÒNG NÀY
+                '5. User Memory Prompt Integration',
+                '6. Gender-based Addressing'
             ]
         })
         
@@ -2047,6 +1997,4 @@ Thầy/cô có cần hỗ trợ thêm gì không ạ? 🎓"""
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.knowledge_data
 
-
-# ✅ FINAL: Initialize the enhanced service with API Priority Restoration
 chatbot_ai = BDUChatbotService()

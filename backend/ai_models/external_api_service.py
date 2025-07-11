@@ -71,9 +71,14 @@ class ExternalAPIService:
         try:
             vien_chuc = payload.get('vien_chuc', {})
             
+            # ✅ NEW: Chuyển đổi giới tính theo logic MỚI
+            gioi_tinh = vien_chuc.get('gioi_tinh')
+            gender_str = 'male' if gioi_tinh == 0 else 'female'
+            
             lecturer_info = {
                 'ma_giang_vien': vien_chuc.get('ma_vien_chuc', ''),
                 'ten_giang_vien': vien_chuc.get('ho_va_ten', ''),
+                'gender': gender_str,
                 'gmail': vien_chuc.get('gmail', ''),
                 'chuc_danh': vien_chuc.get('chuc_danh', ''),
                 'vi_tri_viec_lam': vien_chuc.get('vi_tri_viec_lam', ''),

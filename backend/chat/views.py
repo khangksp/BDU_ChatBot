@@ -364,20 +364,22 @@ class ChatView(APIView):
             # ✅ ENHANCED: Process với comprehensive user context
             if user_context:
                 # Set enhanced user context vào gemini service
-                enhanced_context = {
-                    'personalized_prompt': request.user.get_personalized_system_prompt(),
-                    'faculty_code': user_context.get('faculty_code'),
-                    'full_name': user_context.get('full_name'),
-                    'department': user_context.get('department'),
-                    'department_name': user_context.get('department_name'),
-                    'position_name': user_context.get('position_name'),
-                    'preferences': user_context.get('preferences'),
-                    # ✅ UPDATED: User memory prompt specific context
-                    'user_memory_prompt': request.user.chatbot_preferences.get('user_memory_prompt', ''),  # ✅ UPDATED
-                    'department_priority_enabled': personalization_info.get('department_priority', True)
-                }
+                # enhanced_context = {
+                #     'personalized_prompt': request.user.get_personalized_system_prompt(),
+                #     'faculty_code': user_context.get('faculty_code'),
+                #     'full_name': user_context.get('full_name'),
+                #     'gender': user_context.get('gender'),
+                #     'department': user_context.get('department'),
+                #     'department_name': user_context.get('department_name'),
+                #     'position_name': user_context.get('position_name'),
+                #     'preferences': user_context.get('preferences'),
+                #     # ✅ UPDATED: User memory prompt specific context
+                #     'user_memory_prompt': request.user.chatbot_preferences.get('user_memory_prompt', ''),  # ✅ UPDATED
+                #     'department_priority_enabled': personalization_info.get('department_priority', True)
+                # }
                 
-                chatbot_ai.response_generator.set_user_context(session_id, enhanced_context)
+                # chatbot_ai.response_generator.set_user_context(session_id, enhanced_context)
+                chatbot_ai.response_generator.set_user_context(session_id, user_context)
                 
                 # ✅ NEW: Process with personalization AND JWT token
                 ai_response = chatbot_ai.process_query(user_message, session_id, jwt_token)
