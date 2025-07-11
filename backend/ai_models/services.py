@@ -14,7 +14,7 @@ import pandas as pd
 import random
 
 from .external_api_service import external_api_service
-from .google_drive_service import google_drive_service
+from qa_management.services import drive_service
 
 logger = logging.getLogger(__name__)
 
@@ -734,7 +734,7 @@ class HybridChatbotAI:
     def get_system_status(self):
         """Get system status including hybrid features"""
         gemini_status = self.response_generator.get_system_status()
-        drive_status = google_drive_service.get_system_status()
+        drive_status = drive_service.get_system_status()
         external_api_status = external_api_service.get_system_status()
         
         qa_management_status = {}
@@ -1405,7 +1405,7 @@ class ChatbotAI:
             # Load from Google Drive (fallback/backup)
             csv_knowledge = []
             try:
-                csv_knowledge = google_drive_service.get_csv_data()
+                csv_knowledge = drive_service.get_csv_data()
                 if csv_knowledge:
                     logger.info(f"✅ Loaded {len(csv_knowledge)} records from Google Drive (backup/fallback)")
                 else:

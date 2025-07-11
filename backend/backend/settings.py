@@ -538,11 +538,14 @@ PERSONALIZATION_CACHE = {
 # Google Drive settings
 GOOGLE_DRIVE = {
     'ENABLED': True,
-    'FOLDER_ID': '1589N-eP0KW3SLZwQtibxXnVoMrubPCqM',  # ID từ link Drive
+    'DRIVE_ID': '0AKVCiX4nzAoJUk9PVA',
+    'FOLDER_ID': '1OYvRRLDK40YUMPS6-K4eKSn78JKAzuxL',
     'CSV_FILENAME': 'QA.csv',
     'SERVICE_ACCOUNT_FILE': BASE_DIR / 'thinking-armor-463404-n1-627b306232a8.json',
-    'CACHE_TIMEOUT': 60,  # 1 phút
-    'SCOPES': ['https://www.googleapis.com/auth/drive.file','https://www.googleapis.com/auth/drive']
+    'CACHE_TIMEOUT': 60,
+    'SCOPES': ['https://www.googleapis.com/auth/drive'],
+    'WRITE_ENABLED': True,
+    'BACKUP_ENABLED': True,
 }
 
 GOOGLE_DRIVE.update({

@@ -24,7 +24,7 @@ def qa_status_api(request):
     """
     try:
         from .models import QAEntry, QASyncLog
-        from .services import qa_drive_service
+        from .services import drive_service
         
         # Get basic statistics
         total_entries = QAEntry.objects.count()
@@ -34,7 +34,7 @@ def qa_status_api(request):
         error_entries = QAEntry.objects.filter(sync_status='error').count()
         
         # Get Drive status
-        drive_status = qa_drive_service.get_drive_status()
+        drive_status = drive_service.get_drive_status()
         
         # Get recent sync log
         recent_sync = QASyncLog.objects.order_by('-started_at').first()
@@ -71,14 +71,14 @@ def health_check(request):
     Health check endpoint for QA Management system
     """
     try:
-        from .services import qa_drive_service
+        from .services import drive_service
         
         # Check database connection
         from .models import QAEntry
         db_count = QAEntry.objects.count()
         
         # Check Drive connection
-        drive_status = qa_drive_service.get_drive_status()
+        drive_status = drive_service.get_drive_status()
         
         return JsonResponse({
             'status': 'healthy',

@@ -18,10 +18,10 @@ class QaManagementConfig(AppConfig):
             from . import signals
             
             # Import services to ensure they're initialized
-            from .services import qa_drive_service
+            from .services import drive_service
             
             # Check initial connection
-            drive_status = qa_drive_service.get_drive_status()
+            drive_status = drive_service.get_drive_status()
             if drive_status['connected']:
                 logger.info("✅ QA Management: Google Drive connection established")
             else:

@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 
-from .google_drive_service import google_drive_service
+from qa_management.services import drive_service
 from .services import chatbot_ai
 
 import logging
@@ -119,7 +119,7 @@ def force_refresh_drive_data(request):
             }, status=403)
         
         # Force refresh Google Drive data
-        new_data = google_drive_service.force_refresh()
+        new_data = drive_service.force_refresh()
         
         if new_data:
             # Reload knowledge base với data mới
@@ -151,7 +151,7 @@ def google_drive_status(request):
     Lấy trạng thái Google Drive integration
     """
     try:
-        drive_status = google_drive_service.get_system_status()
+        drive_status = drive_service.get_system_status()
         system_status = chatbot_ai.get_system_status()
         
         return Response({

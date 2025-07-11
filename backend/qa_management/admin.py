@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 import logging
 
 from .models import QAEntry, QASyncLog
-from .services import QADriveService
+from .services import drive_service
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,7 @@ class QAEntryAdmin(admin.ModelAdmin):
     def sync_selected_to_drive(self, request, queryset):
         """Sync selected entries to Google Drive - FIXED VERSION"""
         try:
-            service = QADriveService()
+            service = drive_service
             
             # ✅ BULK SYNC thay vì sync từng cái một để tránh race condition
             selected_entries = list(queryset)
@@ -295,7 +295,7 @@ class QAEntryAdmin(admin.ModelAdmin):
     def sync_selected_individually(self, request, queryset):
         """Sync selected entries one by one (safe but slower)"""
         try:
-            service = QADriveService()
+            service = drive_service
             success_count = 0
             error_count = 0
             
@@ -360,7 +360,7 @@ class QAEntryAdmin(admin.ModelAdmin):
     def force_sync_all(self, request, queryset):
         """Force sync all entries to Drive (rebuild entire CSV)"""
         try:
-            service = QADriveService()
+            service = drive_service
             result = service.export_all_to_drive()
             
             if result['success']:
@@ -386,7 +386,7 @@ class QAEntryAdmin(admin.ModelAdmin):
         """Import Q&A from Google Drive"""
         if request.method == 'POST':
             try:
-                service = QADriveService()
+                service = drive_service
                 result = service.import_from_drive()
                 
                 if result['success']:
@@ -414,7 +414,7 @@ class QAEntryAdmin(admin.ModelAdmin):
         """Export all Q&A to Google Drive"""
         if request.method == 'POST':
             try:
-                service = QADriveService()
+                service = drive_service
                 result = service.export_all_to_drive()
                 
                 if result['success']:
@@ -443,7 +443,7 @@ class QAEntryAdmin(admin.ModelAdmin):
     def sync_status_view(self, request):
         """Show sync status dashboard"""
         try:
-            service = QADriveService()
+            service = drive_service
             
             # Get statistics
             total_entries = QAEntry.objects.count()

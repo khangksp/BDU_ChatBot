@@ -108,7 +108,7 @@ def auto_sync_to_drive(sender, instance, created, **kwargs):
             return
         
         # Import here to avoid circular imports
-        from .services import qa_drive_service
+        from .services import drive_service
         
         logger.info(f"🔄 Auto-sync triggered for: {instance.stt}")
         
@@ -119,7 +119,7 @@ def auto_sync_to_drive(sender, instance, created, **kwargs):
                 instance._syncing = True
                 
                 # ✅ IMPORTANT: Use single entry sync to avoid overwriting all data
-                result = qa_drive_service.sync_single_entry(instance)
+                result = drive_service.sync_single_entry(instance)
                 
                 if result:
                     logger.info(f"✅ Auto-sync successful for entry: {instance.stt}")
@@ -159,8 +159,12 @@ def invalidate_chatbot_cache(sender, **kwargs):
                 chatbot_ai.sbert_retriever.cache_timestamp = 0
             
             # Clear Google Drive cache
-            from ai_models.google_drive_service import google_drive_service
-            google_drive_service.clear_cache()
+            # FIX: Update import path or remove if not available
+            try:
+                from ai_models.services import drive_service
+                drive_service.clear_cache()
+            except ImportError:
+                logger.warning("Google Drive cache service not available for cache invalidation")
             
             logger.info("🗑️ Chatbot cache invalidated")
             
