@@ -488,7 +488,7 @@ class GeminiResponseGenerator:
             ]
         }
         
-        logger.info("✅ Enhanced Gemini Response Generator initialized with Smart Token Management")
+        logger.info("✅ Enhanced Gemini Response Generator initialized with Smart Token Management và Consistent Personalization")
 
     # ✅ NEW: Process external API data
     def _generate_external_api_response(self, query, context, session_id=None):
@@ -519,8 +519,9 @@ class GeminiResponseGenerator:
         
         logger.info(f"🌐 Processing external API data with {optimal_tokens} tokens")
         
+        # 🚀 CRITICAL FIX: Pass session_id để consistent personalization
         response = self._call_gemini_api_with_smart_tokens(
-            prompt, 'external_api_processing', optimal_tokens
+            prompt, 'external_api_processing', optimal_tokens, session_id
         )
         
         if not response:
@@ -764,7 +765,7 @@ Trả lời:"""
         # 3. Ensure proper ending
         if not response.strip().endswith('có cần hỗ trợ thêm gì không ạ?'):
             response = re.sub(r'\s*(có cần.*?không ạ\?|Cần.*?không\?|Có.*?không\?)?\s*$', '', response.strip())
-            response += f' {personal_address.title()} có cần hỗ trợ thêm gì không ạ?'
+            response += f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ?'
         
         # 4. Remove excessive formatting
         response = re.sub(r'\*\*\d+\.\s*', '', response)
@@ -983,8 +984,8 @@ Trả lời:"""
         
         print(f"🧠 SMART TOKENS: {optimal_tokens} tokens")
         
-        # ✅ STEP 2: First attempt with optimal tokens
-        response = self._call_gemini_api_with_smart_tokens(prompt, strategy, optimal_tokens)
+        # ✅ STEP 2: First attempt with optimal tokens - 🚀 CRITICAL FIX: Pass session_id
+        response = self._call_gemini_api_with_smart_tokens(prompt, strategy, optimal_tokens, session_id)
         
         if not response:
             return self._get_smart_fallback_with_context_lecturer(query, None, {}, session_id), {
@@ -1034,8 +1035,8 @@ Trả lời:"""
         
         print(f"🔧 AUTO-COMPLETION: Attempting with {completion_tokens} tokens")
         
-        # ✅ Call API to complete
-        completion = self._call_gemini_api_with_smart_tokens(completion_prompt, 'completion', completion_tokens)
+        # ✅ Call API to complete - 🚀 CRITICAL FIX: Pass session_id
+        completion = self._call_gemini_api_with_smart_tokens(completion_prompt, 'completion', completion_tokens, session_id)
         
         if completion:
             # ✅ Merge incomplete + completion
@@ -1162,8 +1163,12 @@ Trả lời:"""
         print("="*60 + "\n")
         return salutation
 
-    def _call_gemini_api_with_smart_tokens(self, prompt: str, strategy: str, max_tokens: int, retry_count=0) -> Optional[str]:
-        """Call Gemini API with Smart Token Management and automatic key rotation."""
+    def _call_gemini_api_with_smart_tokens(self, prompt: str, strategy: str, max_tokens: int, session_id: str = None, retry_count=0) -> Optional[str]:
+        """
+        🚀 CRITICAL FIX: Call Gemini API với Smart Token Management và Consistent Personalization
+        
+        Đây là hàm quan trọng nhất - đã được sửa để truyền session_id cho personalization
+        """
         
         # Lấy một key hợp lệ từ bộ quản lý
         api_key_to_use = self.key_manager.get_key()
@@ -1173,10 +1178,11 @@ Trả lời:"""
             if retry_count == 0:
                 logger.warning("All keys are limited. Waiting 5 seconds before one last retry...")
                 time.sleep(5)
-                return self._call_gemini_api_with_smart_tokens(prompt, strategy, max_tokens, retry_count=1)
+                return self._call_gemini_api_with_smart_tokens(prompt, strategy, max_tokens, session_id, retry_count=1)
             else:
                 logger.error("CRITICAL: All Gemini API keys are rate-limited. Aborting call.")
-                personal_address = self._get_personal_address(None)
+                # 🚀 CRITICAL FIX: Sử dụng session_id thay vì None
+                personal_address = self._get_personal_address(session_id)
                 return f"Dạ {personal_address}, hiện tại hệ thống đang quá tải, tất cả các kết nối đều đang bận. Vui lòng thử lại sau khoảng 1 phút nữa ạ. 😥"
 
         try:
@@ -1215,7 +1221,8 @@ Trả lời:"""
                     # Kiểm tra xem có bị block vì lý do an toàn không
                     if 'finishReason' in candidate and candidate['finishReason'] == 'SAFETY':
                         logger.warning("🚨 Gemini response blocked due to SAFETY reasons.")
-                        personal_address = self._get_personal_address(None)
+                        # 🚀 CRITICAL FIX: Sử dụng session_id thay vì None
+                        personal_address = self._get_personal_address(session_id)
                         return f"Dạ {personal_address}, em không thể trả lời câu hỏi này vì lý do an toàn và chính sách nội dung."
                     
                     if 'content' in candidate and 'parts' in candidate['content']:
@@ -1226,10 +1233,11 @@ Trả lời:"""
                 self.key_manager.report_failure(api_key_to_use)
                 if retry_count == 0:
                     logger.warning(f"Rate limit on key. Retrying immediately with a new key...")
-                    return self._call_gemini_api_with_smart_tokens(prompt, strategy, max_tokens, retry_count=1)
+                    return self._call_gemini_api_with_smart_tokens(prompt, strategy, max_tokens, session_id, retry_count=1)
                 else:
                     logger.error("Rate limit hit on retry attempt as well. Aborting call.")
-                    personal_address = self._get_personal_address(None)
+                    # 🚀 CRITICAL FIX: Sử dụng session_id thay vì None
+                    personal_address = self._get_personal_address(session_id)
                     return f"Dạ {personal_address}, hiện tại hệ thống đang quá tải. Vui lòng thử lại sau ít phút ạ."
             
             else:
@@ -1239,7 +1247,8 @@ Trả lời:"""
         
         except requests.exceptions.Timeout:
             logger.error("Gemini API call timed out.")
-            personal_address = self._get_personal_address(None)
+            # 🚀 CRITICAL FIX: Sử dụng session_id thay vì None
+            personal_address = self._get_personal_address(session_id)
             return f"Dạ {personal_address}, yêu cầu xử lý mất quá nhiều thời gian và đã bị ngắt. {personal_address.title()} có thể thử lại với câu hỏi ngắn gọn hơn không ạ?"
         except Exception as e:
             logger.error(f"Smart Gemini API call failed: {str(e)}")
@@ -1294,7 +1303,8 @@ Trả lời:
 """
 
         optimal_tokens = self.token_manager.calculate_optimal_tokens(len(prompt), 'direct_enhance')
-        response = self._call_gemini_api_with_smart_tokens(prompt, 'direct_enhance', optimal_tokens)
+        # 🚀 CRITICAL FIX: Pass session_id
+        response = self._call_gemini_api_with_smart_tokens(prompt, 'direct_enhance', optimal_tokens, session_id)
         
         # ✅ FIXED: Fallback cũng sử dụng personal_address
         fallback = f"Dạ {personal_address}, {db_answer} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
@@ -1355,7 +1365,8 @@ Trả lời:
 
         complexity_hint = 'enhanced_generation' if context.get('generation_boosted', False) else 'balanced'
         optimal_tokens = self.token_manager.calculate_optimal_tokens(len(prompt), complexity_hint)
-        response = self._call_gemini_api_with_smart_tokens(prompt, complexity_hint, optimal_tokens)
+        # 🚀 CRITICAL FIX: Pass session_id
+        response = self._call_gemini_api_with_smart_tokens(prompt, complexity_hint, optimal_tokens, session_id)
         
         # ✅ FIXED: Fallback cũng sử dụng personal_address
         fallback = f"Dạ {personal_address}, {db_answer} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
@@ -1508,11 +1519,10 @@ Trả lời:
         return 'balanced'
 
     def _post_process_with_lecturer_consistency(self, response, query, context, strategy, conversation_context, session_id=None):
-        """🚀 NÂNG CẤP: Post-process với conversation context awareness"""
+        """🚀 FIXED: Post-process với better duplication detection"""
         if not response:
             return response
         
-        # ✅ NEW: Lấy thông tin user để personalize addressing
         personal_address = self._get_personal_address(session_id)
         
         # 1. Sửa các vi phạm vai trò cho giảng viên
@@ -1524,34 +1534,46 @@ Trả lời:
             if phrase.lower() in response.lower():
                 response = response.replace(phrase, 'em là AI assistant của BDU')
         
-        # 2. ✅ CRITICAL: Sửa xưng hô không đúng với personalization
+        # 2. Sửa xưng hô không đúng với personalization
         response = re.sub(r'\bbạn\b', personal_address, response, flags=re.IGNORECASE)
         response = re.sub(r'\bmình\b', 'em', response, flags=re.IGNORECASE)
         response = re.sub(r'\btôi\b', 'em', response, flags=re.IGNORECASE)
         
-        # 3. ✅ CRITICAL: Đảm bảo bắt đầu bằng personalized greeting
+        # 3. ✅ CRITICAL: Check if already has proper greeting
         response_stripped = response.strip()
         personalized_start = f"Dạ {personal_address},"
         
         if not response_stripped.lower().startswith(f'dạ {personal_address.lower()}'):
             if response_stripped.lower().startswith('dạ'):
+                # Already has "Dạ" but wrong name, replace it
                 response = personalized_start + ' ' + response_stripped[3:].strip()
             else:
                 response = personalized_start + ' ' + response_stripped
         
-        # 4. ✅ CRITICAL: Đảm bảo kết thúc đúng cách với personalization
-        if not response.strip().endswith('có cần hỗ trợ thêm gì không ạ?'):
-            # Regex mới, mạnh hơn, xóa cả câu kết có chứa tên riêng
-            response = re.sub(r'\s*((Dạ )?(Thầy|Cô|Giảng viên)\s*(\w+\s*)*có cần.*?không ạ\??)\s*$', '', response.strip(), flags=re.IGNORECASE)
+        # 4. ✅ CRITICAL: Better ending detection and replacement
+        # Check if already has a proper ending
+        proper_ending_pattern = r'(thầy|cô|giảng viên)\s+[^.!?]*có\s+cần.*?hỗ trợ.*?thêm.*?gì.*?không.*?ạ\?'
+        
+        if not re.search(proper_ending_pattern, response.lower()):
+            # Remove any partial/incorrect endings first
+            response = re.sub(r'\s*🎓.*$', '', response.strip())
+            response = re.sub(r'\s*(có cần.*?không ạ\?|Cần.*?không\?|Có.*?không\?).*$', '', response.strip())
             
-            # Thêm lại câu kết đúng chuẩn
-            response += f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ?'
-            
-        # 5. ✅ REMOVE: Loại bỏ format phức tạp
-        response = re.sub(r'\*\*\d+\.\s*', '', response)  # Remove **1. **2. etc
-        response = re.sub(r'^\s*\d+\.\s*', '', response, flags=re.MULTILINE)  # Remove numbered lists
-        response = re.sub(r'^\s*[•\-\*]\s*', '', response, flags=re.MULTILINE)  # Remove bullets
-        response = re.sub(r'\*\*(.*?)\*\*', r'\1', response)  # Remove bold formatting
+            # Add the correct ending
+            if not response.strip().endswith(('.', '!', '?')):
+                response += '.'
+            response += f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓'
+        
+        # 5. Remove excessive formatting
+        response = re.sub(r'\*\*\d+\.\s*', '', response)
+        response = re.sub(r'^\s*\d+\.\s*', '', response, flags=re.MULTILINE)
+        response = re.sub(r'^\s*[•\-\*]\s*', '', response, flags=re.MULTILINE)
+        response = re.sub(r'\*\*(.*?)\*\*', r'\1', response)
+        
+        # 6. ✅ NEW: Final cleanup for duplicates
+        # Remove duplicate names in ending
+        duplicate_name_pattern = f'({re.escape(personal_address.title())}).*?\\1'
+        response = re.sub(duplicate_name_pattern, r'\1', response)
         
         return response.strip()
     
@@ -1739,16 +1761,17 @@ Trả lời:"""
             self.memory.conversations.clear()
 
     def get_system_status(self) -> Dict[str, Any]:
-        """Get system status with Smart Token Management and External API info"""
+        """🚀 NÂNG CẤP: Get system status với Smart Token Management, External API info và Consistent Personalization"""
         try:
             test_prompt = "Test ngắn cho giảng viên"
-            response = self._call_gemini_api_with_smart_tokens(test_prompt, 'quick_clarify', 80)
+            # 🚀 CRITICAL FIX: Pass session_id=None for test (có thể pass test session)
+            response = self._call_gemini_api_with_smart_tokens(test_prompt, 'quick_clarify', 80, session_id="test")
             
             return {
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.key_manager.keys),
                 'service_status': 'active' if response else 'error',
-                'mode': 'smart_token_lecturer_focused_with_user_memory_and_context',  # ✅ Updated
+                'mode': 'smart_token_lecturer_focused_with_user_memory_and_context_and_consistent_personalization',  # ✅ Updated
                 'memory_sessions': len(self.memory.conversations),
                 'personalization_sessions': len(self._user_context_cache),
                 'adaptive_token_range': self.token_manager.adaptive_token_range,
@@ -1774,12 +1797,17 @@ Trả lời:"""
                     'personal_information_handling',
                     'gender_based_addressing',  # ✅ NEW feature
                     'conversation_context_summary',  # ✅ NEW feature
-                    'mạch_lạc_response_generation'   # ✅ NEW feature
+                    'mạch_lạc_response_generation',   # ✅ NEW feature
+                    'consistent_personalization_in_errors',  # 🚀 NEW feature
+                    'session_id_propagation_in_api_calls',  # 🚀 NEW feature
+                    'graceful_error_handling_with_personalization'  # 🚀 NEW feature
                 ]
             }
         except Exception as e:
             return {
                 'gemini_api_available': False,
                 'service_status': 'error',
-                'error': str(e)
+                'error': str(e),
+                'consistent_personalization': True,  # 🚀 NEW: Even in error, personalization is supported
+                'graceful_degradation': True  # 🚀 NEW: System supports graceful degradation
             }

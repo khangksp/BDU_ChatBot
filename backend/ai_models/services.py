@@ -865,7 +865,7 @@ class HybridChatbotAI:
             'phobert_available': not self.intent_classifier.fallback_mode,
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'hybrid_retrieval_reranking_lecturer_with_enhanced_memory',  # ✅ Updated
+            'mode': 'hybrid_retrieval_reranking_lecturer_with_enhanced_memory_and_graceful_degradation',  # ✅ Updated
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'personalization_sessions': gemini_status.get('personalization_sessions', 0),
             'adaptive_token_range': self.response_generator.token_manager.adaptive_token_range,
@@ -887,7 +887,10 @@ class HybridChatbotAI:
                 'session_memory_integration',  # ✅ NEW feature
                 'context_driven_api_decisions',  # ✅ NEW feature
                 'enhanced_conversation_continuity',  # ✅ NEW feature
-                'smart_clarification_reduction'  # ✅ NEW feature
+                'smart_clarification_reduction',  # ✅ NEW feature
+                'graceful_degradation_support',  # 🚀 NEW feature
+                'fallback_response_mechanism',  # 🚀 NEW feature
+                'consistent_personalization_in_errors'  # 🚀 NEW feature
             ],
             'gemini_status': gemini_status,
             'external_api_status': external_api_status,
@@ -896,7 +899,9 @@ class HybridChatbotAI:
                 'session_memory_depth': 3,
                 'context_recency_limit': self.decision_engine.external_api_config['context_recency_limit'],
                 'context_memory_threshold': self.decision_engine.external_api_config['context_memory_threshold'],
-                'schedule_continuation_keywords': len(self.decision_engine.external_api_config['schedule_continuation_keywords'])
+                'schedule_continuation_keywords': len(self.decision_engine.external_api_config['schedule_continuation_keywords']),
+                'graceful_degradation': True,  # 🚀 NEW
+                'fallback_capabilities': True  # 🚀 NEW
             }
         }
 
@@ -993,7 +998,8 @@ class HybridChatbotAI:
                 response_text = self._get_personal_out_of_scope_response(session_id)
                 method = 'rejected_non_education'
             else:
-                response_text = self._execute_lecturer_decision(
+                # 🚀 CRITICAL: Execute decision với Graceful Degradation
+                response_text = self._execute_lecturer_decision_with_fallback(
                     decision_type, query, gemini_context, intent_result, entities, session_id
                 )
                 method = decision_type
@@ -1026,6 +1032,7 @@ class HybridChatbotAI:
                 'hybrid_reranking_used': True,
                 'session_memory_used': bool(session_memory),  # ✅ NEW
                 'enhanced_by_context': gemini_context.get('enhanced_by_context', False) if gemini_context else False,  # ✅ NEW
+                'graceful_degradation_used': False,  # 🚀 NEW: Will be set by fallback methods
                 'reranking_stats': {
                     'semantic_score': best_candidate.get('semantic_score', 0),
                     'keyword_score': best_candidate.get('keyword_score', 0),
@@ -1042,43 +1049,248 @@ class HybridChatbotAI:
                 'method': 'error_fallback',
                 'processing_time': time.time() - start_time,
                 'error': str(e),
-                'session_memory_used': bool(session_memory) if 'session_memory' in locals() else False  # ✅ NEW
+                'session_memory_used': bool(session_memory) if 'session_memory' in locals() else False,  # ✅ NEW
+                'graceful_degradation_used': True  # 🚀 NEW
             }
     
-    def _get_personal_address(self, session_id):
-        """Helper method để lấy personal address từ response generator"""
-        if hasattr(self.response_generator, '_get_personal_address'):
-            return self.response_generator._get_personal_address(session_id)
-        return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
+    def _execute_lecturer_decision_with_fallback(self, decision_type, query, gemini_context, intent_result, entities, session_id):
+        """
+        🚀 NEW: Execute lecturer decision với Graceful Degradation mechanism
+        
+        Đây là hàm thay thế cho _execute_lecturer_decision gốc, có khả năng fallback
+        khi Gemini API không khả dụng.
+        """
+        logger.info(f"🎯 Executing enhanced hybrid decision với fallback: {decision_type}")
+        
+        # 🚀 STEP 1: Check Gemini availability trước
+        gemini_available = self._check_gemini_availability()
+        
+        if not gemini_available:
+            logger.warning("⚠️ Gemini API không khả dụng - chuyển sang chế độ Graceful Degradation")
+            return self._create_fallback_response(decision_type, query, gemini_context, session_id)
+        
+        # 🚀 STEP 2: Thử gọi Gemini với error handling
+        try:
+            response_text = self._execute_lecturer_decision_original(
+                decision_type, query, gemini_context, intent_result, entities, session_id
+            )
+            
+            # Kiểm tra response có hợp lệ không
+            if response_text and len(response_text.strip()) > 0:
+                return response_text
+            else:
+                logger.warning("⚠️ Gemini trả về response trống - fallback")
+                return self._create_fallback_response(decision_type, query, gemini_context, session_id)
+                
+        except Exception as e:
+            logger.error(f"❌ Gemini execution failed: {str(e)} - fallback")
+            return self._create_fallback_response(decision_type, query, gemini_context, session_id)
     
-    def _get_personal_short_clarification_response(self, session_id):
-        """Response for short invalid queries với personalization"""
+    def _check_gemini_availability(self):
+        """🚀 NEW: Kiểm tra Gemini API có khả dụng không"""
+        try:
+            # Kiểm tra response_generator có sẵn không
+            if not self.response_generator:
+                return False
+            
+            # Kiểm tra key_manager có keys không
+            if not hasattr(self.response_generator, 'key_manager') or not self.response_generator.key_manager.keys:
+                return False
+            
+            # Thử lấy key
+            test_key = self.response_generator.key_manager.get_key()
+            if not test_key:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error checking Gemini availability: {str(e)}")
+            return False
+    
+    def _create_fallback_response(self, decision_type, query, gemini_context, session_id):
+        """
+        🚀 NEW: Tạo fallback response khi Gemini không khả dụng
+        
+        Hàm này tạo response "thô" nhưng vẫn được cá nhân hóa và định dạng tối thiểu.
+        """
         personal_address = self._get_personal_address(session_id)
-        return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+        
+        # Lấy raw answer từ database nếu có
+        raw_answer = gemini_context.get('db_answer', '') if gemini_context else ''
+        
+        if decision_type == 'use_external_api':
+            return self._create_external_api_fallback(gemini_context, session_id)
+        
+        elif decision_type == 'require_authentication':
+            has_context = gemini_context.get('context_suggested', False) if gemini_context else False
+            return self._create_authentication_fallback(session_id, has_context)
+        
+        elif decision_type in ['use_db_direct', 'enhance_db_answer']:
+            if raw_answer and raw_answer.strip():
+                # 🚀 CORE FALLBACK: Format raw database answer với minimal personalization
+                formatted_answer = self._format_raw_database_answer(raw_answer, personal_address)
+                return formatted_answer
+            else:
+                return self._create_no_answer_fallback(session_id)
+        
+        elif decision_type == 'ask_clarification':
+            context_available = gemini_context.get('context_available', False) if gemini_context else False
+            return self._create_clarification_fallback(query, session_id, context_available)
+        
+        elif decision_type == 'say_dont_know':
+            return self._create_dont_know_fallback(query, session_id)
+        
+        else:
+            logger.warning(f"⚠️ Unknown decision type in fallback: {decision_type}")
+            return self._create_generic_fallback(session_id)
     
-    def _get_personal_out_of_scope_response(self, session_id):
-        """Out of scope response với personalization"""
+    def _format_raw_database_answer(self, raw_answer, personal_address):
+        """
+        🚀 FIXED: Format raw database answer với minimal enhancement nhưng vẫn cá nhân hóa
+        """
+        # Clean raw answer
+        clean_answer = raw_answer.strip()
+        
+        # ✅ NEW: Remove any existing personalized parts to avoid duplication
+        clean_answer = re.sub(r'^(dạ\s+(thầy|cô|giảng viên)[^,]*,?\s*)', '', clean_answer, flags=re.IGNORECASE)
+        clean_answer = re.sub(r'^(xin chào|chào)[^.!?]*[.!?]\s*', '', clean_answer, flags=re.IGNORECASE)
+        
+        # ✅ NEW: Remove any existing endings to avoid duplication
+        ending_patterns = [
+            r'\s*(thầy|cô|giảng viên)\s+[^.!?]*có cần.*?hỗ trợ.*?thêm.*?gì.*?không.*?ạ\?.*$',
+            r'\s*🎓.*$',
+            r'\s*(thầy|cô|giảng viên)\s+[^.!?]*có cần.*?không.*?ạ\?.*$'
+        ]
+        
+        for pattern in ending_patterns:
+            clean_answer = re.sub(pattern, '', clean_answer, flags=re.IGNORECASE)
+        
+        # Ensure it starts with capital letter
+        if clean_answer and not clean_answer[0].isupper():
+            clean_answer = clean_answer[0].upper() + clean_answer[1:]
+        
+        # Add personalized greeting
+        personalized_response = f"Dạ {personal_address}, {clean_answer}"
+        
+        # Ensure proper ending
+        if not personalized_response.strip().endswith(('?', '!', '.')):
+            personalized_response += '.'
+        
+        # Add standard closing - CHỈ MỘT LẦN
+        personalized_response += f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓'
+        
+        logger.info(f"✅ FALLBACK: Formatted raw answer for {personal_address}")
+        return personalized_response
+    
+    def _create_external_api_fallback(self, gemini_context, session_id):
+        """🚀 NEW: Fallback cho external API calls"""
         personal_address = self._get_personal_address(session_id)
-        return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về trường không ạ?"
+        
+        fallback_qa = gemini_context.get('fallback_qa_answer', '') if gemini_context else ''
+        
+        if fallback_qa:
+            return f"""Dạ {personal_address}, em gặp khó khăn khi truy xuất thông tin cá nhân, nhưng em có thể chia sẻ thông tin chung: {fallback_qa}
+
+Để biết thông tin cá nhân chi tiết, {personal_address} có thể truy cập hệ thống quản lý đào tạo của trường ạ. 🎓
+
+{personal_address.title()} có cần em hỗ trợ thêm gì không ạ?"""
+        else:
+            return f"""Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin cá nhân. {personal_address.title()} có thể:
+• Thử lại sau vài phút
+• Truy cập trực tiếp hệ thống quản lý đào tạo
+• Liên hệ bộ phận IT: it@bdu.edu.vn
+
+{personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓"""
     
-    def _get_personal_error_response(self, session_id):
-        """Error response với personalization"""
+    def _create_authentication_fallback(self, session_id, has_context=False):
+        """🚀 NEW: Fallback cho authentication required"""
         personal_address = self._get_personal_address(session_id)
-        return f"Dạ {personal_address}, em gặp khó khăn kỹ thuật. {personal_address.title()} có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓"
+        
+        if has_context:
+            return f"""Dạ {personal_address}, em hiểu {personal_address} đang hỏi tiếp về lịch giảng dạy, nhưng để cung cấp thông tin cá nhân chính xác, {personal_address} cần đăng nhập vào ứng dụng trước ạ. 🔐
+
+{personal_address.title()} có thể:
+• Đăng nhập lại vào ứng dụng BDU
+• Kiểm tra kết nối mạng
+• Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
+
+{personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓"""
+        else:
+            return f"""Dạ {personal_address}, để em có thể cung cấp thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng trước ạ. 🔐
+
+{personal_address.title()} có thể:
+• Đăng nhập lại vào ứng dụng BDU
+• Kiểm tra kết nối mạng
+• Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
+
+{personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓"""
     
-    def _get_no_match_response(self):
-        """Response when no matches found"""
-        return {
-            'response': "Dạ giảng viên, em chưa có thông tin về vấn đề này. Giảng viên có thể liên hệ phòng ban liên quan để được hỗ trợ chi tiết ạ. 🎓",
-            'confidence': 0.1,
-            'method': 'no_match_hybrid',
-            'decision_type': 'say_dont_know',
-            'processing_time': 0.01,
-            'hybrid_reranking_used': True
+    def _create_clarification_fallback(self, query, session_id, context_available=False):
+        """🚀 NEW: Fallback cho clarification requests"""
+        personal_address = self._get_personal_address(session_id)
+        
+        # Analyze query để tạo clarification cụ thể hơn
+        query_lower = query.lower()
+        
+        topic_keywords = {
+            'ngân hàng đề thi': ['ngân hàng', 'đề thi', 'đề'],
+            'kê khai nhiệm vụ': ['kê khai', 'nhiệm vụ'],
+            'tạp chí': ['tạp chí', 'bài viết'],
+            'thi đua khen thưởng': ['thi đua', 'khen thưởng'],
+            'báo cáo': ['báo cáo', 'nộp'],
+            'lịch giảng dạy': ['lịch', 'giảng dạy']
         }
+        
+        for topic, keywords in topic_keywords.items():
+            if any(kw in query_lower for kw in keywords):
+                return f"Dạ {personal_address}, để em hỗ trợ chính xác về {topic}, {personal_address} có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
+        
+        if context_available:
+            return f"Dạ {personal_address}, dựa trên cuộc trò chuyện trước, để em hỗ trợ chính xác hơn, {personal_address} có thể cung cấp thêm chi tiết không ạ? 🎓"
+        else:
+            return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
     
-    def _execute_lecturer_decision(self, decision_type, query, gemini_context, intent_result, entities, session_id):
-        """Execute lecturer-specific decisions với gender-based addressing"""
+    def _create_dont_know_fallback(self, query, session_id):
+        """🚀 NEW: Fallback cho don't know responses"""
+        personal_address = self._get_personal_address(session_id)
+        query_lower = query.lower()
+        
+        # Smart department suggestion based on keywords
+        if any(word in query_lower for word in ['ngân hàng đề', 'đề thi', 'khảo thí']):
+            dept = "Phòng Đảm bảo chất lượng và Khảo thí"
+            contact = "ldkham@bdu.edu.vn"
+        elif any(word in query_lower for word in ['kê khai', 'nhiệm vụ', 'giờ chuẩn']):
+            dept = "Phòng Tổ chức - Cán bộ"
+            contact = "tcccb@bdu.edu.vn"
+        elif any(word in query_lower for word in ['tạp chí', 'nghiên cứu', 'khoa học']):
+            dept = "Phòng Nghiên cứu - Hợp tác"
+            contact = "nghiencuu@bdu.edu.vn"
+        elif any(word in query_lower for word in ['thi đua', 'khen thưởng']):
+            dept = "Phòng Tổ chức - Cán bộ"
+            contact = "tcccb@bdu.edu.vn"
+        else:
+            dept = "phòng ban liên quan"
+            contact = "info@bdu.edu.vn"
+        
+        return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ {dept} qua email {contact} để được hỗ trợ chi tiết ạ. 🎓"
+    
+    def _create_no_answer_fallback(self, session_id):
+        """🚀 NEW: Fallback khi không có raw answer từ database"""
+        personal_address = self._get_personal_address(session_id)
+        return f"Dạ {personal_address}, hiện tại em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ phòng ban liên quan để được hỗ trợ chi tiết ạ. 🎓"
+    
+    def _create_generic_fallback(self, session_id):
+        """🚀 NEW: Generic fallback cho các trường hợp không xác định"""
+        personal_address = self._get_personal_address(session_id)
+        return f"Dạ {personal_address}, em sẵn sàng hỗ trợ {personal_address} về các vấn đề liên quan đến BDU. {personal_address.title()} có thể chia sẻ cụ thể hơn về điều cần hỗ trợ không ạ? 🎓"
+    
+    def _execute_lecturer_decision_original(self, decision_type, query, gemini_context, intent_result, entities, session_id):
+        """
+        🚀 NEW: Wrapper cho logic gốc của _execute_lecturer_decision
+        
+        Đây là phiên bản gốc, được gọi trước khi fallback
+        """
         
         logger.info(f"🎯 Executing enhanced hybrid decision: {decision_type}")
         
@@ -1128,7 +1340,7 @@ class HybridChatbotAI:
             personal_address = self._get_personal_address(session_id)
             response_text = f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
 
-        # Debugging personalization filter (keep existing logic)
+        # Final personalization filter (keep existing logic)
         print("\n--- DEBUGGING PERSONALIZATION FILTER ---")
         print(f"1. Raw response from Gemini: '{response_text}'")
 
@@ -1170,6 +1382,39 @@ class HybridChatbotAI:
 
         print("--- END DEBUGGING (No override applied) ---\n")
         return response_text
+    
+    def _get_personal_address(self, session_id):
+        """Helper method để lấy personal address từ response generator"""
+        if hasattr(self.response_generator, '_get_personal_address'):
+            return self.response_generator._get_personal_address(session_id)
+        return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
+    
+    def _get_personal_short_clarification_response(self, session_id):
+        """Response for short invalid queries với personalization"""
+        personal_address = self._get_personal_address(session_id)
+        return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
+    
+    def _get_personal_out_of_scope_response(self, session_id):
+        """Out of scope response với personalization"""
+        personal_address = self._get_personal_address(session_id)
+        return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về trường không ạ?"
+    
+    def _get_personal_error_response(self, session_id):
+        """Error response với personalization"""
+        personal_address = self._get_personal_address(session_id)
+        return f"Dạ {personal_address}, em gặp khó khăn kỹ thuật. {personal_address.title()} có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓"
+    
+    def _get_no_match_response(self):
+        """Response when no matches found"""
+        return {
+            'response': "Dạ giảng viên, em chưa có thông tin về vấn đề này. Giảng viên có thể liên hệ phòng ban liên quan để được hỗ trợ chi tiết ạ. 🎓",
+            'confidence': 0.1,
+            'method': 'no_match_hybrid',
+            'decision_type': 'say_dont_know',
+            'processing_time': 0.01,
+            'hybrid_reranking_used': True,
+            'graceful_degradation_used': True  # 🚀 NEW
+        }
     
     def _handle_external_api_decision(self, query, gemini_context, intent_result, entities, session_id):
         """Handle decision to use external API với gender support"""
@@ -1341,7 +1586,8 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
             'external_api_used': decision_type == 'use_external_api',
             'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
             'query_length': len(query.split()),
-            'intent_confidence': intent_result.get('confidence', 0) if intent_result else 0
+            'intent_confidence': intent_result.get('confidence', 0) if intent_result else 0,
+            'graceful_degradation_used': gemini_context.get('graceful_degradation_used', False) if gemini_context else False  # 🚀 NEW
         }
         
         self.conversation_memory[session_id].append(interaction)
@@ -1358,7 +1604,8 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
             'confidence': 0.9,
             'method': 'empty_query_lecturer',
             'processing_time': 0.01,
-            'hybrid_reranking_used': False
+            'hybrid_reranking_used': False,
+            'graceful_degradation_used': False  # 🚀 NEW
         }
     
     def get_conversation_context(self, session_id):
@@ -1715,7 +1962,8 @@ class ChatbotAI:
                     'confidence': 0.1,
                     'method': 'empty_query',
                     'sources': [],
-                    'reference_links': []
+                    'reference_links': [],
+                    'graceful_degradation_used': False  # 🚀 NEW
                 }
             
             # Use hybrid approach
@@ -1746,7 +1994,8 @@ class ChatbotAI:
                     'method': 'hybrid_retrieval',
                     'sources': self._format_sources(candidates[:2]),
                     'category': best_candidate.get('category', 'Giảng viên'),
-                    'reference_links': final_links
+                    'reference_links': final_links,
+                    'graceful_degradation_used': False  # 🚀 NEW
                 }
             else:
                 return {
@@ -1754,7 +2003,8 @@ class ChatbotAI:
                     'confidence': 0.1,
                     'method': 'no_match',
                     'sources': [],
-                    'reference_links': []
+                    'reference_links': [],
+                    'graceful_degradation_used': True  # 🚀 NEW
                 }
             
         except Exception as e:
@@ -1764,7 +2014,8 @@ class ChatbotAI:
                 'confidence': 0.1,
                 'method': 'error',
                 'sources': [],
-                'reference_links': []
+                'reference_links': [],
+                'graceful_degradation_used': True  # 🚀 NEW
             }
     
     def _format_sources(self, results):
@@ -1829,7 +2080,9 @@ class BDUChatbotService:
             'schedule_intent_confidence_threshold': 0.6
         }
         
-        logger.info("🚀 Enhanced BDUChatbotService initialized with Context Memory Integration")
+        logger.info("🚀 Enhanced BDUChatbotService initialized with Context Memory Integration and Graceful Degradation")
+    
+    # [Remaining methods unchanged - để giữ nguyên logic hiện tại]
     
     def _needs_external_api(self, query: str, intent_result: dict, session_memory: list = None) -> bool:
         """🚀 NÂNG CẤP: Enhanced API need detection với session memory context"""
@@ -1957,7 +2210,8 @@ class BDUChatbotService:
                     'external_api_used': True,
                     'hybrid_reranking_used': False,  # API call bypassed hybrid system
                     'api_priority_activated': True,   # Flag showing API priority worked
-                    'enhanced_by_context': True  # 🚀 NEW flag
+                    'enhanced_by_context': True,  # 🚀 NEW flag
+                    'graceful_degradation_used': False  # 🚀 NEW flag
                 }
             
             else:
@@ -1971,7 +2225,8 @@ class BDUChatbotService:
                     'processing_time': 0.3,
                     'external_api_used': True,
                     'api_error': api_result.get('error', ''),
-                    'api_priority_activated': True
+                    'api_priority_activated': True,
+                    'graceful_degradation_used': True  # 🚀 NEW flag
                 }
                 
         except Exception as e:
@@ -1983,7 +2238,8 @@ class BDUChatbotService:
                 'method': 'external_api_error',
                 'processing_time': 0.2,
                 'error': str(e),
-                'api_priority_activated': True
+                'api_priority_activated': True,
+                'graceful_degradation_used': True  # 🚀 NEW flag
             }
     
     def _handle_authentication_required(self, session_id: str, has_context: bool = False) -> dict:
@@ -2020,7 +2276,8 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
             'external_api_used': False,
             'api_priority_activated': True,
             'authentication_required': True,
-            'context_aware': has_context  # 🚀 NEW flag
+            'context_aware': has_context,  # 🚀 NEW flag
+            'graceful_degradation_used': False  # 🚀 NEW flag
         }
     
     def _get_personal_address(self, session_id):
@@ -2030,10 +2287,10 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
         return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
     
     def process_query(self, query: str, session_id: str = None, jwt_token: str = None) -> dict:
-        """🚀 NÂNG CẤP: Main method với Enhanced Context Memory Integration"""
+        """🚀 NÂNG CẤP: Main method với Enhanced Context Memory Integration and Graceful Degradation"""
         start_time = time.time()
         
-        logger.info(f"🎯 Enhanced BDU Service Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
+        logger.info(f"🎯 Enhanced BDU Service Processing với Graceful Degradation: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
         
         try:
             if not query or len(query.strip()) < 2:
@@ -2041,7 +2298,8 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                     'response': "Dạ chào giảng viên! Em có thể hỗ trợ gì cho giảng viên về công việc tại BDU ạ? 🎓",
                     'confidence': 0.9,
                     'method': 'empty_query',
-                    'processing_time': time.time() - start_time
+                    'processing_time': time.time() - start_time,
+                    'graceful_degradation_used': False  # 🚀 NEW flag
                 }
             
             # 🚀 NEW: Get session memory EARLY for context-aware decisions
@@ -2065,8 +2323,8 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                     # No token -> Require authentication (with context awareness)
                     return self._handle_authentication_required(session_id, has_context)
             
-            # FALLBACK TO ENHANCED HYBRID SYSTEM
-            logger.info("📚 Using Enhanced Hybrid Retrieval with Context Memory")
+            # FALLBACK TO ENHANCED HYBRID SYSTEM với Graceful Degradation
+            logger.info("📚 Using Enhanced Hybrid Retrieval with Context Memory and Graceful Degradation")
             result = self.hybrid_chatbot.process_query(query, session_id, jwt_token)
             
             # Add enhanced flags to show this went through enhanced hybrid flow
@@ -2074,6 +2332,7 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
             result['fallback_to_enhanced_hybrid'] = True
             result['context_memory_available'] = has_context
             result['enhanced_processing'] = True  # 🚀 NEW flag
+            # graceful_degradation_used flag will be set by hybrid_chatbot if needed
             
             return result
             
@@ -2085,8 +2344,11 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                 'confidence': 0.0,
                 'method': 'service_error',
                 'processing_time': time.time() - start_time,
-                'error': str(e)
+                'error': str(e),
+                'graceful_degradation_used': True  # 🚀 NEW flag
             }
+    
+    # [Keep remaining delegate methods unchanged for brevity...]
     
     def _get_api_fallback_response(self, api_result: dict, session_id: str) -> str:
         """Fallback response when API data is available but Gemini fails với gender support"""
@@ -2152,19 +2414,19 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
             return f"""Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin. {personal_address.title()} có thể:
 • Thử lại sau vài phút
 • Truy cập trực tiếp hệ thống quản lý đào tạo
-• Liên hệ bộ phận IT: it@bdu.edu.vn
+• Liên hệ bộ phần IT: it@bdu.edu.vn
 
 {personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
     
     # Delegate methods to hybrid chatbot with enhanced status
     def get_system_status(self):
-        """🚀 NÂNG CẤP: Get comprehensive system status including enhanced context features"""
+        """🚀 NÂNG CẤP: Get comprehensive system status including enhanced context features và graceful degradation"""
         hybrid_status = self.hybrid_chatbot.get_system_status()
         api_status = external_api_service.get_system_status()
         
-        # Enhance with enhanced API priority info
+        # Enhance with enhanced API priority info and graceful degradation
         hybrid_status.update({
-            'service_layer': 'Enhanced_BDUChatbotService',
+            'service_layer': 'Enhanced_BDUChatbotService_with_Graceful_Degradation',
             'enhanced_api_priority': {  # 🚀 NEW section
                 'context_memory_integration': True,
                 'personal_keywords_count': len(self.api_priority_config['personal_info_keywords']),
@@ -2174,6 +2436,24 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
                 'memory_lookback_limit': self.api_priority_config['memory_lookback_limit'],
                 'confidence_threshold': self.api_priority_config['schedule_intent_confidence_threshold']
             },
+            'graceful_degradation': {  # 🚀 NEW section
+                'enabled': True,
+                'fallback_mechanisms': [
+                    'Raw Database Answer Formatting',
+                    'Personalized Error Messages',
+                    'Department-Specific Suggestions',
+                    'Context-Aware Clarifications',
+                    'External API Fallbacks'
+                ],
+                'fallback_coverage': {
+                    'use_db_direct': 'Raw answer with personalization',
+                    'enhance_db_answer': 'Raw answer with personalization',
+                    'use_external_api': 'API fallback with personalization',
+                    'require_authentication': 'Context-aware auth message',
+                    'ask_clarification': 'Smart clarification based on query',
+                    'say_dont_know': 'Department suggestion with personalization'
+                }
+            },
             'external_api_service_status': api_status,
             'enhanced_processing_flow': [  # 🚀 UPDATED
                 '1. Enhanced Intent Classification',
@@ -2181,9 +2461,11 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
                 '3. Context-Aware API Priority Check',
                 '4. Enhanced External API Call (if needed)',
                 '5. Enhanced Hybrid Retrieval & Re-ranking (fallback)',
-                '6. User Memory Prompt Integration',
-                '7. Gender-based Addressing with Context',
-                '8. Conversation Context Summary Integration'
+                '6. Graceful Degradation Check',
+                '7. Fallback Response Generation (if Gemini fails)',
+                '8. User Memory Prompt Integration',
+                '9. Gender-based Addressing with Context',
+                '10. Conversation Context Summary Integration'
             ]
         })
         
@@ -2216,5 +2498,5 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.knowledge_data
 
-# 🚀 ENHANCED: Create enhanced chatbot instance
+# 🚀 ENHANCED: Create enhanced chatbot instance với Graceful Degradation
 chatbot_ai = BDUChatbotService()
