@@ -404,6 +404,8 @@ class HybridReRanker:
 
 
 class LecturerDecisionEngine:
+    """🚀 NÂNG CẤP: Enhanced Decision Engine với Session Memory Awareness"""
+    
     def __init__(self):
         # ✅ BƯỚC 3: Tăng ngưỡng medium_trust lên 0.5
         self.confidence_thresholds = {
@@ -424,6 +426,7 @@ class LecturerDecisionEngine:
             ]
         }
         
+        # 🚀 NÂNG CẤP: Enhanced external API config với session memory support
         self.external_api_config = {
             'low_confidence_threshold': 0.3,
             'personal_info_keywords': [
@@ -434,8 +437,18 @@ class LecturerDecisionEngine:
             ],
             'time_context_keywords': [
                 'hôm nay', 'hom nay', 'today', 'ngày mai', 'ngay mai', 'tomorrow',
-                'tuần này', 'tuan nay', 'this week', 'tuần tới', 'tuan toi', 'next week'
-            ]
+                'tuần này', 'tuan nay', 'this week', 'tuần tới', 'tuan toi', 'next week',
+                'tuần sau', 'tuan sau', 'cuối tuần', 'cuoi tuan', 'đầu tuần', 'dau tuan'
+            ],
+            # 🚀 NEW: Schedule continuation keywords để nhận diện câu hỏi tiếp theo
+            'schedule_continuation_keywords': [
+                'còn', 'con', 'thêm', 'them', 'nữa', 'nua', 'khác', 'khac', 
+                'và', 'va', 'tiếp theo', 'tiep theo', 'sau đó', 'sau do',
+                'thế còn', 'the con', 'vậy còn', 'vay con', 'còn gì', 'con gi'
+            ],
+            # 🚀 NEW: Context memory thresholds
+            'context_memory_threshold': 0.7,  # Ngưỡng confidence intent từ lịch sử
+            'context_recency_limit': 2  # Chỉ xem 2 interaction gần nhất
         }
         
         # Enhanced education keywords for lecturers
@@ -469,7 +482,7 @@ class LecturerDecisionEngine:
             'gì', 'nào', 'khi nào', 'ở đâu', 'ai', 'sao', 'có phải'
         ]
         
-        logger.info("✅ Enhanced LecturerDecisionEngine initialized with hybrid support")
+        logger.info("✅ Enhanced LecturerDecisionEngine initialized with Session Memory Support")
     
     def is_education_related(self, query):
         """Enhanced education detection for lecturers"""
@@ -551,21 +564,24 @@ class LecturerDecisionEngine:
             logger.info(f"🚀 GENERATION BOOST ACTIVATED: keywords={has_boost_keywords}, random={random_boost}")
         
         return should_boost
-    
-    def needs_external_api(self, query: str, confidence: float, recent_intent: str = None) -> bool:
-        """Determine if query should use external API"""
+
+    def needs_external_api(self, query: str, confidence: float, recent_intent: str = None, session_memory: list = None) -> bool:
+        """🚀 NÂNG CẤP: Determine if query should use external API với session memory awareness"""
         query_lower = query.lower()
         
+        # ✅ CHECK 1: Direct personal keyword matches (unchanged)
         has_personal_keywords = any(
             keyword in query_lower 
             for keyword in self.external_api_config['personal_info_keywords']
         )
+        
+        # ✅ CHECK 2: Time context (usually indicates schedule query)
         has_time_context = any(
             keyword in query_lower 
             for keyword in self.external_api_config['time_context_keywords']
         )
-
-        # Kiểm tra intent có độ tin cậy cao
+        
+        # ✅ CHECK 3: Intent-based detection (unchanged)
         intent_confidence = 0
         intent_is_personal = False
         if recent_intent:
@@ -578,69 +594,140 @@ class LecturerDecisionEngine:
                 intent_is_personal = intent_name in ['personal_schedule', 'personal_info']
         
         high_confidence_personal_intent = intent_is_personal and intent_confidence > 0.6
+        
+        # 🚀 NEW CHECK 4: Session Memory Context Analysis
+        context_suggests_schedule = False
+        has_continuation_words = False
+        
+        if session_memory and len(session_memory) > 0:
+            # Lấy 2 interaction gần nhất
+            recent_interactions = session_memory[-self.external_api_config['context_recency_limit']:]
+            
+            # Kiểm tra xem có interaction nào về schedule không
+            for interaction in recent_interactions:
+                past_intent = interaction.get('intent_info', {})
+                if isinstance(past_intent, dict):
+                    past_intent_name = past_intent.get('intent', '')
+                    past_intent_confidence = past_intent.get('confidence', 0)
+                    
+                    if (past_intent_name in ['personal_schedule', 'teaching_schedule', 'schedule_general'] and 
+                        past_intent_confidence > self.external_api_config['context_memory_threshold']):
+                        context_suggests_schedule = True
+                        logger.info(f"🧠 CONTEXT MEMORY: Found schedule intent '{past_intent_name}' with confidence {past_intent_confidence:.3f}")
+                        break
+            
+            # Kiểm tra từ khóa continuation trong query hiện tại
+            has_continuation_words = any(
+                keyword in query_lower 
+                for keyword in self.external_api_config['schedule_continuation_keywords']
+            )
+        
+        # 🚀 NEW: Context-driven API decision
+        # Nếu có ngữ cảnh lịch trình + từ khóa tiếp tục => rất có thể cần API
+        context_driven_api_need = context_suggests_schedule and has_continuation_words
+        
+        # 🚀 NEW: Smart inference for ambiguous queries
+        # Query ngắn + có time context + có context lịch trình => có thể cần API
+        smart_inference = (
+            len(query.split()) <= 5 and 
+            has_time_context and 
+            context_suggests_schedule
+        )
+        
+        # ✅ CHECK 5: Other conditions (unchanged)
         schedule_related_intent = recent_intent in ['personal_schedule', 'teaching_schedule', 'schedule_general']
         contextual_schedule_query = has_time_context and schedule_related_intent
         
+        # 🚀 FINAL DECISION với memory context
         needs_api = (
             has_personal_keywords or 
             contextual_schedule_query or 
-            high_confidence_personal_intent
+            high_confidence_personal_intent or
+            context_driven_api_need or  # ✅ NEW
+            smart_inference  # ✅ NEW
         )
 
-        logger.info(f"🔍 External API check: confidence={confidence:.3f}, personal_kw={has_personal_keywords}, time_ctx={has_time_context}, recent_intent='{recent_intent}', high_conf_personal={high_confidence_personal_intent}, needs_api={needs_api}")
+        # 🚀 ENHANCED LOGGING
+        logger.info(f"🔍 ENHANCED External API check:")
+        logger.info(f"   📝 Query: '{query}' (confidence={confidence:.3f})")
+        logger.info(f"   🔑 Direct factors: personal_kw={has_personal_keywords}, time_ctx={has_time_context}")
+        logger.info(f"   🧠 Context factors: suggests_schedule={context_suggests_schedule}, continuation_words={has_continuation_words}")
+        logger.info(f"   🎯 Enhanced factors: context_driven={context_driven_api_need}, smart_inference={smart_inference}")
+        logger.info(f"   ✅ Final decision: needs_api={needs_api}")
         
         return needs_api
 
     def make_decision(self, query, best_candidate, intent_result, session_memory=None, jwt_token=None):
-        """Enhanced decision making using hybrid re-ranking results"""
+        """🚀 NÂNG CẤP: Enhanced decision making với session memory integration"""
         
         # Xác định đây có phải tin nhắn đầu tiên không
         is_first_message = not session_memory or len(session_memory) == 0
         
-        # Kiểm tra ngữ cảnh từ các tin nhắn trước
+        # ✅ ENHANCED: Kiểm tra ngữ cảnh từ các tin nhắn trước với deep analysis
         context_override = False
         recent_intent = None
         
         if not is_first_message:
-            last_interaction = session_memory[-1]
-            intent_info_from_memory = last_interaction.get('intent_info', {}) 
-            recent_intent = intent_info_from_memory.get('intent')
-
-            if recent_intent in ['personal_schedule', 'teaching_schedule', 'schedule_general']:
+            # Phân tích các interaction gần đây để hiểu ngữ cảnh
+            recent_interactions = session_memory[-3:] if len(session_memory) >= 3 else session_memory
+            
+            schedule_related_intents = 0
+            education_related_queries = 0
+            
+            for interaction in recent_interactions:
+                intent_info_from_memory = interaction.get('intent_info', {}) 
+                past_intent = intent_info_from_memory.get('intent', '')
+                past_query = interaction.get('query', '').lower()
+                
+                # Đếm các intent liên quan đến lịch trình
+                if past_intent in ['personal_schedule', 'teaching_schedule', 'schedule_general']:
+                    schedule_related_intents += 1
+                    recent_intent = past_intent  # Lưu intent gần nhất
+                
+                # Đếm các query liên quan giáo dục
+                if self.is_education_related(past_query):
+                    education_related_queries += 1
+            
+            # Context override logic
+            if schedule_related_intents >= 1:
                 context_override = True
-                logger.info(f"🧠 MEMORY OVERRIDE: Recent schedule intent '{recent_intent}' detected")
-            else:
-                recent_queries = [item.get('query', '') for item in session_memory[-3:]]
-                recent_education_queries = [q for q in recent_queries if self.is_education_related(q)]
-                if len(recent_education_queries) >= 1:
-                    context_override = True
-                    logger.info("🧠 MEMORY OVERRIDE: Recent education context detected")
-        
-        # Bỏ qua kiểm tra "có liên quan giáo dục không" cho tin nhắn đầu tiên
+                logger.info(f"🧠 ENHANCED MEMORY OVERRIDE: {schedule_related_intents} schedule-related intents detected")
+            elif education_related_queries >= 2:
+                context_override = True
+                logger.info(f"🧠 ENHANCED MEMORY OVERRIDE: {education_related_queries} education-related queries detected")
+            
+        # Bỏ qua kiểm tra "có liên quan giáo dục không" cho tin nhắn đầu tiên hoặc có context override
         is_education = self.is_education_related(query) or context_override or is_first_message
         if not is_education:
-            logger.info("Decision: Rejecting non-education query on a non-first message.")
+            logger.info("DECISION: Rejecting non-education query on a non-first message without context.")
             return 'reject_non_education', None, False
         
         # Lấy điểm và phân loại độ tin cậy
         final_score = best_candidate.get('final_score', 0) if best_candidate else 0
         confidence_level = self.categorize_confidence(final_score)
         
-        # Logic kiểm tra API và token
-        needs_api = self.needs_external_api(query, final_score, intent_result)
+        # 🚀 ENHANCED: Logic kiểm tra API với session memory
+        needs_api = self.needs_external_api(
+            query, final_score, intent_result, session_memory
+        )
         has_jwt_token = bool(jwt_token and jwt_token.strip())
         
-        logger.info(f"🤖 Hybrid Decision: final_score={final_score:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
+        logger.info(f"🤖 ENHANCED Hybrid Decision: final_score={final_score:.3f}, level={confidence_level}, needs_api={needs_api}, has_token={has_jwt_token}")
         
-        # Ưu tiên logic API
+        # 🚀 ENHANCED: Ưu tiên logic API với memory context
         if needs_api and has_jwt_token:
+            # ✅ Special handling: Nếu có context memory và query ngắn, ưu tiên API hơn nữa
+            if session_memory and len(query.split()) <= 5:
+                logger.info("🚀 CONTEXT PRIORITY: Short query with memory context -> prioritizing API")
+            
             return 'use_external_api', {
                 'instruction': 'external_api_lecturer',
                 'query': query,
                 'jwt_token': jwt_token,
                 'fallback_qa_answer': best_candidate.get('answer', '') if best_candidate else '',
                 'confidence': final_score,
-                'message': 'Using external API for personal/schedule information'
+                'message': 'Using external API for personal/schedule information',
+                'enhanced_by_context': bool(session_memory)  # ✅ NEW flag
             }, True
         
         elif needs_api and not has_jwt_token:
@@ -648,17 +735,32 @@ class LecturerDecisionEngine:
                 'instruction': 'authentication_required',
                 'query': query,
                 'confidence': final_score,
-                'message': 'Personal information requires authentication'
+                'message': 'Personal information requires authentication',
+                'context_suggested': bool(session_memory and len(session_memory) > 0)  # ✅ NEW flag
             }, True
         
-        # Kiểm tra nhu cầu làm rõ
+        # 🚀 ENHANCED: Kiểm tra nhu cầu làm rõ với context awareness
         needs_clarification = self.needs_clarification(query, final_score)
-        if needs_clarification and confidence_level != 'medium_trust':
+        
+        # ✅ SPECIAL CASE: Nếu có context memory mạnh, giảm nhu cầu clarification
+        if needs_clarification and session_memory and len(session_memory) > 0:
+            # Kiểm tra xem có context schedule không
+            has_strong_schedule_context = any(
+                interaction.get('intent_info', {}).get('intent', '') in ['personal_schedule', 'teaching_schedule']
+                for interaction in session_memory[-2:]
+            )
+            
+            if has_strong_schedule_context and confidence_level in ['low_trust', 'medium_trust']:
+                logger.info("🧠 CONTEXT OVERRIDE: Strong schedule context -> reducing clarification need")
+                needs_clarification = False
+        
+        if needs_clarification and confidence_level not in ['medium_trust', 'high_trust']:
             return 'ask_clarification', {
                 'query': query,
                 'confidence': final_score,
                 'instruction': 'clarification_needed',
-                'message': 'Question is too vague, need clarification'
+                'message': 'Question is too vague, need clarification',
+                'context_available': bool(session_memory and len(session_memory) > 0)  # ✅ NEW flag
             }, True
         
         # Áp dụng generation boost
@@ -674,7 +776,8 @@ class LecturerDecisionEngine:
                 'instruction': 'direct_answer_lecturer',
                 'db_answer': best_candidate.get('answer', '') if best_candidate else '',
                 'confidence': final_score,
-                'message': 'High confidence - use database answer directly'
+                'message': 'High confidence - use database answer directly',
+                'enhanced_by_context': bool(session_memory)  # ✅ NEW flag
             }
         elif confidence_level == 'medium_trust':
             decision = 'enhance_db_answer'
@@ -683,7 +786,8 @@ class LecturerDecisionEngine:
                 'db_answer': best_candidate.get('answer', '') if best_candidate else '',
                 'confidence': final_score,
                 'message': 'Medium confidence - enhance database answer',
-                'generation_boosted': should_boost
+                'generation_boosted': should_boost,
+                'enhanced_by_context': bool(session_memory)  # ✅ NEW flag
             }
         elif confidence_level == 'low_trust':
             decision = 'ask_clarification'
@@ -691,7 +795,8 @@ class LecturerDecisionEngine:
                 'instruction': 'clarification_needed',
                 'db_answer': best_candidate.get('answer', '') if best_candidate else '',
                 'confidence': final_score,
-                'message': 'Low confidence - ask for clarification'
+                'message': 'Low confidence - ask for clarification',
+                'context_available': bool(session_memory and len(session_memory) > 0)  # ✅ NEW flag
             }
         else:  # no_trust
             decision = 'say_dont_know'
@@ -701,12 +806,12 @@ class LecturerDecisionEngine:
                 'message': 'No relevant information - say dont know'
             }
         
-        logger.info(f"🎯 Hybrid Decision made: {decision} (final_score: {final_score:.3f})")
+        logger.info(f"🎯 ENHANCED Hybrid Decision made: {decision} (final_score: {final_score:.3f}, context_enhanced: {bool(session_memory)})")
         return decision, context, True
 
 
 class HybridChatbotAI:
-    """Enhanced Hybrid Chatbot with Re-ranking for BDU Lecturers"""
+    """🚀 NÂNG CẤP: Enhanced Hybrid Chatbot với Session Memory Integration"""
     
     def __init__(self, shared_response_generator):
         # Initialize components với shared response_generator
@@ -717,7 +822,7 @@ class HybridChatbotAI:
         self.reranker = HybridReRanker()
         self.conversation_memory = {}
         
-        logger.info("🚀 HybridChatbotAI initialized with SHARED Response Generator")
+        logger.info("🚀 Enhanced HybridChatbotAI initialized with Session Memory Support")
     
     @property
     def model(self):
@@ -760,7 +865,7 @@ class HybridChatbotAI:
             'phobert_available': not self.intent_classifier.fallback_mode,
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'hybrid_retrieval_reranking_lecturer_with_user_memory',
+            'mode': 'hybrid_retrieval_reranking_lecturer_with_enhanced_memory',  # ✅ Updated
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'personalization_sessions': gemini_status.get('personalization_sessions', 0),
             'adaptive_token_range': self.response_generator.token_manager.adaptive_token_range,
@@ -778,11 +883,21 @@ class HybridChatbotAI:
                 'qa_management_integration', 'external_api_integration', 'jwt_token_authentication',
                 'lecturer_schedule_access', 'personal_information_queries', 'user_memory_prompt_support',
                 'flexible_personalization', 'dynamic_system_prompts', 'custom_user_instructions',
-                'gender_based_addressing', 'no_fallback_addressing'
+                'gender_based_addressing', 'no_fallback_addressing',
+                'session_memory_integration',  # ✅ NEW feature
+                'context_driven_api_decisions',  # ✅ NEW feature
+                'enhanced_conversation_continuity',  # ✅ NEW feature
+                'smart_clarification_reduction'  # ✅ NEW feature
             ],
             'gemini_status': gemini_status,
             'external_api_status': external_api_status,
-            'qa_management_status': qa_management_status
+            'qa_management_status': qa_management_status,
+            'enhanced_features': {  # ✅ NEW section
+                'session_memory_depth': 3,
+                'context_recency_limit': self.decision_engine.external_api_config['context_recency_limit'],
+                'context_memory_threshold': self.decision_engine.external_api_config['context_memory_threshold'],
+                'schedule_continuation_keywords': len(self.decision_engine.external_api_config['schedule_continuation_keywords'])
+            }
         }
 
     def _is_valid_short_query(self, query):
@@ -815,16 +930,20 @@ class HybridChatbotAI:
         return False
     
     def process_query(self, query, session_id=None, jwt_token=None):
-        """Main query processing with Hybrid Re-ranking"""
+        """🚀 NÂNG CẤP: Main query processing với Enhanced Session Memory Integration"""
         start_time = time.time()
         
-        logger.info(f"👨‍🏫 Processing hybrid query: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
+        logger.info(f"👨‍🏫 Processing ENHANCED hybrid query: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
         
         try:
             # VALIDATE INPUT NGAY TỪ ĐẦU
             query = self._clean_query(query)
             if not query:
                 return self._get_empty_query_response_lecturer()
+            
+            # 🚀 NEW: Get session memory EARLY để sử dụng trong decision making
+            session_memory = self.get_conversation_context(session_id) if session_id else []
+            logger.info(f"🧠 MEMORY STATUS: {len(session_memory)} interactions in history")
             
             # Kiểm tra query quá ngắn và không hợp lệ
             if len(query.strip()) < 3 and not self._is_valid_short_query(query):
@@ -837,7 +956,8 @@ class HybridChatbotAI:
                     'processing_time': time.time() - start_time,
                     'is_education': True,
                     'lecturer_optimized': True,
-                    'early_validation_triggered': True
+                    'early_validation_triggered': True,
+                    'session_memory_used': bool(session_memory)  # ✅ NEW
                 }
             
             # Get intent and entities
@@ -863,8 +983,7 @@ class HybridChatbotAI:
             
             logger.info(f"🎯 Best candidate after re-ranking: final_score={best_candidate.get('final_score', 0):.3f}")
             
-            # DECISION MAKING với hybrid result
-            session_memory = self.get_conversation_context(session_id) if session_id else None
+            # 🚀 ENHANCED DECISION MAKING với session memory
             decision_type, gemini_context, should_respond = self.decision_engine.make_decision(
                 query, best_candidate, intent_result, session_memory, jwt_token
             )
@@ -879,9 +998,14 @@ class HybridChatbotAI:
                 )
                 method = decision_type
             
-            # Update memory
+            # 🚀 ENHANCED: Update memory với richer context information
             if session_id and should_respond:
-                self._update_memory(session_id, query, intent_result, best_candidate.get('final_score', 0), decision_type, should_respond)
+                self._update_enhanced_memory(
+                    session_id, query, intent_result, 
+                    best_candidate.get('final_score', 0), 
+                    decision_type, should_respond, 
+                    gemini_context  # ✅ NEW: Pass full context
+                )
             
             processing_time = time.time() - start_time
             
@@ -900,6 +1024,8 @@ class HybridChatbotAI:
                 'reference_links': best_candidate.get('reference_links', []),
                 'external_api_used': decision_type == 'use_external_api',
                 'hybrid_reranking_used': True,
+                'session_memory_used': bool(session_memory),  # ✅ NEW
+                'enhanced_by_context': gemini_context.get('enhanced_by_context', False) if gemini_context else False,  # ✅ NEW
                 'reranking_stats': {
                     'semantic_score': best_candidate.get('semantic_score', 0),
                     'keyword_score': best_candidate.get('keyword_score', 0),
@@ -909,13 +1035,14 @@ class HybridChatbotAI:
             }
             
         except Exception as e:
-            logger.error(f"❌ Hybrid processing error: {str(e)}")
+            logger.error(f"❌ Enhanced hybrid processing error: {str(e)}")
             return {
                 'response': self._get_personal_error_response(session_id),
                 'confidence': 0.0,
                 'method': 'error_fallback',
                 'processing_time': time.time() - start_time,
-                'error': str(e)
+                'error': str(e),
+                'session_memory_used': bool(session_memory) if 'session_memory' in locals() else False  # ✅ NEW
             }
     
     def _get_personal_address(self, session_id):
@@ -953,7 +1080,7 @@ class HybridChatbotAI:
     def _execute_lecturer_decision(self, decision_type, query, gemini_context, intent_result, entities, session_id):
         """Execute lecturer-specific decisions với gender-based addressing"""
         
-        logger.info(f"🎯 Executing hybrid decision: {decision_type}")
+        logger.info(f"🎯 Executing enhanced hybrid decision: {decision_type}")
         
         response_text = ""
         
@@ -1193,12 +1320,13 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         
         return query
     
-    def _update_memory(self, session_id, query, intent_result, confidence, decision_type=None, was_education=True):
-        """Enhanced memory update for lecturers with more context"""
+    def _update_enhanced_memory(self, session_id, query, intent_result, confidence, decision_type=None, was_education=True, gemini_context=None):
+        """🚀 NÂNG CẤP: Enhanced memory update với richer context information"""
         if session_id not in self.conversation_memory:
             self.conversation_memory[session_id] = []
         
-        self.conversation_memory[session_id].append({
+        # ✅ ENHANCED: Store more context information
+        interaction = {
             'query': query,
             'intent_info': intent_result,
             'confidence': confidence,
@@ -1207,12 +1335,21 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
             'decision_type': decision_type,
             'was_education_related': was_education,
             'is_education_query': self.decision_engine.is_education_related(query),
-            'hybrid_processed': True
-        })
+            'hybrid_processed': True,
+            # ✅ NEW: Additional context fields
+            'enhanced_by_context': gemini_context.get('enhanced_by_context', False) if gemini_context else False,
+            'external_api_used': decision_type == 'use_external_api',
+            'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
+            'query_length': len(query.split()),
+            'intent_confidence': intent_result.get('confidence', 0) if intent_result else 0
+        }
         
-        self.conversation_memory[session_id] = self.conversation_memory[session_id][-10:]
+        self.conversation_memory[session_id].append(interaction)
         
-        logger.info(f"🧠 Hybrid Memory updated for session {session_id}: {len(self.conversation_memory[session_id])} total interactions")
+        # Keep only recent history (increased to 15 for better context)
+        self.conversation_memory[session_id] = self.conversation_memory[session_id][-15:]
+        
+        logger.info(f"🧠 ENHANCED Memory updated for session {session_id}: {len(self.conversation_memory[session_id])} total interactions")
     
     def _get_empty_query_response_lecturer(self):
         """Response for empty queries from lecturers"""
@@ -1292,7 +1429,7 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         return sources
 
 
-# ChatbotAI class with top-k semantic search
+# ChatbotAI class with top-k semantic search (unchanged, keeping original)
 class ChatbotAI:
     def __init__(self, shared_response_generator):
         self.model = None
@@ -1644,7 +1781,7 @@ class ChatbotAI:
 
 
 class BDUChatbotService:
-    """Primary Service Layer for BDU Chatbot with API Priority"""
+    """🚀 NÂNG CẤP: Enhanced Primary Service Layer với Context Memory Integration"""
     
     def __init__(self):
         # Tạo shared response_generator trước tiên
@@ -1655,7 +1792,7 @@ class BDUChatbotService:
         
         self.intent_classifier = PhoBERTIntentClassifier()
         
-        # API priority configuration
+        # 🚀 ENHANCED: API priority configuration with memory awareness
         self.api_priority_config = {
             'personal_info_keywords': [
                 'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
@@ -1676,61 +1813,115 @@ class BDUChatbotService:
                 'hôm nay', 'hom nay', 'today', 'ngày mai', 'ngay mai', 'tomorrow',
                 'tuần này', 'tuan nay', 'this week', 'tuần tới', 'tuan toi', 'next week',
                 'thứ 2', 'thu 2', 'thứ 3', 'thu 3', 'thứ 4', 'thu 4', 'thứ 5', 'thu 5',
-                'thứ 6', 'thu 6', 'thứ 7', 'thu 7', 'chủ nhật', 'chu nhat'
+                'thứ 6', 'thu 6', 'thứ 7', 'thu 7', 'chủ nhật', 'chu nhat',
+                'tuần sau', 'tuan sau', 'cuối tuần', 'cuoi tuan', 'đầu tuần', 'dau tuan'
             ],
             'schedule_intent_names': [
                 'personal_schedule', 'teaching_schedule', 'schedule_general', 'personal_info'
-            ]
+            ],
+            # 🚀 NEW: Context-aware settings
+            'context_continuation_keywords': [
+                'còn', 'con', 'thêm', 'them', 'nữa', 'nua', 'khác', 'khac', 
+                'và', 'va', 'tiếp theo', 'tiep theo', 'sau đó', 'sau do',
+                'thế còn', 'the con', 'vậy còn', 'vay con', 'còn gì', 'con gi'
+            ],
+            'memory_lookback_limit': 3,  # Look back 3 interactions
+            'schedule_intent_confidence_threshold': 0.6
         }
         
-        logger.info("🚀 BDUChatbotService initialized with API Priority and SHARED Response Generator")
+        logger.info("🚀 Enhanced BDUChatbotService initialized with Context Memory Integration")
     
-    def _needs_external_api(self, query: str, intent_result: dict) -> bool:
-        """Check if query needs external API call"""
+    def _needs_external_api(self, query: str, intent_result: dict, session_memory: list = None) -> bool:
+        """🚀 NÂNG CẤP: Enhanced API need detection với session memory context"""
         if not query:
             return False
         
         query_lower = query.lower()
         
-        # Check 1: Direct personal keyword matches
+        # ✅ CHECK 1: Direct personal keyword matches (unchanged)
         has_personal_keywords = any(
             keyword in query_lower 
             for keyword in self.api_priority_config['personal_info_keywords']
         )
         
-        # Check 2: Time context (usually indicates schedule query)
+        # ✅ CHECK 2: Time context (usually indicates schedule query)
         has_time_context = any(
             keyword in query_lower 
             for keyword in self.api_priority_config['time_context_keywords']
         )
         
-        # Check 3: Intent-based detection
+        # ✅ CHECK 3: Intent-based detection (unchanged)
         intent_name = intent_result.get('intent', '')
         is_schedule_intent = intent_name in self.api_priority_config['schedule_intent_names']
         
-        # Check 4: High confidence personal intent
+        # ✅ CHECK 4: High confidence personal intent
         intent_confidence = intent_result.get('confidence', 0)
         high_confidence_personal = (
             is_schedule_intent and intent_confidence > 0.7
         )
         
-        # Final decision: Need API if ANY condition is met
+        # 🚀 NEW CHECK 5: Session Memory Context Analysis
+        context_suggests_api = False
+        has_continuation_words = False
+        
+        if session_memory and len(session_memory) > 0:
+            # Analyze recent interactions for schedule-related context
+            recent_interactions = session_memory[-self.api_priority_config['memory_lookback_limit']:]
+            
+            schedule_intent_count = 0
+            for interaction in recent_interactions:
+                past_intent = interaction.get('intent_info', {})
+                if isinstance(past_intent, dict):
+                    past_intent_name = past_intent.get('intent', '')
+                    past_intent_confidence = past_intent.get('confidence', 0)
+                    
+                    if (past_intent_name in self.api_priority_config['schedule_intent_names'] and 
+                        past_intent_confidence > self.api_priority_config['schedule_intent_confidence_threshold']):
+                        schedule_intent_count += 1
+            
+            # If we found schedule context in recent history
+            if schedule_intent_count > 0:
+                context_suggests_api = True
+                logger.info(f"🧠 CONTEXT API: Found {schedule_intent_count} schedule-related intents in history")
+            
+            # Check for continuation keywords in current query
+            has_continuation_words = any(
+                keyword in query_lower 
+                for keyword in self.api_priority_config['context_continuation_keywords']
+            )
+        
+        # 🚀 NEW: Context-driven API decisions
+        context_driven_api = context_suggests_api and has_continuation_words
+        smart_short_query_api = (
+            len(query.split()) <= 5 and 
+            has_time_context and 
+            context_suggests_api
+        )
+        
+        # ✅ FINAL DECISION with memory integration
         needs_api = (
             has_personal_keywords or 
             has_time_context or 
-            high_confidence_personal
+            high_confidence_personal or
+            context_driven_api or  # 🚀 NEW
+            smart_short_query_api  # 🚀 NEW
         )
         
-        logger.info(f"🔍 API Priority Check: query='{query[:50]}...', "
-                   f"personal_kw={has_personal_keywords}, time_ctx={has_time_context}, "
-                   f"schedule_intent={is_schedule_intent}, needs_api={needs_api}")
+        # 🚀 ENHANCED LOGGING
+        logger.info(f"🔍 ENHANCED API Priority Check:")
+        logger.info(f"   📝 Query: '{query[:50]}...' ({len(query.split())} words)")
+        logger.info(f"   🔑 Direct: personal_kw={has_personal_keywords}, time_ctx={has_time_context}")
+        logger.info(f"   🎯 Intent: is_schedule={is_schedule_intent}, high_conf={high_confidence_personal}")
+        logger.info(f"   🧠 Context: suggests_api={context_suggests_api}, continuation={has_continuation_words}")
+        logger.info(f"   🚀 Enhanced: context_driven={context_driven_api}, smart_short={smart_short_query_api}")
+        logger.info(f"   ✅ Final: needs_api={needs_api}")
         
         return needs_api
     
     def _handle_external_api_call(self, query: str, intent_result: dict, entities: dict, session_id: str, jwt_token: str) -> dict:
         """Handle external API call and response processing"""
         try:
-            logger.info("🌐 PRIORITY: Calling external API for personal/schedule information")
+            logger.info("🌐 ENHANCED PRIORITY: Calling external API for personal/schedule information")
             
             # Call external API service
             api_result = external_api_service.get_lecturer_schedule(jwt_token, query)
@@ -1765,7 +1956,8 @@ class BDUChatbotService:
                     'lecturer_optimized': True,
                     'external_api_used': True,
                     'hybrid_reranking_used': False,  # API call bypassed hybrid system
-                    'api_priority_activated': True   # Flag showing API priority worked
+                    'api_priority_activated': True,   # Flag showing API priority worked
+                    'enhanced_by_context': True  # 🚀 NEW flag
                 }
             
             else:
@@ -1794,25 +1986,41 @@ class BDUChatbotService:
                 'api_priority_activated': True
             }
     
-    def _handle_authentication_required(self, session_id: str) -> dict:
-        """Handle case where API is needed but no JWT token provided với gender support"""
+    def _handle_authentication_required(self, session_id: str, has_context: bool = False) -> dict:
+        """🚀 NÂNG CẤP: Handle authentication với context awareness"""
         personal_address = self._get_personal_address(session_id)
-        return {
-            'response': f"""Dạ {personal_address}, để em có thể cung cấp thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng trước ạ. 🔐
+        
+        if has_context:
+            # More specific message when we know there's schedule context
+            message = f"""Dạ {personal_address}, em hiểu {personal_address} đang hỏi tiếp về lịch giảng dạy, nhưng để cung cấp thông tin cá nhân chính xác, {personal_address} cần đăng nhập vào ứng dụng trước ạ. 🔐
 
 {personal_address.title()} có thể:
 • Đăng nhập lại vào ứng dụng BDU
 • Kiểm tra kết nối mạng
 • Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
 
-Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch giảng dạy nhé! 🎓""",
+Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch giảng dạy nhé! 🎓"""
+        else:
+            # Standard message
+            message = f"""Dạ {personal_address}, để em có thể cung cấp thông tin cá nhân như lịch giảng dạy, {personal_address} cần đăng nhập vào ứng dụng trước ạ. 🔐
+
+{personal_address.title()} có thể:
+• Đăng nhập lại vào ứng dụng BDU
+• Kiểm tra kết nối mạng
+• Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
+
+Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch giảng dạy nhé! 🎓"""
+        
+        return {
+            'response': message,
             'confidence': 0.9,
             'method': 'authentication_required',
             'decision_type': 'require_authentication',
             'processing_time': 0.01,
             'external_api_used': False,
             'api_priority_activated': True,
-            'authentication_required': True
+            'authentication_required': True,
+            'context_aware': has_context  # 🚀 NEW flag
         }
     
     def _get_personal_address(self, session_id):
@@ -1822,10 +2030,10 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
         return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
     
     def process_query(self, query: str, session_id: str = None, jwt_token: str = None) -> dict:
-        """Main method với API Priority"""
+        """🚀 NÂNG CẤP: Main method với Enhanced Context Memory Integration"""
         start_time = time.time()
         
-        logger.info(f"🎯 BDU Service Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
+        logger.info(f"🎯 Enhanced BDU Service Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
         
         try:
             if not query or len(query.strip()) < 2:
@@ -1836,13 +2044,17 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                     'processing_time': time.time() - start_time
                 }
             
+            # 🚀 NEW: Get session memory EARLY for context-aware decisions
+            session_memory = self.hybrid_chatbot.get_conversation_context(session_id) if session_id else []
+            has_context = len(session_memory) > 0
+            
             # Intent Classification
             intent_result = self.intent_classifier.classify_intent(query)
             entities = self.intent_classifier.extract_entities(query)
             
-            # API PRIORITY CHECK (RESTORED FUNCTIONALITY)
-            if self._needs_external_api(query, intent_result):
-                logger.info("🚨 API PRIORITY ACTIVATED: Personal/Schedule query detected")
+            # 🚀 ENHANCED API PRIORITY CHECK với session memory integration
+            if self._needs_external_api(query, intent_result, session_memory):
+                logger.info("🚨 ENHANCED API PRIORITY ACTIVATED: Personal/Schedule query detected with context awareness")
                 
                 if jwt_token and jwt_token.strip():
                     # Has token -> Call external API
@@ -1850,21 +2062,23 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                         query, intent_result, entities, session_id, jwt_token
                     )
                 else:
-                    # No token -> Require authentication
-                    return self._handle_authentication_required(session_id)
+                    # No token -> Require authentication (with context awareness)
+                    return self._handle_authentication_required(session_id, has_context)
             
-            # FALLBACK TO HYBRID SYSTEM (for general knowledge)
-            logger.info("📚 Using Hybrid Retrieval for general knowledge query")
+            # FALLBACK TO ENHANCED HYBRID SYSTEM
+            logger.info("📚 Using Enhanced Hybrid Retrieval with Context Memory")
             result = self.hybrid_chatbot.process_query(query, session_id, jwt_token)
             
-            # Add flag to show this went through normal hybrid flow
+            # Add enhanced flags to show this went through enhanced hybrid flow
             result['api_priority_activated'] = False
-            result['fallback_to_hybrid'] = True
+            result['fallback_to_enhanced_hybrid'] = True
+            result['context_memory_available'] = has_context
+            result['enhanced_processing'] = True  # 🚀 NEW flag
             
             return result
             
         except Exception as e:
-            logger.error(f"❌ BDU Service Error: {str(e)}")
+            logger.error(f"❌ Enhanced BDU Service Error: {str(e)}")
             personal_address = self._get_personal_address(session_id)
             return {
                 'response': f"Dạ {personal_address}, em gặp khó khăn kỹ thuật. {personal_address.title()} có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓",
@@ -1942,29 +2156,34 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
 
 {personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
     
-    # Delegate methods to hybrid chatbot
+    # Delegate methods to hybrid chatbot with enhanced status
     def get_system_status(self):
-        """Get comprehensive system status including API priority status"""
+        """🚀 NÂNG CẤP: Get comprehensive system status including enhanced context features"""
         hybrid_status = self.hybrid_chatbot.get_system_status()
         api_status = external_api_service.get_system_status()
         
-        # Enhance with API priority info
+        # Enhance with enhanced API priority info
         hybrid_status.update({
-            'service_layer': 'BDUChatbotService',
-            'api_priority_restoration': {
-                'restored': True,
+            'service_layer': 'Enhanced_BDUChatbotService',
+            'enhanced_api_priority': {  # 🚀 NEW section
+                'context_memory_integration': True,
                 'personal_keywords_count': len(self.api_priority_config['personal_info_keywords']),
                 'time_keywords_count': len(self.api_priority_config['time_context_keywords']),
-                'schedule_intents': self.api_priority_config['schedule_intent_names']
+                'continuation_keywords_count': len(self.api_priority_config['context_continuation_keywords']),
+                'schedule_intents': self.api_priority_config['schedule_intent_names'],
+                'memory_lookback_limit': self.api_priority_config['memory_lookback_limit'],
+                'confidence_threshold': self.api_priority_config['schedule_intent_confidence_threshold']
             },
             'external_api_service_status': api_status,
-            'processing_flow': [
-                '1. Intent Classification',
-                '2. API Priority Check (RESTORED)', 
-                '3. External API Call (if needed)',
-                '4. Hybrid Retrieval & Re-ranking (fallback)',
-                '5. User Memory Prompt Integration',
-                '6. Gender-based Addressing'
+            'enhanced_processing_flow': [  # 🚀 UPDATED
+                '1. Enhanced Intent Classification',
+                '2. Session Memory Context Analysis', 
+                '3. Context-Aware API Priority Check',
+                '4. Enhanced External API Call (if needed)',
+                '5. Enhanced Hybrid Retrieval & Re-ranking (fallback)',
+                '6. User Memory Prompt Integration',
+                '7. Gender-based Addressing with Context',
+                '8. Conversation Context Summary Integration'
             ]
         })
         
@@ -1997,4 +2216,5 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.knowledge_data
 
+# 🚀 ENHANCED: Create enhanced chatbot instance
 chatbot_ai = BDUChatbotService()

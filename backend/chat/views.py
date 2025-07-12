@@ -119,6 +119,48 @@ def validate_jwt_token_format(token):
     
     return True, "Valid JWT format"
 
+def auto_setup_user_context_from_jwt(session_id: str, jwt_token: str):
+    """
+    🚀 AUTO-SETUP user context từ JWT token để đảm bảo personal addressing
+    """
+    try:
+        # Import external_api_service
+        from ai_models.external_api_service import external_api_service
+        
+        # Decode JWT để lấy thông tin user
+        lecturer_info = external_api_service.get_lecturer_info_from_token(jwt_token)
+        
+        if lecturer_info:
+            # Setup user context với thông tin từ JWT
+            user_context = {
+                'full_name': lecturer_info.get('ten_giang_vien', ''),
+                'gender': lecturer_info.get('gender', 'other'),  # Đã được convert trong external_api_service
+                'ma_giang_vien': lecturer_info.get('ma_giang_vien', ''),
+                'chuc_danh': lecturer_info.get('chuc_danh', ''),
+                'gmail': lecturer_info.get('gmail', ''),
+                'faculty_code': 'JWT_AUTO',
+                'department_name': lecturer_info.get('vi_tri_viec_lam', ''),
+                'preferences': {
+                    'user_memory_prompt': '',  # Có thể load từ database user preferences
+                    'department_priority': True
+                },
+                'jwt_source': True,  # Flag để biết context này từ JWT
+                'auto_detected': True
+            }
+            
+            # Set context vào response generator
+            if chatbot_ai and hasattr(chatbot_ai, 'response_generator'):
+                chatbot_ai.response_generator.set_user_context(session_id, user_context)
+                logger.info(f"✅ JWT Auto-setup: {lecturer_info['ten_giang_vien']} ({lecturer_info['gender']}) -> session {session_id}")
+                return True
+            else:
+                logger.warning("⚠️ Chatbot AI service not available for context setup")
+                return False
+            
+    except Exception as e:
+        logger.error(f"❌ Error auto-setup user context from JWT: {str(e)}")
+        return False
+
 # ✅ SAFE SYSTEM STATUS FUNCTIONS
 def get_safe_system_status():
     """Get system status with safe fallbacks"""
@@ -411,10 +453,21 @@ class ChatView(APIView):
             if jwt_token:
                 is_valid_format, format_message = validate_jwt_token_format(jwt_token)
                 logger.info(f"🔑 JWT Token received: format_valid={is_valid_format}, message='{format_message}'")
+                
+                # 🚀 CRITICAL FIX: Auto-setup user context từ JWT
+                if is_valid_format:
+                    logger.info("🔧 Setting up user context from JWT token...")
+                    setup_success = auto_setup_user_context_from_jwt(session_id, jwt_token)
+                    if setup_success:
+                        logger.info("✅ JWT auto-setup completed successfully")
+                    else:
+                        logger.warning("⚠️ JWT auto-setup failed")
+                else:
+                    logger.warning(f"⚠️ Invalid JWT format: {format_message}")
             else:
                 logger.info("🔑 No JWT token provided - using standard QA mode")
             
-            # Get user context
+            # Get user context (existing logic - keep as backup)
             user_id = request.user.id if request.user.is_authenticated else None
             user_context = None
             personalization_info = {}
@@ -435,6 +488,11 @@ class ChatView(APIView):
                     }
                     
                     logger.info(f"👤 USER CONTEXT: {user_context.get('role_description', 'Unknown') if user_context else 'None'}")
+                    
+                    # 🚀 ADDITIONAL: Set authenticated user context as backup
+                    if user_context and chatbot_ai and hasattr(chatbot_ai, 'response_generator'):
+                        chatbot_ai.response_generator.set_user_context(session_id, user_context)
+                        logger.info("✅ Authenticated user context also set as backup")
                     
                 except Exception as e:
                     logger.warning(f"Could not get enhanced user context: {e}")
@@ -464,11 +522,9 @@ class ChatView(APIView):
             ai_response = None
             if chatbot_ai:
                 try:
-                    if user_context:
-                        chatbot_ai.response_generator.set_user_context(session_id, user_context)
-                        ai_response = chatbot_ai.process_query(user_message, session_id, jwt_token)
-                    else:
-                        ai_response = chatbot_ai.process_query(user_message, session_id, jwt_token)
+                    # 🚀 ALWAYS call process_query with JWT token for auto-detection
+                    ai_response = chatbot_ai.process_query(user_message, session_id, jwt_token)
+                    
                 except Exception as e:
                     logger.error(f"Error processing with AI service: {e}")
             
@@ -541,6 +597,7 @@ class ChatView(APIView):
                     'user_memory_prompt_applied': ai_response.get('user_memory_prompt_used', False),
                     'department_priority_used': user_context.get('department_priority_enabled') if user_context else False,
                     'jwt_token_provided': bool(jwt_token),
+                    'jwt_auto_setup_used': jwt_token and is_valid_format,  # 🚀 NEW FLAG
                     'external_api_used': ai_response.get('external_api_used', False),
                     'external_api_method': ai_response.get('method', '') if ai_response.get('external_api_used') else None,
                     'decision_type': ai_response.get('decision_type', ''),
@@ -589,9 +646,10 @@ class ChatView(APIView):
                     'audio_format': 'mp3_base64' if audio_content_base64 else None
                 },
                 
-                # Personalization info
+                # 🚀 ENHANCED: Personalization info với JWT auto-setup
                 'personalization': {
-                    'enabled': bool(user_context),
+                    'enabled': bool(user_context) or bool(jwt_token and is_valid_format),
+                    'jwt_auto_setup': jwt_token and is_valid_format,  # 🚀 NEW
                     'user_info': {
                         'department': personalization_info.get('department'),
                         'position': personalization_info.get('position'),
@@ -608,6 +666,7 @@ class ChatView(APIView):
                 # External API information
                 'external_api': {
                     'jwt_token_provided': bool(jwt_token),
+                    'jwt_format_valid': is_valid_format if jwt_token else None,  # 🚀 NEW
                     'external_api_used': ai_response.get('external_api_used', False),
                     'decision_type': ai_response.get('decision_type', ''),
                     'method_used': ai_response.get('method', ''),
@@ -645,11 +704,13 @@ class ChatView(APIView):
                 },
                 'personalization': {
                     'enabled': bool(locals().get('user_context')),
+                    'jwt_auto_setup': False,  # 🚀 NEW
                     'fallback_used': True,
                     'error': str(e)
                 },
                 'external_api': {
                     'jwt_token_provided': bool(locals().get('jwt_token')),
+                    'jwt_format_valid': None,  # 🚀 NEW
                     'external_api_used': False,
                     'fallback_used': True,
                     'error': str(e)

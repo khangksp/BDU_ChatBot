@@ -256,7 +256,7 @@ class ExternalAPIService:
     
     def _filter_schedule_by_query(self, schedule: Dict, query_context: str) -> Dict:
         """
-        Filter schedule based on query context (today, tomorrow, this week, etc.)
+        🚀 ENHANCED FIX: Ultra-reliable schedule filtering với deterministic logic
         """
         if not query_context:
             return schedule
@@ -264,46 +264,133 @@ class ExternalAPIService:
         query_lower = query_context.lower()
         today = datetime.now()
         
-        # ✅ NÂNG CẤP 2: Thêm logic tìm ngày/tháng cụ thể
-        # Ưu tiên tìm ngày tháng cụ thể trước để tăng độ chính xác
-        date_match = re.search(r'(\d{1,2})[/-](\d{1,2})', query_lower)
-        if date_match:
-            day = int(date_match.group(1))
-            month = int(date_match.group(2))
-            # Mặc định lấy năm hiện tại
+        logger.info(f"🔍 ENHANCED TIME FILTER: query='{query_context}', today={today.strftime('%d-%m-%Y')}")
+        
+        # ✅ CRITICAL FIX: Xử lý theo thứ tự ưu tiên STRICT
+        
+        # PRIORITY 1: Specific complex patterns (highest priority)
+        complex_patterns = {
+            'tuần sau nữa': lambda: self._get_week_dates(today, weeks_ahead=2),
+            'tuan sau nua': lambda: self._get_week_dates(today, weeks_ahead=2),
+            '2 tuần tới': lambda: self._get_week_dates(today, weeks_ahead=2),
+            '2 tuan toi': lambda: self._get_week_dates(today, weeks_ahead=2),
+            'cuối tuần này': lambda: self._get_weekend_dates(today, current_week=True),
+            'cuoi tuan nay': lambda: self._get_weekend_dates(today, current_week=True),
+            'đầu tuần sau': lambda: self._get_early_week_dates(today, weeks_ahead=1),
+            'dau tuan sau': lambda: self._get_early_week_dates(today, weeks_ahead=1),
+        }
+        
+        for pattern, date_func in complex_patterns.items():
+            if pattern in query_lower:
+                dates = date_func()
+                logger.info(f"✅ COMPLEX PATTERN MATCH: '{pattern}' -> {dates}")
+                return {k: v for k, v in schedule.items() if k in dates}
+        
+        # PRIORITY 2: Number + time unit patterns
+        number_pattern = re.search(r'(\d+)\s*tuần\s*(tới|sau|tiếp theo)', query_lower)
+        if number_pattern:
+            num_weeks = int(number_pattern.group(1))
+            dates = self._get_week_dates(today, weeks_ahead=num_weeks)
+            logger.info(f"✅ NUMBER PATTERN: {num_weeks} tuần -> {dates}")
+            return {k: v for k, v in schedule.items() if k in dates}
+        
+        # PRIORITY 3: Basic time keywords (medium priority)
+        basic_time_patterns = {
+            'tuần này': lambda: self._get_week_dates(today, weeks_ahead=0),
+            'tuan nay': lambda: self._get_week_dates(today, weeks_ahead=0),
+            'this week': lambda: self._get_week_dates(today, weeks_ahead=0),
+            'tuần tới': lambda: self._get_week_dates(today, weeks_ahead=1),
+            'tuan toi': lambda: self._get_week_dates(today, weeks_ahead=1),
+            'tuần sau': lambda: self._get_week_dates(today, weeks_ahead=1),
+            'tuan sau': lambda: self._get_week_dates(today, weeks_ahead=1),
+            'next week': lambda: self._get_week_dates(today, weeks_ahead=1),
+            'hôm nay': lambda: [today.strftime('%d-%m-%Y')],
+            'hom nay': lambda: [today.strftime('%d-%m-%Y')],
+            'today': lambda: [today.strftime('%d-%m-%Y')],
+            'ngày mai': lambda: [(today + timedelta(days=1)).strftime('%d-%m-%Y')],
+            'ngay mai': lambda: [(today + timedelta(days=1)).strftime('%d-%m-%Y')],
+            'tomorrow': lambda: [(today + timedelta(days=1)).strftime('%d-%m-%Y')],
+        }
+        
+        for pattern, date_func in basic_time_patterns.items():
+            if pattern in query_lower:
+                dates = date_func()
+                logger.info(f"✅ BASIC TIME PATTERN: '{pattern}' -> {dates}")
+                return {k: v for k, v in schedule.items() if k in dates}
+        
+        # PRIORITY 4: Weekday patterns
+        weekday_patterns = {
+            'thứ 2': 0, 'thu 2': 0, 'thứ hai': 0, 'thu hai': 0,
+            'thứ 3': 1, 'thu 3': 1, 'thứ ba': 1, 'thu ba': 1,
+            'thứ 4': 2, 'thu 4': 2, 'thứ tư': 2, 'thu tu': 2,
+            'thứ 5': 3, 'thu 5': 3, 'thứ năm': 3, 'thu nam': 3,
+            'thứ 6': 4, 'thu 6': 4, 'thứ sáu': 4, 'thu sau': 4,
+            'thứ 7': 5, 'thu 7': 5, 'thứ bảy': 5, 'thu bay': 5,
+            'chủ nhật': 6, 'chu nhat': 6, 'sunday': 6
+        }
+        
+        for weekday_name, target_weekday in weekday_patterns.items():
+            if weekday_name in query_lower:
+                target_date = self._get_next_weekday(today, target_weekday)
+                target_date_str = target_date.strftime('%d-%m-%Y')
+                logger.info(f"✅ WEEKDAY PATTERN: '{weekday_name}' -> {target_date_str}")
+                return {k: v for k, v in schedule.items() if k == target_date_str}
+        
+        # PRIORITY 5: Specific date patterns (lowest priority)
+        # Chỉ xử lý khi không có từ khóa thời gian chung trong câu ngắn
+        word_count = len(query_context.split())
+        has_general_keywords = any(kw in query_lower for kw in [
+            'tuần', 'tuan', 'week', 'hôm nay', 'hom nay', 'ngày mai', 'ngay mai'
+        ])
+        
+        date_pattern = re.search(r'(\d{1,2})[/-](\d{1,2})', query_lower)
+        if date_pattern and not (word_count <= 10 and has_general_keywords):
+            day = int(date_pattern.group(1))
+            month = int(date_pattern.group(2))
             year = today.year
             try:
                 specific_date_str = datetime(year, month, day).strftime('%d-%m-%Y')
-                logger.info(f"🔍 Found specific date in query: {specific_date_str}")
+                logger.info(f"✅ SPECIFIC DATE: {day}/{month} -> {specific_date_str}")
                 return {k: v for k, v in schedule.items() if k == specific_date_str}
             except ValueError:
-                # Nếu ngày tháng không hợp lệ (vd: 30/2), bỏ qua và để các bộ lọc khác xử lý
-                pass 
-
-        # Define date filters based on common queries
-        if any(keyword in query_lower for keyword in ['hôm nay', 'hom nay', 'today']):
-            today_str = today.strftime('%d-%m-%Y')
-            return {k: v for k, v in schedule.items() if k == today_str}
-            
-        elif any(keyword in query_lower for keyword in ['ngày mai', 'ngay mai', 'tomorrow']):
-            tomorrow = today + timedelta(days=1)
-            tomorrow_str = tomorrow.strftime('%d-%m-%Y')
-            return {k: v for k, v in schedule.items() if k == tomorrow_str}
-            
-        elif any(keyword in query_lower for keyword in ['tuần này', 'tuan nay', 'this week']):
-            # Get dates for current week (Monday to Sunday)
-            start_of_week = today - timedelta(days=today.weekday())
-            week_dates = [(start_of_week + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(7)]
-            return {k: v for k, v in schedule.items() if k in week_dates}
-            
-        elif any(keyword in query_lower for keyword in ['tuần tới', 'tuan toi', 'next week']):
-            # Get dates for next week
-            start_of_next_week = today + timedelta(days=(7 - today.weekday()))
-            week_dates = [(start_of_next_week + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(7)]
-            return {k: v for k, v in schedule.items() if k in week_dates}
-            
-        # Return full schedule if no specific time filter
+                logger.warning(f"⚠️ Invalid date: {day}/{month}")
+        
+        logger.info(f"✅ NO PATTERN MATCHED -> returning full schedule")
         return schedule
+
+    def _get_week_dates(self, today: datetime, weeks_ahead: int) -> List[str]:
+        """Helper: Get dates for a specific week"""
+        if weeks_ahead == 0:
+            # Current week: Monday to Sunday
+            start_of_week = today - timedelta(days=today.weekday())
+        else:
+            # Future weeks: start from Monday of target week
+            start_of_week = today + timedelta(days=(7 * weeks_ahead - today.weekday()))
+        
+        return [(start_of_week + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(7)]
+
+    def _get_weekend_dates(self, today: datetime, current_week: bool = True) -> List[str]:
+        """Helper: Get weekend dates (Saturday + Sunday)"""
+        if current_week:
+            days_until_saturday = (5 - today.weekday()) % 7
+            saturday = today + timedelta(days=days_until_saturday)
+        else:
+            saturday = today + timedelta(days=(12 - today.weekday()))
+        
+        sunday = saturday + timedelta(days=1)
+        return [saturday.strftime('%d-%m-%Y'), sunday.strftime('%d-%m-%Y')]
+
+    def _get_early_week_dates(self, today: datetime, weeks_ahead: int) -> List[str]:
+        """Helper: Get early week dates (Mon, Tue, Wed)"""
+        start_of_target_week = today + timedelta(days=(7 * weeks_ahead - today.weekday()))
+        return [(start_of_target_week + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(3)]
+
+    def _get_next_weekday(self, today: datetime, target_weekday: int) -> datetime:
+        """Helper: Get next occurrence of a specific weekday"""
+        days_ahead = target_weekday - today.weekday()
+        if days_ahead <= 0:  # Target day already happened this week
+            days_ahead += 7
+        return today + timedelta(days=days_ahead)
     
     def get_system_status(self) -> Dict[str, Any]:
         """Get system status for external API service"""
@@ -320,9 +407,11 @@ class ExternalAPIService:
                 'features': [
                     'jwt_token_decoding',
                     'lecturer_schedule_retrieval',
-                    'query_context_filtering',
+                    'enhanced_query_context_filtering',  # ✅ UPDATED
                     'response_caching',
-                    'error_handling'
+                    'error_handling',
+                    'complex_time_pattern_processing',   # ✅ NEW
+                    'priority_based_time_filtering'      # ✅ NEW
                 ]
             }
         }

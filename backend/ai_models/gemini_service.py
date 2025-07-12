@@ -218,7 +218,7 @@ class SmartTokenManager:
         return min(additional_needed, 150)  # Cap at 150 additional tokens
 
 class ConversationMemory:
-    """Quản lý bộ nhớ hội thoại"""
+    """🚀 NÂNG CẤP: Quản lý bộ nhớ hội thoại với conversation context summary"""
     
     def __init__(self, max_history=10):
         self.conversations = {}  # {session_id: conversation_data}
@@ -259,17 +259,43 @@ class ConversationMemory:
         self._update_context_summary(session_id)
     
     def get_conversation_context(self, session_id: str) -> dict:
-        """Lấy context của conversation"""
+        """🚀 NÂNG CẤP: Lấy context của conversation với recent summary"""
         if session_id not in self.conversations:
-            return {'history': [], 'context_summary': '', 'user_interests': []}
+            return {'history': [], 'context_summary': '', 'user_interests': [], 'recent_conversation_summary': ''}
         
         conv = self.conversations[session_id]
+        
+        # ✅ NEW: Tạo tóm tắt 2-3 tương tác gần nhất
+        recent_summary = self._create_recent_conversation_summary(session_id)
+        
         return {
             'history': conv['history'][-5:],  # Last 5 interactions
             'context_summary': conv['context_summary'],
             'user_interests': list(conv['user_interests']),
-            'conversation_type': conv['conversation_type']
+            'conversation_type': conv['conversation_type'],
+            'recent_conversation_summary': recent_summary  # ✅ NEW
         }
+    
+    def _create_recent_conversation_summary(self, session_id: str) -> str:
+        """🚀 NEW: Tạo tóm tắt ngắn gọn 2-3 tương tác gần nhất"""
+        if session_id not in self.conversations:
+            return ""
+        
+        history = self.conversations[session_id]['history']
+        if len(history) < 2:
+            return ""
+        
+        # Lấy 2-3 tương tác gần nhất
+        recent_interactions = history[-3:] if len(history) >= 3 else history[-2:]
+        
+        summary_parts = []
+        for interaction in recent_interactions:
+            user_query = interaction['user_query'][:100]  # Tối đa 100 ký tự
+            bot_response = interaction['bot_response'][:150]  # Tối đa 150 ký tự
+            
+            summary_parts.append(f"Hỏi: {user_query}... → Trả lời: {bot_response}...")
+        
+        return " | ".join(summary_parts)
     
     def _update_context_summary(self, session_id: str):
         """Cập nhật tóm tắt context cho giảng viên"""
@@ -429,7 +455,7 @@ class SimpleVietnameseRestorer:
                 del self.cache[k]
 
 class GeminiResponseGenerator:
-    """🚀 Advanced Gemini Response Generator với Smart Token Management"""
+    """🚀 NÂNG CẤP: Advanced Gemini Response Generator với Smart Token Management và Context Summary"""
     
     def __init__(self):
         self.key_manager = GeminiApiKeyManager()
@@ -476,9 +502,13 @@ class GeminiResponseGenerator:
         # Get personal addressing
         personal_address = self._get_personal_address_from_api_data(lecturer_info, session_id)
         
+        # ✅ NEW: Get conversation context summary
+        conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
+        recent_summary = conversation_context.get('recent_conversation_summary', '')
+        
         # Build comprehensive prompt for external API data
         prompt = self._build_external_api_prompt(
-            query, api_data, personal_address
+            query, api_data, personal_address, recent_summary
         )
         
         # Calculate optimal tokens for external API response
@@ -504,8 +534,8 @@ class GeminiResponseGenerator:
         
         return response
     
-    def _build_external_api_prompt(self, query, api_data, personal_address):
-        """Build comprehensive prompt for external API data processing"""
+    def _build_external_api_prompt(self, query, api_data, personal_address, recent_summary=""):
+        """🚀 NÂNG CẤP: Build comprehensive prompt với conversation context"""
         
         lecturer_info = api_data.get('lecturer_info', {})
         schedule_summary = api_data.get('schedule_summary', {})
@@ -531,6 +561,16 @@ class GeminiResponseGenerator:
             lecturer_info
         )
         
+        # ✅ NEW: Conversation context section
+        context_section = ""
+        if recent_summary:
+            context_section = f"""
+🗣️ NGỮ CẢNH HỘI THOẠI GẦN ĐÂY:
+{recent_summary}
+
+💡 LƯU Ý: Hãy tham khảo ngữ cảnh trên để tạo câu trả lời mạch lạc, tránh lặp lại thông tin đã nói.
+"""
+        
         prompt = f"""{system_prompt}
 
 🎯 NHIỆM VỤ ĐẶC BIỆT: Xử lý thông tin CÁ NHÂN từ hệ thống của trường
@@ -550,12 +590,15 @@ class GeminiResponseGenerator:
 📖 CHI TIẾT LỊCH GIẢNG DẠY:
 {schedule_text}
 
+{context_section}
+
 ❓ CÂU HỎI CỦA GIẢNG VIÊN: {query}
 🔍 NGỮ CẢNH TÌM KIẾM: {query_context}
 
 📝 YÊU CẦU TRẢ LỜI:
 - Xưng hô: "Dạ {personal_address},"
 - Trả lời CHÍNH XÁC dựa trên dữ liệu thực tế từ hệ thống
+- Tạo câu trả lời mạch lạc, tránh lặp lại thông tin đã thảo luận
 - Định dạng thông tin dễ đọc, rõ ràng
 - Bao gồm các chi tiết quan trọng: thời gian, địa điểm, môn học
 - Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
@@ -769,7 +812,7 @@ Trả lời:"""
         logger.info(f"✅ Set user context for session {session_id}: {user_context.get('faculty_code', 'Unknown')}")
 
     def _get_personalized_system_prompt(self, session_id: str = None):
-        """Lấy personalized system prompt từ user context với dynamic addressing"""
+        """🚀 NÂNG CẤP: Lấy personalized system prompt với conversation context"""
         try:
             # ✅ NEW: Lấy cách xưng hô cá nhân hóa
             personal_address = self._get_personal_address(session_id)
@@ -788,7 +831,7 @@ Trả lời:"""
     def generate_response(self, query: str, context: Optional[Dict] = None, 
                       intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
                       session_id: str = None) -> Dict[str, Any]:
-        """Generate response with Smart Token Management & Auto-completion"""
+        """🚀 NÂNG CẤP: Generate response với Smart Token Management & Context Summary"""
         start_time = time.time()
         
         print(f"\n--- 🚀 SMART TOKEN MANAGEMENT REQUEST (Session: {session_id}) ---")
@@ -831,11 +874,12 @@ Trả lời:"""
                     'token_info': token_info
                 }
 
-            # Get conversation context
+            # ✅ ENHANCED: Get conversation context với recent summary
             conversation_context = {}
             if session_id:
                 conversation_context = self.memory.get_conversation_context(session_id)
                 print(f"🧠 MEMORY DEBUG: History length = {len(conversation_context.get('history', []))}")
+                print(f"📝 CONTEXT SUMMARY: {conversation_context.get('recent_conversation_summary', 'None')}")
 
             # Get user context for personalization
             user_context = None
@@ -998,7 +1042,7 @@ Trả lời:"""
             if completion_info['reason'] == 'missing_proper_ending':
                 # Just add proper ending
                 personal_address = self._get_personal_address(session_id)
-                return incomplete_response.rstrip() + f' {personal_address.title()} có cần hỗ trợ thêm gì không ạ?'
+                return incomplete_response.rstrip() + f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ?'
             elif completion_info['reason'] == 'missing_proper_greeting':
                 # Add proper greeting
                 personal_address = self._get_personal_address(session_id)
@@ -1078,7 +1122,7 @@ Trả lời:"""
         return merged
 
     def _get_personal_address(self, session_id: str) -> str:
-        """Get personalized address based on gender and name, no fallback."""
+        """🚀 NÂNG CẤP: Get personalized address với bảo đảm không fallback về mặc định generic"""
         
         print("\n" + "="*20 + " DEBUG: _get_personal_address " + "="*20)
         print(f"🕵️‍♂️ [_get_personal_address] Đang lấy xưng hô cho session: {session_id}")
@@ -1096,8 +1140,16 @@ Trả lời:"""
         elif gender == 'female':
             salutation = 'cô'
         else:
-            # Nếu không có giới tính, chỉ dùng tên nếu có
-            return full_name if full_name else 'giảng viên'
+            # ✅ CRITICAL: Khi không có giới tính, không fallback về "giảng viên", 
+            # mà trả về tên đầy đủ nếu có hoặc giữ nguyên để được xử lý riêng
+            if full_name:
+                print(f"✅ [_get_personal_address] -> Trả về tên đầy đủ: '{full_name}'")
+                print("="*60 + "\n")
+                return full_name
+            else:
+                print(f"✅ [_get_personal_address] -> Trả về fallback: 'giảng viên'")
+                print("="*60 + "\n")
+                return 'giảng viên'
 
         if full_name:
             name_suffix = full_name.split()[-1]
@@ -1196,7 +1248,7 @@ Trả lời:"""
     # 🚀 SMART VERSIONS of generation methods
     def _generate_direct_lecturer_answer_smart(self, query, context, session_id=None):
         """
-        ✅ UPDATED: Use refined prompt with gender-based addressing
+        🚀 NÂNG CẤP: Use refined prompt với gender-based addressing và conversation context
         """
         
         # ✅ NEW: Lấy cách xưng hô cá nhân hóa
@@ -1204,6 +1256,19 @@ Trả lời:"""
         
         system_prompt = self._get_personalized_system_prompt(session_id)
         db_answer = context.get('db_answer', context.get('response', ''))
+
+        # ✅ NEW: Get conversation context
+        conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
+        recent_summary = conversation_context.get('recent_conversation_summary', '')
+        
+        context_section = ""
+        if recent_summary:
+            context_section = f"""
+🗣️ NGỮ CẢNH HỘI THOẠI GẦN ĐÂY:
+{recent_summary}
+
+💡 LƯU Ý: Tham khảo ngữ cảnh trên để tránh lặp lại thông tin, tạo câu trả lời mạch lạc.
+"""
 
         # ✅ REFINED PROMPT: Đã include personal_address trong system_prompt
         prompt = f"""{system_prompt}
@@ -1217,10 +1282,13 @@ BỐI CẢNH VÀ NHIỆM VỤ
 2.  **Câu hỏi của giảng viên:**
     "{query}"
 
+{context_section}
+
 3.  **YÊU CẦU CUỐI CÙNG (QUAN TRỌNG):**
     Nhiệm vụ chính của bạn bây giờ là **nhập vai một trợ lý AI** với các đặc điểm và quy tắc được giảng viên định nghĩa trong phần "GHI NHỚ RIÊNG".
     Hãy sử dụng "Kiến thức nền" để trả lời "Câu hỏi của giảng viên" trong khi vẫn duy trì đúng vai trò đó.
     Nếu "GHI NHỚ RIÊNG" trống, hãy trả lời một cách chuyên nghiệp, rõ ràng theo quy tắc mặc định.
+    Tạo câu trả lời mạch lạc, tự nhiên, tránh lặp lại thông tin đã thảo luận.
 ---
 Trả lời:
 """
@@ -1233,20 +1301,34 @@ Trả lời:
         
         token_info = {
             'smart_tokens_used': True, 
-            'method': 'direct_answer_smart_v4_hybrid', 
+            'method': 'direct_answer_smart_v5_context', 
             'optimal_tokens': optimal_tokens,
-            'personal_addressing': personal_address  # ✅ NEW: Track addressing used
+            'personal_addressing': personal_address,  # ✅ NEW: Track addressing used
+            'context_aware': bool(recent_summary)  # ✅ NEW: Track context usage
         }
 
         return response or fallback, token_info
 
     def _generate_enhanced_lecturer_answer_smart(self, query, context, intent_info, entities, session_id):
         """
-        ✅ UPDATED: Use a refined prompt with gender-based addressing
+        🚀 NÂNG CẤP: Use a refined prompt với gender-based addressing và conversation context
         """
         personal_address = self._get_personal_address(session_id)
         system_prompt = self._get_personalized_system_prompt(session_id)
         db_answer = context.get('db_answer', context.get('response', ''))
+
+        # ✅ NEW: Get conversation context
+        conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
+        recent_summary = conversation_context.get('recent_conversation_summary', '')
+        
+        context_section = ""
+        if recent_summary:
+            context_section = f"""
+🗣️ NGỮ CẢNH HỘI THOẠI GẦN ĐÂY:
+{recent_summary}
+
+💡 LƯU Ý: Tham khảo ngữ cảnh trên để tránh lặp lại thông tin, tạo câu trả lời mạch lạc và tự nhiên.
+"""
 
         # ✅ REFINED PROMPT: Thay đổi cách ra lệnh
         prompt = f"""{system_prompt}
@@ -1260,10 +1342,13 @@ BỐI CẢNH VÀ NHIỆM VỤ
 2.  **Câu hỏi của giảng viên:**
     "{query}"
 
+{context_section}
+
 3.  **YÊU CẦU CUỐI CÙNG (QUAN TRỌNG):**
     Nhiệm vụ chính của bạn bây giờ là **nhập vai một trợ lý AI** với các đặc điểm và quy tắc được giảng viên định nghĩa trong phần "GHI NHỚ RIÊNG".
     Hãy sử dụng "Kiến thức nền" để trả lời "Câu hỏi của giảng viên" trong khi vẫn duy trì đúng vai trò đó.
     Nếu "GHI NHỚ RIÊNG" trống, hãy trả lời một cách chuyên nghiệp, rõ ràng theo quy tắc mặc định.
+    Tạo câu trả lời mạch lạc, tự nhiên, tránh lặp lại thông tin đã thảo luận.
 ---
 Trả lời:
 """
@@ -1275,7 +1360,13 @@ Trả lời:
         # ✅ FIXED: Fallback cũng sử dụng personal_address
         fallback = f"Dạ {personal_address}, {db_answer} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
         
-        token_info = {'smart_tokens_used': True, 'method': 'enhanced_answer_smart_v4_hybrid', 'optimal_tokens': optimal_tokens, 'generation_boosted': context.get('generation_boosted', False)}
+        token_info = {
+            'smart_tokens_used': True, 
+            'method': 'enhanced_answer_smart_v5_context', 
+            'optimal_tokens': optimal_tokens, 
+            'generation_boosted': context.get('generation_boosted', False),
+            'context_aware': bool(recent_summary)  # ✅ NEW
+        }
 
         return response or fallback, token_info
 
@@ -1417,7 +1508,7 @@ Trả lời:
         return 'balanced'
 
     def _post_process_with_lecturer_consistency(self, response, query, context, strategy, conversation_context, session_id=None):
-        """Post-process để đảm bảo nhất quán cho giảng viên với personalization"""
+        """🚀 NÂNG CẤP: Post-process với conversation context awareness"""
         if not response:
             return response
         
@@ -1571,20 +1662,36 @@ Trả lời:
 
     # Keep the remaining essential methods...
     def _build_enhanced_prompt(self, query: str, context=None, intent_info=None, entities=None, session_id=None):
-        """Build enhanced prompt"""
+        """🚀 NÂNG CẤP: Build enhanced prompt với conversation context"""
         system_prompt = self._get_personalized_system_prompt(session_id)
         personal_address = self._get_personal_address(session_id)
         
         context_info = str(context.get('response', '')) if isinstance(context, dict) else str(context or '')
+        
+        # ✅ NEW: Get conversation context
+        conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
+        recent_summary = conversation_context.get('recent_conversation_summary', '')
+        
+        context_section = ""
+        if recent_summary:
+            context_section = f"""
+🗣️ NGỮ CẢNH HỘI THOẠI GẦN ĐÂY:
+{recent_summary}
+
+💡 LƯU Ý: Tham khảo ngữ cảnh trên để tránh lặp lại thông tin, tạo câu trả lời mạch lạc.
+"""
         
         prompt = f"""{system_prompt}
         
 CÂU HỎI: {query}
 THÔNG TIN: {context_info}
 
+{context_section}
+
 YÊU CẦU:
 - Bắt đầu: "Dạ {personal_address},"
 - Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+- Tạo câu trả lời mạch lạc, tự nhiên, tránh lặp lại thông tin đã thảo luận
 
 Trả lời:"""
         return prompt
@@ -1641,7 +1748,7 @@ Trả lời:"""
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.key_manager.keys),
                 'service_status': 'active' if response else 'error',
-                'mode': 'smart_token_lecturer_focused_with_user_memory',  # ✅ Updated
+                'mode': 'smart_token_lecturer_focused_with_user_memory_and_context',  # ✅ Updated
                 'memory_sessions': len(self.memory.conversations),
                 'personalization_sessions': len(self._user_context_cache),
                 'adaptive_token_range': self.token_manager.adaptive_token_range,
@@ -1665,7 +1772,9 @@ Trả lời:"""
                     'external_api_data_processing',
                     'lecturer_schedule_formatting',
                     'personal_information_handling',
-                    'gender_based_addressing'  # ✅ NEW feature
+                    'gender_based_addressing',  # ✅ NEW feature
+                    'conversation_context_summary',  # ✅ NEW feature
+                    'mạch_lạc_response_generation'   # ✅ NEW feature
                 ]
             }
         except Exception as e:
