@@ -168,7 +168,7 @@ class GoogleDriveService:
             entries = []
             for _, row in df.iterrows():
                 entries.append({
-                    'stt': row['STT'],
+                    'STT': row['STT'],
                     'question': row['question'],
                     'answer': row['answer'],
                     'category': 'Giảng viên'
