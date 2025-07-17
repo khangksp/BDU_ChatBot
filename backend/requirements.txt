@@ -73,3 +73,8 @@ google-auth-httplib2==0.1.1
 
 # ✅ REQUIRED: Development Tools
 python-decouple==3.8
+
+# ✅ REQUIRED: PDF & DOCX Processing (OCR)
+pdf2image==1.17.0
+pytesseract==0.3.10
+python-docx==1.1.2

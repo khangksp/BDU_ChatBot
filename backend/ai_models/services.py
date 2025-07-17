@@ -404,7 +404,7 @@ class HybridReRanker:
 
 
 class LecturerDecisionEngine:
-    """🚀 NÂNG CẤP: Enhanced Decision Engine với Session Memory Awareness"""
+    """🚀 NÂNG CẤP: Enhanced Decision Engine với Session Memory Awareness và Document Context Support"""
     
     def __init__(self):
         # ✅ BƯỚC 3: Tăng ngưỡng medium_trust lên 0.5
@@ -482,7 +482,7 @@ class LecturerDecisionEngine:
             'gì', 'nào', 'khi nào', 'ở đâu', 'ai', 'sao', 'có phải'
         ]
         
-        logger.info("✅ Enhanced LecturerDecisionEngine initialized with Session Memory Support")
+        logger.info("✅ Enhanced LecturerDecisionEngine initialized with Session Memory Support và Document Context Support")
     
     def is_education_related(self, query):
         """Enhanced education detection for lecturers"""
@@ -657,8 +657,33 @@ class LecturerDecisionEngine:
         
         return needs_api
 
-    def make_decision(self, query, best_candidate, intent_result, session_memory=None, jwt_token=None):
-        """🚀 NÂNG CẤP: Enhanced decision making với session memory integration"""
+    def make_decision(self, query, best_candidate, intent_result, session_memory=None, jwt_token=None, document_text=None):
+        """
+        🚀 NÂNG CẤP: Enhanced decision making với session memory integration và Document Context Support
+        
+        Args:
+            query (str): User query
+            best_candidate (dict): Best candidate từ hybrid search
+            intent_result (dict): Intent classification result
+            session_memory (list): Session conversation memory
+            jwt_token (str): JWT token for external API
+            document_text (str): Văn bản từ tài liệu được upload (nếu có)
+        
+        Returns:
+            tuple: (decision_type, context, should_respond)
+        """
+        
+        # 🚀 NEW: ƯU TIÊN HÀNG ĐẦU - Document Context Processing
+        if document_text and document_text.strip():
+            logger.info("🏆 DOCUMENT CONTEXT PRIORITY: Document text provided, prioritizing document-based response")
+            return 'use_document_context', {
+                'instruction': 'answer_from_document',
+                'query': query,
+                'document_text': document_text,
+                'confidence': 0.95,  # High confidence for document-based responses
+                'message': 'Answering based on the provided document content',
+                'enhanced_by_document': True
+            }, True
         
         # Xác định đây có phải tin nhắn đầu tiên không
         is_first_message = not session_memory or len(session_memory) == 0
@@ -806,12 +831,12 @@ class LecturerDecisionEngine:
                 'message': 'No relevant information - say dont know'
             }
         
-        logger.info(f"🎯 ENHANCED Hybrid Decision made: {decision} (final_score: {final_score:.3f}, context_enhanced: {bool(session_memory)})")
+        logger.info(f"🎯 ENHANCED Hybrid Decision made: {decision} (final_score: {final_score:.3f}, context_enhanced: {bool(session_memory)}, document_context: {bool(document_text)})")
         return decision, context, True
 
 
 class HybridChatbotAI:
-    """🚀 NÂNG CẤP: Enhanced Hybrid Chatbot với Session Memory Integration"""
+    """🚀 NÂNG CẤP: Enhanced Hybrid Chatbot với Session Memory Integration và Document Context Support"""
     
     def __init__(self, shared_response_generator):
         # Initialize components với shared response_generator
@@ -822,7 +847,7 @@ class HybridChatbotAI:
         self.reranker = HybridReRanker()
         self.conversation_memory = {}
         
-        logger.info("🚀 Enhanced HybridChatbotAI initialized with Session Memory Support")
+        logger.info("🚀 Enhanced HybridChatbotAI initialized with Session Memory Support và Document Context Support")
     
     @property
     def model(self):
@@ -865,7 +890,7 @@ class HybridChatbotAI:
             'phobert_available': not self.intent_classifier.fallback_mode,
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'hybrid_retrieval_reranking_lecturer_with_enhanced_memory_and_graceful_degradation',  # ✅ Updated
+            'mode': 'hybrid_retrieval_reranking_lecturer_with_enhanced_memory_and_document_context_support',  # ✅ Updated
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'personalization_sessions': gemini_status.get('personalization_sessions', 0),
             'adaptive_token_range': self.response_generator.token_manager.adaptive_token_range,
@@ -890,7 +915,10 @@ class HybridChatbotAI:
                 'smart_clarification_reduction',  # ✅ NEW feature
                 'graceful_degradation_support',  # 🚀 NEW feature
                 'fallback_response_mechanism',  # 🚀 NEW feature
-                'consistent_personalization_in_errors'  # 🚀 NEW feature
+                'consistent_personalization_in_errors',  # 🚀 NEW feature
+                'document_context_processing',  # 🚀 NEW feature
+                'pdf_docx_support',  # 🚀 NEW feature
+                'document_based_answering'  # 🚀 NEW feature
             ],
             'gemini_status': gemini_status,
             'external_api_status': external_api_status,
@@ -901,7 +929,10 @@ class HybridChatbotAI:
                 'context_memory_threshold': self.decision_engine.external_api_config['context_memory_threshold'],
                 'schedule_continuation_keywords': len(self.decision_engine.external_api_config['schedule_continuation_keywords']),
                 'graceful_degradation': True,  # 🚀 NEW
-                'fallback_capabilities': True  # 🚀 NEW
+                'fallback_capabilities': True,  # 🚀 NEW
+                'document_context_support': True,  # 🚀 NEW
+                'supported_document_formats': ['.pdf', '.docx'],  # 🚀 NEW
+                'ocr_integration': True  # 🚀 NEW
             }
         }
 
@@ -934,11 +965,22 @@ class HybridChatbotAI:
         
         return False
     
-    def process_query(self, query, session_id=None, jwt_token=None):
-        """🚀 NÂNG CẤP: Main query processing với Enhanced Session Memory Integration"""
+    def process_query(self, query, session_id=None, jwt_token=None, document_text=None):
+        """
+        🚀 NÂNG CẤP: Main query processing với Enhanced Session Memory Integration và Document Context Support
+        
+        Args:
+            query (str): User query
+            session_id (str): Session ID cho conversation memory
+            jwt_token (str): JWT token cho external API
+            document_text (str): Văn bản từ tài liệu được upload (nếu có)
+        
+        Returns:
+            dict: Processing result with enhanced features
+        """
         start_time = time.time()
         
-        logger.info(f"👨‍🏫 Processing ENHANCED hybrid query: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
+        logger.info(f"👨‍🏫 Processing ENHANCED hybrid query with Document Context Support: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
         
         try:
             # VALIDATE INPUT NGAY TỪ ĐẦU
@@ -949,6 +991,11 @@ class HybridChatbotAI:
             # 🚀 NEW: Get session memory EARLY để sử dụng trong decision making
             session_memory = self.get_conversation_context(session_id) if session_id else []
             logger.info(f"🧠 MEMORY STATUS: {len(session_memory)} interactions in history")
+            
+            # 📄 NEW: Log document context nếu có
+            if document_text:
+                doc_length = len(document_text.strip())
+                logger.info(f"📄 DOCUMENT CONTEXT: {doc_length} characters of document text provided")
             
             # Kiểm tra query quá ngắn và không hợp lệ
             if len(query.strip()) < 3 and not self._is_valid_short_query(query):
@@ -962,7 +1009,8 @@ class HybridChatbotAI:
                     'is_education': True,
                     'lecturer_optimized': True,
                     'early_validation_triggered': True,
-                    'session_memory_used': bool(session_memory)  # ✅ NEW
+                    'session_memory_used': bool(session_memory),
+                    'document_context_used': bool(document_text)  # ✅ NEW
                 }
             
             # Get intent and entities
@@ -988,9 +1036,9 @@ class HybridChatbotAI:
             
             logger.info(f"🎯 Best candidate after re-ranking: final_score={best_candidate.get('final_score', 0):.3f}")
             
-            # 🚀 ENHANCED DECISION MAKING với session memory
+            # 🚀 ENHANCED DECISION MAKING với session memory và document context
             decision_type, gemini_context, should_respond = self.decision_engine.make_decision(
-                query, best_candidate, intent_result, session_memory, jwt_token
+                query, best_candidate, intent_result, session_memory, jwt_token, document_text
             )
             
             # Execute decision
@@ -1010,7 +1058,8 @@ class HybridChatbotAI:
                     session_id, query, intent_result, 
                     best_candidate.get('final_score', 0), 
                     decision_type, should_respond, 
-                    gemini_context  # ✅ NEW: Pass full context
+                    gemini_context,  # ✅ NEW: Pass full context
+                    document_text  # 🚀 NEW: Pass document context
                 )
             
             processing_time = time.time() - start_time
@@ -1033,6 +1082,9 @@ class HybridChatbotAI:
                 'session_memory_used': bool(session_memory),  # ✅ NEW
                 'enhanced_by_context': gemini_context.get('enhanced_by_context', False) if gemini_context else False,  # ✅ NEW
                 'graceful_degradation_used': False,  # 🚀 NEW: Will be set by fallback methods
+                'document_context_used': bool(document_text),  # 🚀 NEW
+                'document_context_priority': decision_type == 'use_document_context',  # 🚀 NEW
+                'enhanced_by_document': gemini_context.get('enhanced_by_document', False) if gemini_context else False,  # 🚀 NEW
                 'reranking_stats': {
                     'semantic_score': best_candidate.get('semantic_score', 0),
                     'keyword_score': best_candidate.get('keyword_score', 0),
@@ -1050,6 +1102,7 @@ class HybridChatbotAI:
                 'processing_time': time.time() - start_time,
                 'error': str(e),
                 'session_memory_used': bool(session_memory) if 'session_memory' in locals() else False,  # ✅ NEW
+                'document_context_used': bool(document_text) if 'document_text' in locals() else False,  # 🚀 NEW
                 'graceful_degradation_used': True  # 🚀 NEW
             }
     
@@ -1119,6 +1172,13 @@ class HybridChatbotAI:
         # Lấy raw answer từ database nếu có
         raw_answer = gemini_context.get('db_answer', '') if gemini_context else ''
         
+        # 🚀 NEW: Special handling cho document context
+        if decision_type == 'use_document_context':
+            document_text = gemini_context.get('document_text', '') if gemini_context else ''
+            if document_text:
+                # Tạo response cơ bản từ document
+                return self._create_document_fallback_response(query, document_text, session_id)
+        
         if decision_type == 'use_external_api':
             return self._create_external_api_fallback(gemini_context, session_id)
         
@@ -1144,6 +1204,29 @@ class HybridChatbotAI:
         else:
             logger.warning(f"⚠️ Unknown decision type in fallback: {decision_type}")
             return self._create_generic_fallback(session_id)
+    
+    def _create_document_fallback_response(self, query, document_text, session_id):
+        """
+        🚀 NEW: Tạo fallback response cho document context
+        
+        Khi Gemini không khả dụng, trả về response cơ bản dựa trên document
+        """
+        personal_address = self._get_personal_address(session_id)
+        
+        # Lấy đoạn văn bản đầu tiên từ document
+        preview_text = document_text[:500] + "..." if len(document_text) > 500 else document_text
+        
+        return f"""Dạ {personal_address}, em đã nhận được tài liệu mà {personal_address} gửi và tìm thấy thông tin sau:
+
+📄 Nội dung tài liệu:
+{preview_text}
+
+Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {personal_address.title()} có thể:
+• Đặt câu hỏi cụ thể hơn về nội dung
+• Gửi lại tài liệu với câu hỏi rõ ràng hơn
+• Liên hệ bộ phận IT để được hỗ trợ: it@bdu.edu.vn
+
+{personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓"""
     
     def _format_raw_database_answer(self, raw_answer, personal_address):
         """
@@ -1296,8 +1379,16 @@ class HybridChatbotAI:
         
         response_text = ""
         
+        # 🚀 NEW: Xử lý document context
+        if decision_type == 'use_document_context':
+            response = self.response_generator.generate_response(
+                query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
+            )
+            personal_address = self._get_personal_address(session_id)
+            response_text = response.get('response', f"Dạ {personal_address}, em đã xem xét tài liệu nhưng gặp khó khăn trong việc trả lời. {personal_address.title()} có thể đặt câu hỏi cụ thể hơn không ạ? 🎓")
+        
         # Lấy response từ Gemini như bình thường
-        if decision_type == 'use_external_api':
+        elif decision_type == 'use_external_api':
             response_text = self._handle_external_api_decision(query, gemini_context, intent_result, entities, session_id)
         
         elif decision_type == 'require_authentication':
@@ -1536,7 +1627,7 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
                 return f"""Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin. {personal_address.title()} có thể:
 • Thử lại sau vài phút
 • Truy cập trực tiếp hệ thống quản lý đào tạo
-• Liên hệ bộ phận IT: it@bdu.edu.vn
+• Liên hệ bộ phần IT: it@bdu.edu.vn
 
 {personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
     
@@ -1565,8 +1656,8 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         
         return query
     
-    def _update_enhanced_memory(self, session_id, query, intent_result, confidence, decision_type=None, was_education=True, gemini_context=None):
-        """🚀 NÂNG CẤP: Enhanced memory update với richer context information"""
+    def _update_enhanced_memory(self, session_id, query, intent_result, confidence, decision_type=None, was_education=True, gemini_context=None, document_text=None):
+        """🚀 NÂNG CẤP: Enhanced memory update với richer context information và Document Context Support"""
         if session_id not in self.conversation_memory:
             self.conversation_memory[session_id] = []
         
@@ -1587,7 +1678,12 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
             'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
             'query_length': len(query.split()),
             'intent_confidence': intent_result.get('confidence', 0) if intent_result else 0,
-            'graceful_degradation_used': gemini_context.get('graceful_degradation_used', False) if gemini_context else False  # 🚀 NEW
+            'graceful_degradation_used': gemini_context.get('graceful_degradation_used', False) if gemini_context else False,  # 🚀 NEW
+            # 🚀 NEW: Document context fields
+            'document_context_used': bool(document_text),
+            'document_context_priority': decision_type == 'use_document_context',
+            'enhanced_by_document': gemini_context.get('enhanced_by_document', False) if gemini_context else False,
+            'document_text_length': len(document_text) if document_text else 0
         }
         
         self.conversation_memory[session_id].append(interaction)
@@ -1595,7 +1691,7 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         # Keep only recent history (increased to 15 for better context)
         self.conversation_memory[session_id] = self.conversation_memory[session_id][-15:]
         
-        logger.info(f"🧠 ENHANCED Memory updated for session {session_id}: {len(self.conversation_memory[session_id])} total interactions")
+        logger.info(f"🧠 ENHANCED Memory updated for session {session_id}: {len(self.conversation_memory[session_id])} total interactions (document_context: {bool(document_text)})")
     
     def _get_empty_query_response_lecturer(self):
         """Response for empty queries from lecturers"""
@@ -2032,7 +2128,7 @@ class ChatbotAI:
 
 
 class BDUChatbotService:
-    """🚀 NÂNG CẤP: Enhanced Primary Service Layer với Context Memory Integration"""
+    """🚀 NÂNG CẤP: Enhanced Primary Service Layer với Context Memory Integration và Document Context Support"""
     
     def __init__(self):
         # Tạo shared response_generator trước tiên
@@ -2080,7 +2176,7 @@ class BDUChatbotService:
             'schedule_intent_confidence_threshold': 0.6
         }
         
-        logger.info("🚀 Enhanced BDUChatbotService initialized with Context Memory Integration and Graceful Degradation")
+        logger.info("🚀 Enhanced BDUChatbotService initialized with Context Memory Integration, Document Context Support và Graceful Degradation")
     
     # [Remaining methods unchanged - để giữ nguyên logic hiện tại]
     
@@ -2286,11 +2382,22 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
             return self.response_generator._get_personal_address(session_id)
         return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
     
-    def process_query(self, query: str, session_id: str = None, jwt_token: str = None) -> dict:
-        """🚀 NÂNG CẤP: Main method với Enhanced Context Memory Integration and Graceful Degradation"""
+    def process_query(self, query: str, session_id: str = None, jwt_token: str = None, document_text: str = None) -> dict:
+        """
+        🚀 NÂNG CẤP: Main method với Enhanced Context Memory Integration, Document Context Support và Graceful Degradation
+        
+        Args:
+            query (str): User query
+            session_id (str): Session ID for conversation memory
+            jwt_token (str): JWT token for external API
+            document_text (str): Văn bản từ tài liệu được upload (nếu có)
+            
+        Returns:
+            dict: Processing result with enhanced features
+        """
         start_time = time.time()
         
-        logger.info(f"🎯 Enhanced BDU Service Processing với Graceful Degradation: '{query}' (session: {session_id}, has_token: {bool(jwt_token)})")
+        logger.info(f"🎯 Enhanced BDU Service Processing với Document Context Support và Graceful Degradation: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
         
         try:
             if not query or len(query.strip()) < 2:
@@ -2299,12 +2406,18 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                     'confidence': 0.9,
                     'method': 'empty_query',
                     'processing_time': time.time() - start_time,
+                    'document_context_used': False,  # 🚀 NEW flag
                     'graceful_degradation_used': False  # 🚀 NEW flag
                 }
             
             # 🚀 NEW: Get session memory EARLY for context-aware decisions
             session_memory = self.hybrid_chatbot.get_conversation_context(session_id) if session_id else []
             has_context = len(session_memory) > 0
+            
+            # 📄 NEW: Log document context nếu có
+            if document_text:
+                doc_length = len(document_text.strip())
+                logger.info(f"📄 DOCUMENT CONTEXT: {doc_length} characters of document text provided")
             
             # Intent Classification
             intent_result = self.intent_classifier.classify_intent(query)
@@ -2323,15 +2436,16 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                     # No token -> Require authentication (with context awareness)
                     return self._handle_authentication_required(session_id, has_context)
             
-            # FALLBACK TO ENHANCED HYBRID SYSTEM với Graceful Degradation
-            logger.info("📚 Using Enhanced Hybrid Retrieval with Context Memory and Graceful Degradation")
-            result = self.hybrid_chatbot.process_query(query, session_id, jwt_token)
+            # FALLBACK TO ENHANCED HYBRID SYSTEM với Document Context Support và Graceful Degradation
+            logger.info("📚 Using Enhanced Hybrid Retrieval with Context Memory, Document Context Support và Graceful Degradation")
+            result = self.hybrid_chatbot.process_query(query, session_id, jwt_token, document_text)
             
             # Add enhanced flags to show this went through enhanced hybrid flow
             result['api_priority_activated'] = False
             result['fallback_to_enhanced_hybrid'] = True
             result['context_memory_available'] = has_context
             result['enhanced_processing'] = True  # 🚀 NEW flag
+            result['document_context_support'] = bool(document_text)  # 🚀 NEW flag
             # graceful_degradation_used flag will be set by hybrid_chatbot if needed
             
             return result
@@ -2345,6 +2459,7 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                 'method': 'service_error',
                 'processing_time': time.time() - start_time,
                 'error': str(e),
+                'document_context_used': bool(document_text),  # 🚀 NEW flag
                 'graceful_degradation_used': True  # 🚀 NEW flag
             }
     
@@ -2420,13 +2535,25 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
     
     # Delegate methods to hybrid chatbot with enhanced status
     def get_system_status(self):
-        """🚀 NÂNG CẤP: Get comprehensive system status including enhanced context features và graceful degradation"""
+        """🚀 NÂNG CẤP: Get comprehensive system status including enhanced context features, document context support và graceful degradation"""
         hybrid_status = self.hybrid_chatbot.get_system_status()
         api_status = external_api_service.get_system_status()
         
-        # Enhance with enhanced API priority info and graceful degradation
+        # Check OCR service status
+        ocr_status = {}
+        try:
+            from .ocr_service import ocr_service
+            ocr_status = ocr_service.get_service_status()
+        except Exception as e:
+            ocr_status = {
+                'is_configured': False,
+                'error': str(e),
+                'supported_formats': []
+            }
+        
+        # Enhance with enhanced API priority info, document context support và graceful degradation
         hybrid_status.update({
-            'service_layer': 'Enhanced_BDUChatbotService_with_Graceful_Degradation',
+            'service_layer': 'Enhanced_BDUChatbotService_with_Document_Context_Support_and_Graceful_Degradation',
             'enhanced_api_priority': {  # 🚀 NEW section
                 'context_memory_integration': True,
                 'personal_keywords_count': len(self.api_priority_config['personal_info_keywords']),
@@ -2436,6 +2563,20 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
                 'memory_lookback_limit': self.api_priority_config['memory_lookback_limit'],
                 'confidence_threshold': self.api_priority_config['schedule_intent_confidence_threshold']
             },
+            'document_context_support': {  # 🚀 NEW section
+                'enabled': True,
+                'priority_level': 'highest',  # Document context has highest priority
+                'supported_formats': ocr_status.get('supported_formats', []),
+                'ocr_integration': ocr_status.get('is_configured', False),
+                'features': [
+                    'PDF text extraction',
+                    'DOCX text extraction',
+                    'Vietnamese OCR support',
+                    'Document-based answering',
+                    'Context-aware processing',
+                    'Fallback mechanisms'
+                ]
+            },
             'graceful_degradation': {  # 🚀 NEW section
                 'enabled': True,
                 'fallback_mechanisms': [
@@ -2443,7 +2584,8 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
                     'Personalized Error Messages',
                     'Department-Specific Suggestions',
                     'Context-Aware Clarifications',
-                    'External API Fallbacks'
+                    'External API Fallbacks',
+                    'Document Context Fallbacks'  # 🚀 NEW
                 ],
                 'fallback_coverage': {
                     'use_db_direct': 'Raw answer with personalization',
@@ -2451,21 +2593,25 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
                     'use_external_api': 'API fallback with personalization',
                     'require_authentication': 'Context-aware auth message',
                     'ask_clarification': 'Smart clarification based on query',
-                    'say_dont_know': 'Department suggestion with personalization'
+                    'say_dont_know': 'Department suggestion with personalization',
+                    'use_document_context': 'Document-based fallback with personalization'  # 🚀 NEW
                 }
             },
             'external_api_service_status': api_status,
+            'ocr_service_status': ocr_status,  # 🚀 NEW
             'enhanced_processing_flow': [  # 🚀 UPDATED
                 '1. Enhanced Intent Classification',
                 '2. Session Memory Context Analysis', 
-                '3. Context-Aware API Priority Check',
-                '4. Enhanced External API Call (if needed)',
-                '5. Enhanced Hybrid Retrieval & Re-ranking (fallback)',
-                '6. Graceful Degradation Check',
-                '7. Fallback Response Generation (if Gemini fails)',
-                '8. User Memory Prompt Integration',
-                '9. Gender-based Addressing with Context',
-                '10. Conversation Context Summary Integration'
+                '3. Document Context Priority Check',  # 🚀 NEW
+                '4. Context-Aware API Priority Check',
+                '5. Enhanced External API Call (if needed)',
+                '6. Enhanced Hybrid Retrieval & Re-ranking (fallback)',
+                '7. Document Context Processing (if applicable)',  # 🚀 NEW
+                '8. Graceful Degradation Check',
+                '9. Fallback Response Generation (if Gemini fails)',
+                '10. User Memory Prompt Integration',
+                '11. Gender-based Addressing with Context',
+                '12. Conversation Context Summary Integration'
             ]
         })
         
@@ -2498,5 +2644,4 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.knowledge_data
 
-# 🚀 ENHANCED: Create enhanced chatbot instance với Graceful Degradation
 chatbot_ai = BDUChatbotService()

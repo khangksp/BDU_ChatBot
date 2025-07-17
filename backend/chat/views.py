@@ -17,6 +17,11 @@ except ImportError:
     speech_service = None
     tts_service = None
 
+try:
+    from ai_models.ocr_service import ocr_service
+except ImportError:
+    ocr_service = None
+
 import uuid
 import time
 import logging
@@ -447,6 +452,32 @@ class ChatView(APIView):
             
             logger.info(f"🎯 Request mode: {request_mode}")
             
+            # ✅ NEW: Xử lý file tài liệu đính kèm (OCR)
+            document_text = None
+            document_file = request.FILES.get('document') # Frontend sẽ gửi file với key là 'document'
+            if document_file and ocr_service:
+                logger.info(f"📄 Document file received: {document_file.name}")
+                # Lưu file tạm thời để xử lý
+                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(document_file.name)[1]) as tmp_file:
+                    for chunk in document_file.chunks():
+                        tmp_file.write(chunk)
+                    tmp_file_path = tmp_file.name
+                
+                try:
+                    # Gọi OCR service để đọc file
+                    pages_data = ocr_service.read_document(tmp_file_path)
+                    if pages_data:
+                        # Ghép nối text từ tất cả các trang
+                        document_text = "\n\n".join([page['text'] for page in pages_data if page['text'].strip()])
+                        logger.info(f"✅ OCR extracted {len(document_text)} characters.")
+                    else:
+                        logger.error("❌ OCR failed to extract text from document.")
+                finally:
+                    # Luôn xóa file tạm sau khi xử lý xong
+                    os.unlink(tmp_file_path)
+            elif document_file and not ocr_service:
+                logger.error("❌ Document received, but OCR service is not available.")
+            
             # Extract JWT token
             jwt_token = extract_jwt_token(request)
             
@@ -498,6 +529,11 @@ class ChatView(APIView):
                     logger.warning(f"Could not get enhanced user context: {e}")
                     personalization_info['error'] = str(e)
             
+            # ✅ CRITICAL: Nếu có file upload nhưng không có tin nhắn, tạo tin nhắn mặc định
+            if document_text and not user_message:
+                user_message = f"Dựa vào nội dung tài liệu này ({document_file.name}), hãy tóm tắt ý chính."
+                logger.info(f"📝 No user message, generated default query: '{user_message}'")
+            
             if not user_message:
                 return Response(
                     {'error': 'Tin nhắn không được để trống'}, 
@@ -523,7 +559,7 @@ class ChatView(APIView):
             if chatbot_ai:
                 try:
                     # 🚀 ALWAYS call process_query with JWT token for auto-detection
-                    ai_response = chatbot_ai.process_query(user_message, session_id, jwt_token)
+                    ai_response = chatbot_ai.process_query(user_message, session_id, jwt_token, document_text=document_text)
                     
                 except Exception as e:
                     logger.error(f"Error processing with AI service: {e}")

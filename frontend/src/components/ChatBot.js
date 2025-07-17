@@ -22,19 +22,32 @@ const ChatBot = () => {
     const [mediaRecorder, setMediaRecorder] = useState(null);
     const [recordingTime, setRecordingTime] = useState(0);
     
-    // ✅ FIXED: TTS states with better logic
+    // ✅ TTS states
     const [ttsSupported, setTtsSupported] = useState(false);
     const [isPlayingAudio, setIsPlayingAudio] = useState(false);
     const [currentAudio, setCurrentAudio] = useState(null);
     const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
     const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
-    const [lastUserInputMethod, setLastUserInputMethod] = useState('text'); // 'text' or 'voice'
-    const [forceVoiceMode, setForceVoiceMode] = useState(false); // ✅ NEW: Force voice mode for next message
+    const [lastUserInputMethod, setLastUserInputMethod] = useState('text');
+    const [forceVoiceMode, setForceVoiceMode] = useState(false);
+    
+    // 🚀 NEW: File Upload và Document Context states
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [isUploadingFile, setIsUploadingFile] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [currentDocument, setCurrentDocument] = useState(null);
+    const [documentContext, setDocumentContext] = useState(null);
+    const [isProcessingDocument, setIsProcessingDocument] = useState(false);
+    const [documentPreview, setDocumentPreview] = useState(null);
+    const [showDocumentModal, setShowDocumentModal] = useState(false);
+    const [documentProcessingStatus, setDocumentProcessingStatus] = useState('');
+    const [autoDownloadEnabled, setAutoDownloadEnabled] = useState(true);
+    const [pendingDocumentUrls, setPendingDocumentUrls] = useState([]);
     
     // Reference sources state
     const [expandedSources, setExpandedSources] = useState(new Set());
     
-    // ✅ 2. PERSONALIZATION STATES (MUST BE BEFORE useEffect)
+    // ✅ 2. PERSONALIZATION STATES
     const [showPersonalization, setShowPersonalization] = useState(false);
     const [user, setUser] = useState(null);
     const [personalizationEnabled, setPersonalizationEnabled] = useState(false);
@@ -50,7 +63,7 @@ const ChatBot = () => {
     const [renameSessionId, setRenameSessionId] = useState('');
     const [newSessionTitle, setNewSessionTitle] = useState('');
 
-    // ✅ 4. UI STATES - Enhanced sidebar management
+    // ✅ 4. UI STATES
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [chatSessions, setChatSessions] = useState([]);
 
@@ -59,19 +72,20 @@ const ChatBot = () => {
     const inputRef = useRef(null);
     const audioChunks = useRef([]);
     const recordingInterval = useRef(null);
-    const audioRef = useRef(null); // ✅ NEW: Ref for audio playback
+    const audioRef = useRef(null);
+    const fileInputRef = useRef(null); // 🚀 NEW: File input ref
 
-    // ✅ 6. MAIN SETUP useEffect (FIRST)
+    // ✅ 6. MAIN SETUP useEffect
     useEffect(() => {
         axios.defaults.baseURL = API_BASE_URL;
         axios.defaults.timeout = 30000;
         
         testConnection();
         checkSpeechSupport();
-        checkTtsSupport(); // ✅ NEW: Check TTS support
+        checkTtsSupport();
         checkUserAuth(); 
+        checkDocumentSupportStatus(); // 🚀 NEW: Check document support
         
-        // ✅ Check initial screen size for sidebar
         const handleResize = () => {
             if (window.innerWidth <= 768) {
                 setSidebarOpen(false);
@@ -80,7 +94,6 @@ const ChatBot = () => {
             }
         };
         
-        // Set initial sidebar state
         handleResize();
         window.addEventListener('resize', handleResize);
         
@@ -91,7 +104,6 @@ const ChatBot = () => {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
-            // ✅ NEW: Cleanup audio
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.src = '';
@@ -100,7 +112,7 @@ const ChatBot = () => {
         };
     }, []);
 
-    // ✅ 7. CHAT SESSIONS useEffect (AFTER user is declared)
+    // ✅ 7. CHAT SESSIONS useEffect
     useEffect(() => {
         if (user && personalizationEnabled) {
             console.log('Loading chat sessions for user:', user.faculty_code);
@@ -109,7 +121,6 @@ const ChatBot = () => {
     }, [user, personalizationEnabled]);
 
     useEffect(() => {
-        // Close context menu when clicking outside
         const handleClickOutside = (event) => {
             if (contextMenu && !event.target.closest('.context-menu') && !event.target.closest('.chat-menu-btn')) {
                 setContextMenu(null);
@@ -125,7 +136,6 @@ const ChatBot = () => {
     // ✅ 8. CONNECTION STATUS useEffect
     useEffect(() => {
         if (connectionStatus === 'connected') {
-            // Only set welcome message if no user or no sessions loaded
             if (!user || chatSessions.length === 0) {
                 const newSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
                 setSessionId(newSessionId);
@@ -146,6 +156,23 @@ const ChatBot = () => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // 🚀 NEW: Document context useEffect
+    useEffect(() => {
+        if (currentDocument && !isProcessingDocument) {
+            showTemporaryMessage(
+                `📄 Đang sử dụng tài liệu: ${currentDocument.filename}`,
+                'document-context'
+            );
+        }
+    }, [currentDocument]);
+
+    // 🚀 NEW: Auto-download documents from reference links
+    useEffect(() => {
+        if (autoDownloadEnabled && pendingDocumentUrls.length > 0) {
+            processPendingDocuments();
+        }
+    }, [autoDownloadEnabled, pendingDocumentUrls]);
 
     // ✅ 10. HELPER FUNCTIONS
 
@@ -213,7 +240,6 @@ const ChatBot = () => {
         }
     };
 
-    // ✅ FIXED: Better TTS support checking
     const checkTtsSupport = async () => {
         try {
             const response = await axios.get('/api/speech-status/');
@@ -224,7 +250,6 @@ const ChatBot = () => {
             
             if (ttsServiceAvailable) {
                 console.log('✅ TTS service available');
-                // ✅ FIXED: Auto-enable voice mode if both STT and TTS are available
                 if (speechSupported) {
                     setVoiceModeEnabled(true);
                     console.log('🎤🔊 Auto-enabled voice mode (STT + TTS available)');
@@ -240,7 +265,157 @@ const ChatBot = () => {
         }
     };
 
-    // ✅ NEW: Audio playback functions
+    // 🚀 NEW: Check document support status
+    const checkDocumentSupportStatus = async () => {
+        try {
+            const response = await axios.get('/api/document-support-status/');
+            const documentSupported = response.data.document_context_support || false;
+            
+            console.log('📄 Document support status:', response.data);
+            
+            if (documentSupported) {
+                console.log('✅ Document context support available');
+                showTemporaryMessage('📄 Hỗ trợ tài liệu PDF/DOCX có sẵn', 'document-support');
+            } else {
+                console.log('⚠️ Document context support not available');
+            }
+        } catch (error) {
+            console.error('Error checking document support:', error);
+        }
+    };
+
+    // 🚀 NEW: File Upload Functions
+    const handleFileSelect = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Giữ lại logic kiểm tra file type và size
+        const allowedTypes = [
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/msword'
+        ];
+        if (!allowedTypes.includes(file.type)) {
+            alert('❌ Chỉ hỗ trợ file PDF và DOCX. Vui lòng chọn file khác.');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            alert('❌ File quá lớn (tối đa 10MB). Vui lòng chọn file nhỏ hơn.');
+            return;
+        }
+
+        // ✅ THAY ĐỔI CHÍNH: Chỉ cập nhật state, không upload ngay
+        setSelectedFile(file);
+        showTemporaryMessage(`📄 Đã chọn file: ${file.name}. Gửi tin nhắn để bắt đầu phân tích.`, 'document-selected');
+    };
+
+    // 🚀 NEW: Auto-download document from URL
+    const downloadAndProcessDocument = async (url, filename = null) => {
+        setIsProcessingDocument(true);
+        setDocumentProcessingStatus('Đang tải từ link...');
+
+        try {
+            const response = await axios.post('/api/download-and-process-document/', {
+                url: url,
+                filename: filename,
+                session_id: sessionId
+            }, {
+                timeout: 120000 // 2 minutes timeout
+            });
+
+            if (response.data.success) {
+                const documentData = {
+                    filename: response.data.filename,
+                    file_size: response.data.file_size,
+                    file_type: response.data.file_type,
+                    upload_time: new Date(),
+                    document_id: response.data.document_id,
+                    text_content: response.data.text_content,
+                    page_count: response.data.page_count,
+                    processing_time: response.data.processing_time,
+                    source_url: url
+                };
+
+                setCurrentDocument(documentData);
+                setDocumentContext(response.data.text_content);
+                setDocumentPreview(response.data.preview || response.data.text_content?.substring(0, 500));
+
+                // Show success message
+                showTemporaryMessage(
+                    `✅ Đã tải và xử lý "${response.data.filename}" từ link`,
+                    'document-download-success'
+                );
+
+                // Add system message about document
+                const documentMessage = {
+                    type: 'system',
+                    content: `📄 Đã tải tài liệu từ link: **${response.data.filename}**\n\n` +
+                            `📊 Thông tin: ${response.data.page_count} trang\n\n` +
+                            `💡 Bạn có thể hỏi về nội dung tài liệu này ngay bây giờ!`,
+                    timestamp: new Date(),
+                    temporary: false,
+                    document_info: documentData
+                };
+
+                setMessages(prev => [...prev, documentMessage]);
+                setDocumentProcessingStatus('Hoàn thành');
+
+                return true;
+
+            } else {
+                throw new Error(response.data.error || 'Không thể tải tài liệu từ link');
+            }
+
+        } catch (error) {
+            console.error('❌ Error downloading document:', error);
+            showTemporaryMessage(`❌ Không thể tải tài liệu từ link: ${error.message}`, 'document-download-error');
+            setDocumentProcessingStatus('Lỗi');
+            return false;
+        } finally {
+            setIsProcessingDocument(false);
+        }
+    };
+
+    // 🚀 NEW: Process pending documents from reference links
+    const processPendingDocuments = async () => {
+        if (pendingDocumentUrls.length === 0) return;
+
+        for (const urlData of pendingDocumentUrls) {
+            const success = await downloadAndProcessDocument(urlData.url, urlData.title);
+            if (success) {
+                // Remove processed URL from pending list
+                setPendingDocumentUrls(prev => prev.filter(item => item.url !== urlData.url));
+                break; // Only process one document at a time
+            }
+        }
+    };
+
+    // 🚀 NEW: Clear document context
+    const clearDocumentContext = () => {
+        setCurrentDocument(null);
+        setDocumentContext(null);
+        setDocumentPreview(null);
+        setDocumentProcessingStatus('');
+        showTemporaryMessage('🗑️ Đã xóa tài liệu khỏi ngữ cảnh', 'document-cleared');
+    };
+
+    // 🚀 NEW: Toggle document modal
+    const toggleDocumentModal = () => {
+        setShowDocumentModal(!showDocumentModal);
+    };
+
+    // 🚀 NEW: Toggle auto-download
+    const toggleAutoDownload = () => {
+        setAutoDownloadEnabled(!autoDownloadEnabled);
+        if (!autoDownloadEnabled) {
+            showTemporaryMessage('⚡ Tự động tải tài liệu: BẬT', 'auto-download-on');
+        } else {
+            showTemporaryMessage('⏸️ Tự động tải tài liệu: TẮT', 'auto-download-off');
+        }
+    };
+
+    // ✅ EXISTING FUNCTIONS (keeping all existing functions)
+
     const playAudioFromBase64 = async (base64Audio) => {
         if (!base64Audio || !autoPlayEnabled) {
             return;
@@ -249,13 +424,11 @@ const ChatBot = () => {
         try {
             setIsPlayingAudio(true);
             
-            // Stop current audio if playing
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.src = '';
             }
 
-            // Create audio blob from base64
             const audioBlob = base64ToBlob(base64Audio, 'audio/mp3');
             const audioUrl = URL.createObjectURL(audioBlob);
             
@@ -332,18 +505,13 @@ const ChatBot = () => {
         }
     };
 
-    // ✅ 11. SIDEBAR TOGGLE FUNCTIONS
-
     const toggleSidebar = () => {
         setSidebarOpen(!sidebarOpen);
     };
 
     const handleLogoClick = () => {
-        // Toggle sidebar when logo is clicked
         setSidebarOpen(!sidebarOpen);
     };
-
-    // ✅ 12. SIMPLIFIED CHAT SESSION FUNCTIONS
 
     const showContextMenu = (e, sessionId) => {
         e.stopPropagation();
@@ -379,7 +547,6 @@ const ChatBot = () => {
             });
             
             if (response.data.success) {
-                // Update local state
                 setChatSessions(prev => 
                     prev.map(session => 
                         (session.session_id === renameSessionId || session.id === renameSessionId)
@@ -408,14 +575,12 @@ const ChatBot = () => {
             const response = await axios.delete(`/api/chat-sessions/${sessionId}/`);
             
             if (response.data.success) {
-                // Remove from local state
                 setChatSessions(prev => 
                     prev.filter(session => 
                         session.session_id !== sessionId && session.id !== sessionId
                     )
                 );
                 
-                // If deleted session was active, create new one
                 const deletedSession = chatSessions.find(s => 
                     (s.session_id === sessionId || s.id === sessionId) && s.active
                 );
@@ -450,29 +615,25 @@ const ChatBot = () => {
                 console.log('Loaded sessions:', sessions);
                 
                 if (sessions.length > 0) {
-                    // Set session đầu tiên là active
                     const updatedSessions = sessions.map((session, index) => ({
                         ...session,
                         active: index === 0,
-                        id: session.session_id // Để tương thích với UI hiện tại
+                        id: session.session_id
                     }));
                     
                     setChatSessions(updatedSessions);
                     
-                    // Load messages của session đầu tiên
                     if (updatedSessions[0]) {
                         setCurrentSessionId(updatedSessions[0].session_id);
                         loadSessionMessages(updatedSessions[0].session_id);
                     }
                 } else {
-                    // Tạo session mới nếu chưa có
                     console.log('No sessions found, creating new one');
                     createNewChatSession();
                 }
             }
         } catch (error) {
             console.error('Error loading chat sessions:', error);
-            // Fallback: load welcome message without sessions
             loadWelcomeMessage();
         } finally {
             setLoadingSessions(false);
@@ -500,7 +661,6 @@ const ChatBot = () => {
             }
         } catch (error) {
             console.error('Error loading session messages:', error);
-            // Fallback: tạo session mới
             createNewChatSession();
         } finally {
             setLoadingMessages(false);
@@ -510,7 +670,6 @@ const ChatBot = () => {
     const createNewChatSession = async () => {
         try {
             if (!user) {
-                // Fallback cho user chưa login
                 const fallbackSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
                 setSessionId(fallbackSessionId);
                 setCurrentSessionId(fallbackSessionId);
@@ -534,24 +693,23 @@ const ChatBot = () => {
                     last_message_time: new Date().toISOString()
                 };
                 
-                // Update sessions list
                 setChatSessions(prev => [
                     newSession,
                     ...prev.map(s => ({ ...s, active: false }))
                 ]);
                 
-                // Set current session
                 setSessionId(newSession.session_id);
                 setCurrentSessionId(newSession.session_id);
                 
-                // Clear messages và hiển thị welcome message
+                // Clear document context when creating new session
+                clearDocumentContext();
+                
                 loadWelcomeMessage();
                 
                 return newSession.session_id;
             }
         } catch (error) {
             console.error('Error creating new session:', error);
-            // Fallback: tạo session ID local
             const fallbackSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
             setSessionId(fallbackSessionId);
             setCurrentSessionId(fallbackSessionId);
@@ -574,13 +732,11 @@ const ChatBot = () => {
         if (user) {
             const name = user.full_name?.split(' ').pop() || user.faculty_code;
             
-            // ✅ UPDATED: Thông điệp chào mừng với User Memory Prompt và TTS
             const hasUserMemoryPrompt = user.chatbot_preferences?.user_memory_prompt?.trim();
             const memoryStatus = hasUserMemoryPrompt ? 
                 "🧠 Tôi đã ghi nhớ những chỉ dẫn riêng mà bạn đã thiết lập!" : 
                 "💡 Bạn có thể thiết lập 'Ghi nhớ và chỉ dẫn' trong cài đặt để tôi phục vụ bạn tốt hơn!";
             
-            // ✅ NEW: TTS status in welcome message
             const voiceStatus = ttsSupported ? 
                 (speechSupported ? 
                     "🎤🔊 Bạn có thể gõ, nói hoặc nghe phản hồi bằng giọng nói!" :
@@ -600,11 +756,13 @@ Tôi có thể hỗ trợ ${user.position_name?.toLowerCase() || 'bạn'} về:
 • 💰 Học phí và chính sách
 • 🏢 Cơ sở vật chất
 • 📞 Thông tin liên hệ
+• 📄 Phân tích tài liệu PDF/DOCX
 
-${voiceStatus}`;
+${voiceStatus}
+
+💡 **Mới**: Bạn có thể tải lên tài liệu PDF/DOCX để tôi phân tích và trả lời câu hỏi về nội dung!`;
         }
         
-        // Fallback cho user chưa login
         const voiceStatus = ttsSupported ? 
             (speechSupported ? 
                 "🎤🔊 Bạn có thể gõ, nói hoặc nghe phản hồi bằng giọng nói!" :
@@ -620,12 +778,14 @@ ${voiceStatus}`;
 • 🎓 Đời sống sinh viên
 • 🏢 Cơ sở vật chất và tiện ích
 • 📞 Thông tin liên hệ
+• 📄 Phân tích tài liệu PDF/DOCX
 
-${voiceStatus}`;
+${voiceStatus}
+
+💡 **Mới**: Bạn có thể tải lên tài liệu PDF/DOCX để tôi phân tích và trả lời câu hỏi về nội dung!`;
     };
 
     const switchChatSession = async (sessionId) => {
-        // Update active state
         setChatSessions(prev => 
             prev.map(session => ({
                 ...session,
@@ -633,10 +793,11 @@ ${voiceStatus}`;
             }))
         );
         
-        // Load messages của session đó
         await loadSessionMessages(sessionId);
         
-        // Scroll to bottom
+        // Clear document context when switching sessions
+        clearDocumentContext();
+        
         setTimeout(() => scrollToBottom(), 100);
     };
 
@@ -700,7 +861,6 @@ ${voiceStatus}`;
                     </div>
                 ))}
                 
-                {/* ✅ SIMPLIFIED Context Menu - Only Rename and Delete */}
                 {contextMenu && contextMenu.show && (
                     <div 
                         className="context-menu"
@@ -725,13 +885,12 @@ ${voiceStatus}`;
         );
     };
 
-    // ✅ 13. SPEECH FUNCTIONS (FIXED TTS integration)
+    // ✅ SPEECH FUNCTIONS (keeping existing)
 
     const startRecording = async () => {
         try {
-            // ✅ FIXED: Set voice input method and force voice mode for next message
             setLastUserInputMethod('voice');
-            setForceVoiceMode(true); // ✅ NEW: Force voice mode for this recording
+            setForceVoiceMode(true);
             
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
@@ -782,7 +941,6 @@ ${voiceStatus}`;
                     console.error('❌ Audio too small:', totalSize, 'bytes');
                     showTemporaryMessage('❌ Audio quá ngắn. Vui lòng ghi âm lâu hơn.', 'speech-error');
                     setIsProcessingSpeech(false);
-                    // ✅ Reset force voice mode on error
                     setForceVoiceMode(false);
                     return;
                 }
@@ -808,7 +966,6 @@ ${voiceStatus}`;
         } catch (error) {
             console.error('❌ Error starting recording:', error);
             showTemporaryMessage('❌ Không thể truy cập microphone. Vui lòng cho phép truy cập và thử lại.', 'speech-error');
-            // ✅ Reset force voice mode on error
             setForceVoiceMode(false);
         }
     };
@@ -872,7 +1029,6 @@ ${voiceStatus}`;
                 
                 showTemporaryMessage(`🎤 "${transcribedText}"`, 'speech-success');
                 
-                // ✅ FIXED: Show TTS mode indicator if enabled
                 if (ttsSupported && voiceModeEnabled) {
                     showTemporaryMessage('🎤🔊 Sẵn sàng trả lời bằng giọng nói', 'voice-mode-ready');
                 }
@@ -883,7 +1039,6 @@ ${voiceStatus}`;
                 
                 const errorMsg = response.data.error || 'Không nhận diện được giọng nói';
                 showTemporaryMessage(`❌ ${errorMsg}`, 'speech-error');
-                // ✅ Reset force voice mode on STT error
                 setForceVoiceMode(false);
             }
         } catch (error) {
@@ -897,7 +1052,6 @@ ${voiceStatus}`;
             } else {
                 showTemporaryMessage('❌ Lỗi xử lý giọng nói. Vui lòng thử lại.', 'speech-error');
             }
-            // ✅ Reset force voice mode on error
             setForceVoiceMode(false);
         } finally {
             setIsProcessingSpeech(false);
@@ -940,57 +1094,82 @@ ${voiceStatus}`;
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    // ✅ 14. CHAT FUNCTIONS (FIXED TTS mode logic)
+    // ✅ CHAT FUNCTIONS (Enhanced with document context)
 
     const sendMessage = async () => {
-        if (!inputMessage.trim() || isLoading || connectionStatus !== 'connected') return;
+        // ✅ Kiểm tra cơ bản
+        const messageContent = inputMessage.trim();
+        if ((!messageContent && !selectedFile) || isLoading || connectionStatus !== 'connected') {
+            if (!selectedFile) return; // Chỉ cho phép gửi file mà không cần tin nhắn
+        }
 
+        // ✅ Tạo một tin nhắn user tạm thời để hiển thị ngay lập tức
         const userMessage = {
             type: 'user',
-            content: inputMessage.trim(),
+            // Hiển thị tên file nếu không có tin nhắn text
+            content: messageContent || `(Đã gửi file: ${selectedFile.name})`,
             timestamp: new Date()
         };
-
         setMessages(prev => [...prev, userMessage]);
+
         setIsLoading(true);
         setIsTyping(true);
 
-        const messageToSend = inputMessage.trim();
+        const messageToSend = messageContent;
         setInputMessage('');
+        const fileToSend = selectedFile;
+        setSelectedFile(null); // Xóa file đã chọn sau khi chuẩn bị gửi
 
-        // ✅ FIXED: Better mode detection logic
-        let requestMode = 'text'; // Default
-        
-        if (ttsSupported) {
-            if (forceVoiceMode) {
-                // User just used STT, force voice mode
-                requestMode = 'voice';
-                console.log('🎤🔊 FORCE VOICE MODE: Using voice mode because user used STT');
-            } else if (voiceModeEnabled && lastUserInputMethod === 'voice') {
-                // Voice mode enabled and last input was voice
-                requestMode = 'voice';
-                console.log('🎤🔊 VOICE MODE: Using voice mode (enabled + voice input)');
-            } else if (voiceModeEnabled) {
-                // Voice mode enabled but text input - still use voice for consistency
-                requestMode = 'voice';
-                console.log('🔊 VOICE MODE: Using voice mode (enabled globally)');
-            }
+        // ... (logic xác định requestMode giữ nguyên) ...
+        let requestMode = 'text';
+        if (ttsSupported && (forceVoiceMode || voiceModeEnabled)) {
+            requestMode = 'voice';
         }
-        
-        console.log(`📤 Sending message with mode: ${requestMode} (TTS: ${ttsSupported}, voice_enabled: ${voiceModeEnabled}, force: ${forceVoiceMode}, input: ${lastUserInputMethod})`);
 
         try {
-            // ✅ FIXED: Send mode in request
-            const response = await axios.post('/api/chat/', {
-                message: messageToSend,
-                session_id: sessionId,
-                mode: requestMode  // ✅ FIXED: Send correct mode
-            }, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 30000
-            });
+            let response;
+            // 🚀 LOGIC QUAN TRỌNG NHẤT
+            if (fileToSend) {
+                // Trường hợp 1: Có file đính kèm -> Sử dụng FormData
+                console.log(`📤 Sending message WITH DOCUMENT to /api/chat/`);
+                const formData = new FormData();
+                formData.append('message', messageToSend);
+                formData.append('document', fileToSend); // Key là 'document'
+                formData.append('session_id', sessionId);
+                formData.append('mode', requestMode);
 
+                response = await axios.post('/api/chat/', formData, {
+                    headers: {
+                        // Trình duyệt sẽ tự set 'Content-Type' là 'multipart/form-data'
+                    },
+                    timeout: 120000 // Tăng timeout cho việc xử lý file
+                });
+            } else {
+                // Trường hợp 2: Chỉ có text -> Gửi JSON như cũ
+                console.log(`📤 Sending TEXT-ONLY message to /api/chat/`);
+                const requestData = {
+                    message: messageToSend,
+                    session_id: sessionId,
+                    mode: requestMode
+                };
+                response = await axios.post('/api/chat/', requestData, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 30000
+                });
+            }
+
+            // ... (Toàn bộ phần xử lý response phía dưới giữ nguyên y hệt) ...
             const finalReferenceLinks = response.data.reference_links || [];
+
+            if (autoDownloadEnabled && finalReferenceLinks.length > 0) {
+                const documentLinks = finalReferenceLinks.filter(link => 
+                    link.url && (link.url.includes('.pdf') || link.url.includes('.docx'))
+                );
+                
+                if (documentLinks.length > 0) {
+                    setPendingDocumentUrls(documentLinks);
+                }
+            }
 
             setTimeout(() => {
                 const botMessage = {
@@ -1003,42 +1182,30 @@ ${voiceStatus}`;
                     timestamp: new Date(),
                     chat_id: Date.now(),
                     reference_links: finalReferenceLinks,
-                    // ✅ UPDATED: User memory prompt information
                     user_memory_applied: response.data.personalization?.user_memory_info?.memory_applied || false,
                     external_api_used: response.data.external_api?.external_api_used || false,
-                    // ✅ FIXED: TTS information
                     audio_content: response.data.audio_content,
                     mode: response.data.mode,
-                    tts_info: response.data.tts_info
+                    tts_info: response.data.tts_info,
+                    document_context_used: response.data.document_context_used || false,
+                    document_enhanced: response.data.document_enhanced || false
                 };
-
-                console.log('🎯 FINAL BOTMESSAGE:', botMessage);
-                console.log('🔊 TTS INFO:', botMessage.tts_info);
-                console.log('🎵 AUDIO CONTENT LENGTH:', botMessage.audio_content ? botMessage.audio_content.length : 'null');
                 
                 setMessages(prev => [...prev, botMessage]);
                 setIsTyping(false);
                 
-                // ✅ FIXED: Play audio if available and auto-play is enabled
                 if (botMessage.audio_content && autoPlayEnabled) {
-                    console.log('🔊 Auto-playing TTS audio');
                     playAudioFromBase64(botMessage.audio_content);
-                } else if (botMessage.audio_content && !autoPlayEnabled) {
-                    console.log('🔇 TTS audio available but auto-play disabled');
-                    showTemporaryMessage('🔊 Âm thanh có sẵn - bấm để phát', 'audio-available');
-                } else if (requestMode === 'voice' && !botMessage.audio_content) {
-                    console.error('❌ Voice mode requested but no audio returned');
-                    showTemporaryMessage('❌ Không thể tạo âm thanh phản hồi', 'audio-error');
                 }
 
             }, 1000);
 
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error sending message:', error);
             setTimeout(() => {
                 const errorMessage = {
                     type: 'bot',
-                    content: 'Xin lỗi, đã có lỗi xảy ra.',
+                    content: 'Xin lỗi, đã có lỗi xảy ra khi gửi tin nhắn.',
                     timestamp: new Date(),
                     isError: true
                 };
@@ -1047,24 +1214,21 @@ ${voiceStatus}`;
             }, 1000);
         } finally {
             setIsLoading(false);
-            // ✅ FIXED: Reset states after sending
             setLastUserInputMethod('text');
-            setForceVoiceMode(false); // Reset force mode after sending
+            setForceVoiceMode(false);
         }
     };
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            setLastUserInputMethod('text'); // ✅ FIXED: Track text input
+            setLastUserInputMethod('text');
             sendMessage();
         }
     };
 
-    // ✅ FIXED: Handle input change to track manual text editing
     const handleInputChange = (e) => {
         setInputMessage(e.target.value);
-        // ✅ FIXED: Only set to text if user is actually typing (not from STT)
         if (!forceVoiceMode) {
             setLastUserInputMethod('text');
         }
@@ -1128,7 +1292,7 @@ ${voiceStatus}`;
         testConnection();
     };
 
-    // ✅ 15. RENDER JSX
+    // ✅ RENDER JSX
 
     return (
         <div className="modern-chatbot-container">
@@ -1193,7 +1357,6 @@ ${voiceStatus}`;
                         </span>
                     </div>
                     
-                    {/* ✅ FIXED: Voice features status */}
                     {(speechSupported || ttsSupported) && (
                         <div className="voice-features-status">
                             {speechSupported && (
@@ -1229,7 +1392,110 @@ ${voiceStatus}`;
             {/* Main Chat Area */}
             <div className="modern-main-area">
 
-                {/* ✅ FIXED: Voice Control Panel */}
+                {/* 🚀 NEW: Document Context Panel */}
+                {currentDocument && (
+                    <div className="document-context-panel">
+                        <div className="document-info">
+                            <div className="document-header">
+                                <span className="document-icon">📄</span>
+                                <div className="document-details">
+                                    <span className="document-name">{currentDocument.filename}</span>
+                                    <span className="document-meta">
+                                        {currentDocument.page_count} trang • {(currentDocument.file_size / 1024).toFixed(1)}KB
+                                    </span>
+                                </div>
+                                <div className="document-actions">
+                                    <button 
+                                        className="doc-action-btn"
+                                        onClick={toggleDocumentModal}
+                                        title="Xem chi tiết"
+                                    >
+                                        👁️
+                                    </button>
+                                    <button 
+                                        className="doc-action-btn danger"
+                                        onClick={clearDocumentContext}
+                                        title="Xóa khỏi ngữ cảnh"
+                                    >
+                                        🗑️
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="document-status">
+                                <span className="status-indicator active">
+                                    ✅ Đang sử dụng trong ngữ cảnh
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 🚀 NEW: File Upload and Document Controls */}
+                <div className="document-control-panel">
+                    <div className="upload-section">
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileSelect}
+                            accept=".pdf,.docx,.doc"
+                            style={{ display: 'none' }}
+                        />
+                        
+                        <button 
+                            className="upload-btn"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploadingFile || isProcessingDocument}
+                            title="Tải lên tài liệu PDF/DOCX"
+                        >
+                            {isUploadingFile ? (
+                                <>
+                                    <span className="btn-icon">⏳</span>
+                                    <span className="btn-text">Đang tải... {uploadProgress}%</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="btn-icon">📁</span>
+                                    <span className="btn-text">Tải lên tài liệu</span>
+                                </>
+                            )}
+                        </button>
+
+                        {(speechSupported || ttsSupported) && (
+                            <div className="document-voice-controls">
+                                <button 
+                                    className={`doc-control-btn ${autoDownloadEnabled ? 'active' : ''}`}
+                                    onClick={toggleAutoDownload}
+                                    title={autoDownloadEnabled ? 'Tắt tự động tải' : 'Bật tự động tải'}
+                                >
+                                    {autoDownloadEnabled ? '⚡' : '⏸️'} 
+                                    {autoDownloadEnabled ? 'Tự động tải' : 'Thủ công'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Processing Status */}
+                    {(isUploadingFile || isProcessingDocument) && (
+                        <div className="processing-status">
+                            <div className="processing-animation">
+                                <div className="processing-spinner"></div>
+                                <span className="processing-text">
+                                    {documentProcessingStatus}
+                                </span>
+                            </div>
+                            {uploadProgress > 0 && (
+                                <div className="progress-bar">
+                                    <div 
+                                        className="progress-fill" 
+                                        style={{ width: `${uploadProgress}%` }}
+                                    ></div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Voice Control Panel */}
                 {(speechSupported || ttsSupported) && (
                     <div className="voice-control-panel">
                         {ttsSupported && (
@@ -1273,6 +1539,9 @@ ${voiceStatus}`;
                             )}
                             {isPlayingAudio && (
                                 <span className="status-badge playing">🔊 Đang phát...</span>
+                            )}
+                            {currentDocument && (
+                                <span className="status-badge document-active">📄 Có tài liệu</span>
                             )}
                         </div>
                     </div>
@@ -1336,6 +1605,13 @@ ${voiceStatus}`;
                                     >
                                         🏢 Cơ sở vật chất
                                     </button>
+                                    {/* 🚀 NEW: Document-related quick actions */}
+                                    <button 
+                                        className="quick-btn document-btn"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        📄 Tải lên tài liệu
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1351,7 +1627,23 @@ ${voiceStatus}`;
                                             {formatMessage(message.content)}
                                         </div>
 
-                                        {/* ✅ FIXED: Audio playback controls for bot messages */}
+                                        {/* 🚀 NEW: Document info display */}
+                                        {message.document_info && (
+                                            <div className="document-info-display">
+                                                <div className="document-preview">
+                                                    <span className="document-icon">📄</span>
+                                                    <div className="document-details">
+                                                        <span className="document-name">{message.document_info.filename}</span>
+                                                        <span className="document-meta">
+                                                            {message.document_info.page_count} trang • 
+                                                            {(message.document_info.file_size / 1024).toFixed(1)}KB
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Audio playback controls */}
                                         {message.type === 'bot' && message.audio_content && !message.temporary && (
                                             <div className="audio-controls">
                                                 <button 
@@ -1371,27 +1663,37 @@ ${voiceStatus}`;
                                             </div>
                                         )}
 
-                                        {/* ✅ UPDATED: Enhanced metadata with user memory prompt info and TTS */}
+                                        {/* Enhanced metadata with document context */}
                                         {message.type === 'bot' && !message.isError && !message.temporary && (
                                             <div className="message-metadata-enhanced">
-                                                {/* User Memory Prompt Indicator */}
                                                 {message.user_memory_applied && (
                                                     <div className="memory-applied-badge">
                                                         🧠 Đã áp dụng ghi nhớ cá nhân
                                                     </div>
                                                 )}
                                                 
-                                                {/* External API Indicator */}
                                                 {message.external_api_used && (
                                                     <div className="external-api-badge">
                                                         🌐 Thông tin cá nhân từ hệ thống
                                                     </div>
                                                 )}
                                                 
-                                                {/* ✅ FIXED: TTS Mode Indicator */}
                                                 {message.mode === 'voice' && (
                                                     <div className="voice-mode-badge">
                                                         🎤🔊 Chế độ giọng nói
+                                                    </div>
+                                                )}
+
+                                                {/* 🚀 NEW: Document context badges */}
+                                                {message.document_context_used && (
+                                                    <div className="document-context-badge">
+                                                        📄 Dựa trên tài liệu đã tải
+                                                    </div>
+                                                )}
+
+                                                {message.document_enhanced && (
+                                                    <div className="document-enhanced-badge">
+                                                        🔍 Phân tích từ tài liệu
                                                     </div>
                                                 )}
                                             </div>
@@ -1419,15 +1721,28 @@ ${voiceStatus}`;
                                                         <h4>🔗 Tài liệu liên quan:</h4>
                                                         <div className="reference-links">
                                                             {message.reference_links.map((link, linkIdx) => (
-                                                                <a
-                                                                    key={linkIdx}
-                                                                    href={link.url}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="reference-link"
-                                                                >
-                                                                    📄 {link.stt || link.title || 'Tài liệu'}
-                                                                </a>
+                                                                <div key={linkIdx} className="reference-link-item">
+                                                                    <a
+                                                                        href={link.url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="reference-link"
+                                                                    >
+                                                                        📄 {link.stt || link.title || 'Tài liệu'}
+                                                                    </a>
+                                                                    {/* 🚀 NEW: Auto-download button */}
+                                                                    {(link.url.includes('.pdf') || link.url.includes('.docx')) && (
+                                                                        <button
+                                                                            className="auto-download-btn"
+                                                                            onClick={() => downloadAndProcessDocument(link.url, link.title)}
+                                                                            disabled={isProcessingDocument}
+                                                                            title="Tải và phân tích tài liệu này"
+                                                                        >
+                                                                            {isProcessingDocument ? '⏳' : '⚡'} 
+                                                                            {isProcessingDocument ? 'Đang tải...' : 'Tải & phân tích'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             ))}
                                                         </div>
                                                     </div>
@@ -1468,7 +1783,9 @@ ${voiceStatus}`;
                                                 <span></span>
                                                 <span></span>
                                             </div>
-                                            <span className="typing-text">AI đang suy nghĩ...</span>
+                                            <span className="typing-text">
+                                                {currentDocument ? 'AI đang phân tích tài liệu...' : 'AI đang suy nghĩ...'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -1503,15 +1820,31 @@ ${voiceStatus}`;
                         </div>
                     )}
 
+                    {/* ✅ NEW: Hiển thị file đã chọn */}
+                    {selectedFile && (
+                        <div className="selected-file-indicator">
+                            <span>📄 Đã chọn: <strong>{selectedFile.name}</strong></span>
+                            <button 
+                                onClick={() => setSelectedFile(null)} 
+                                className="remove-file-btn"
+                                title="Bỏ chọn file này"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    )}
+
                     <div className="modern-input-container">
                         <div className="input-wrapper">
                             <textarea
                                 ref={inputRef}
                                 value={inputMessage}
-                                onChange={handleInputChange} // ✅ FIXED: Use improved handler
+                                onChange={handleInputChange}
                                 onKeyPress={handleKeyPress}
                                 placeholder={connectionStatus === 'connected' 
-                                    ? "Hỏi bất cứ điều gì về Đại học Bình Dương..."
+                                    ? (currentDocument 
+                                        ? `Hỏi về tài liệu "${currentDocument.filename}" hoặc bất cứ điều gì khác...`
+                                        : "Hỏi bất cứ điều gì về Đại học Bình Dương...")
                                     : "Đang kết nối đến server..."}
                                 rows="1"
                                 disabled={isLoading || connectionStatus !== 'connected' || isRecording}
@@ -1530,11 +1863,26 @@ ${voiceStatus}`;
                                         {isRecording ? '⏹️' : (isProcessingSpeech ? '⏳' : '🎤')}
                                     </button>
                                 )}
+                                
+                                {/* 🚀 NEW: File upload button in input */}
+                                <button 
+                                    className="file-btn"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isLoading || connectionStatus !== 'connected' || isUploadingFile}
+                                    title="Tải lên tài liệu"
+                                >
+                                    {isUploadingFile ? '⏳' : '📎'}
+                                </button>
                             </div>
                         </div>
                         
                         <div className="input-footer">
                             <div className="input-mode-indicator">
+                                {currentDocument && (
+                                    <span className="mode-badge document">
+                                        📄 {currentDocument.filename}
+                                    </span>
+                                )}
                                 {forceVoiceMode ? (
                                     <span className="mode-badge voice-ready">🎤🔊 Sẵn sàng nói</span>
                                 ) : voiceModeEnabled && ttsSupported ? (
@@ -1551,6 +1899,86 @@ ${voiceStatus}`;
                 </div>
             </div>
 
+            {/* 🚀 NEW: Document Preview Modal */}
+            {showDocumentModal && currentDocument && (
+                <div className="modal-overlay" onClick={toggleDocumentModal}>
+                    <div className="modal-content document-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>📄 Chi tiết tài liệu</h3>
+                            <button 
+                                className="modal-close"
+                                onClick={toggleDocumentModal}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="document-details-full">
+                                <div className="detail-row">
+                                    <span className="detail-label">Tên file:</span>
+                                    <span className="detail-value">{currentDocument.filename}</span>
+                                </div>
+                                <div className="detail-row">
+                                    <span className="detail-label">Kích thước:</span>
+                                    <span className="detail-value">{(currentDocument.file_size / 1024).toFixed(1)}KB</span>
+                                </div>
+                                <div className="detail-row">
+                                    <span className="detail-label">Số trang:</span>
+                                    <span className="detail-value">{currentDocument.page_count}</span>
+                                </div>
+                                <div className="detail-row">
+                                    <span className="detail-label">Thời gian tải:</span>
+                                    <span className="detail-value">{currentDocument.upload_time?.toLocaleString('vi-VN')}</span>
+                                </div>
+                                {currentDocument.processing_time && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">Thời gian xử lý:</span>
+                                        <span className="detail-value">{currentDocument.processing_time}ms</span>
+                                    </div>
+                                )}
+                                {currentDocument.source_url && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">Nguồn:</span>
+                                        <span className="detail-value">
+                                            <a href={currentDocument.source_url} target="_blank" rel="noopener noreferrer">
+                                                Link gốc
+                                            </a>
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {documentPreview && (
+                                <div className="document-preview-section">
+                                    <h4>📖 Xem trước nội dung:</h4>
+                                    <div className="document-preview-text">
+                                        {documentPreview}
+                                        {documentPreview.length >= 500 && '...'}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button 
+                                className="btn-danger"
+                                onClick={() => {
+                                    clearDocumentContext();
+                                    toggleDocumentModal();
+                                }}
+                            >
+                                🗑️ Xóa khỏi ngữ cảnh
+                            </button>
+                            <button 
+                                className="btn-confirm"
+                                onClick={toggleDocumentModal}
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Personalization Modal */}
             {showPersonalization && (
                 <PersonalizationSettings
@@ -1558,13 +1986,12 @@ ${voiceStatus}`;
                     onClose={() => setShowPersonalization(false)}
                     onUpdateSuccess={(newData) => {
                         console.log('Personalization updated:', newData);
-                        // ✅ UPDATED: Reload user auth to get updated user memory prompt
                         checkUserAuth();
                     }}
                 />
             )}
 
-            {/* ✅ SIMPLIFIED Rename Modal */}
+            {/* Rename Modal */}
             {showRenameModal && (
                 <div className="modal-overlay" onClick={() => setShowRenameModal(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>

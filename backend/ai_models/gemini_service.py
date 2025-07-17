@@ -1,3 +1,4 @@
+# ai_models/gemini_service.py
 import logging
 import time
 import requests
@@ -142,8 +143,8 @@ class SmartTokenManager:
             
         # ✅ ADJUSTMENT dựa trên complexity hint
         if complexity_hint:
-            if complexity_hint in ['enhanced_generation', 'detailed_explanation']:
-                base_tokens += 100
+            if complexity_hint in ['enhanced_generation', 'detailed_explanation', 'document_context']:
+                base_tokens += 100  # 🚀 NEW: Document context needs more tokens
             elif complexity_hint in ['quick_clarify', 'simple_answer']:
                 base_tokens -= 40
                 
@@ -455,7 +456,7 @@ class SimpleVietnameseRestorer:
                 del self.cache[k]
 
 class GeminiResponseGenerator:
-    """🚀 NÂNG CẤP: Advanced Gemini Response Generator với Smart Token Management và Context Summary"""
+    """🚀 NÂNG CẤP: Advanced Gemini Response Generator với Smart Token Management, Context Summary và Document Context Support"""
     
     def __init__(self):
         self.key_manager = GeminiApiKeyManager()
@@ -488,7 +489,79 @@ class GeminiResponseGenerator:
             ]
         }
         
-        logger.info("✅ Enhanced Gemini Response Generator initialized with Smart Token Management và Consistent Personalization")
+        logger.info("✅ Enhanced Gemini Response Generator initialized with Smart Token Management, Consistent Personalization và Document Context Support")
+
+    # 🚀 NEW: Document Context Processing Methods
+    def _build_document_context_prompt(self, query: str, document_text: str, session_id: str = None) -> str:
+        """
+        🚀 NEW: Build comprehensive prompt for document-based question answering
+        
+        Args:
+            query (str): User's question about the document
+            document_text (str): Text content extracted from the document
+            session_id (str): Session ID for personalization
+            
+        Returns:
+            str: Formatted prompt for Gemini API
+        """
+        # Get personalized system prompt
+        system_prompt = self._get_personalized_system_prompt(session_id)
+        personal_address = self._get_personal_address(session_id)
+        
+        # Get conversation context if available
+        conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
+        recent_summary = conversation_context.get('recent_conversation_summary', '')
+        
+        # Build context section
+        context_section = ""
+        if recent_summary:
+            context_section = f"""
+🗣️ NGỮ CẢNH HỘI THOẠI GẦN ĐÂY:
+{recent_summary}
+
+💡 LƯU Ý: Hãy tham khảo ngữ cảnh trên để tạo câu trả lời mạch lạc, tránh lặp lại thông tin đã thảo luận.
+"""
+        
+        # Truncate document text if too long (keep within token limits)
+        max_doc_length = 3000  # characters
+        if len(document_text) > max_doc_length:
+            document_text = document_text[:max_doc_length] + "\n\n[...tài liệu còn tiếp...]"
+        
+        # ⭐ NHIỆM VỤ 1: Thêm khối chỉ dẫn đặc biệt cho việc xử lý dữ liệu OCR "bẩn"
+        ocr_guidance = """---
+⭐ HƯỚNG DẪN XỬ LÝ DỮ LIỆU OCR ĐẶC BIỆT (Rất quan trọng)
+Dữ liệu dưới đây được trích xuất tự động từ file PDF/DOCX, do đó có thể chứa các lỗi định dạng, đặc biệt là các bảng (table) bị chuyển thành văn bản thuần túy.
+1.  **Xử lý bảng (Table):** Một dòng văn bản có thể chứa nhiều thông tin liên quan (ví dụ: số thứ tự, họ tên, chức vụ, nhiệm vụ). BẠN PHẢI TỰ SUY LUẬN để liên kết các thông tin có vẻ nằm trên cùng một hàng với nhau. Ví dụ: dòng "1 Bà A Chức vụ B Nhiệm vụ C" có nghĩa là Bà A có chức vụ B và nhiệm vụ C.
+2.  **Đếm số lượng:** Nếu được hỏi "có mấy điều", "có bao nhiêu thành viên", hãy tìm và đếm số lần xuất hiện của các từ khóa như "Điều 1.", "Điều 2.", hoặc các số thứ tự trong danh sách (1, 2, 3...).
+3.  **Tìm kiếm chính xác:** Hãy đọc thật kỹ và tìm kiếm chính xác các từ khóa trong câu hỏi của người dùng trong toàn bộ văn bản, ngay cả khi nó không có cấu trúc.
+---"""
+
+        prompt = f"""{system_prompt}
+
+🎯 NHIỆM VỤ ĐẶC BIỆT: Trả lời câu hỏi dựa trên nội dung tài liệu được cung cấp
+
+{ocr_guidance}
+
+📄 NỘI DUNG TÀI LIỆU:
+{document_text}
+
+{context_section}
+
+❓ CÂU HỎI CỦA GIẢNG VIÊN: {query}
+
+📝 YÊU CẦU TRẢ LỜI QUAN TRỌNG:
+- Xưng hô: "Dạ {personal_address},"
+- CHỈ TRẢ LỜI DỰA VÀO nội dung tài liệu được cung cấp ở trên
+- KHÔNG SỬ DỤNG kiến thức bên ngoài tài liệu
+- Nếu tài liệu không chứa thông tin để trả lời câu hỏi, hãy nói rõ điều đó
+- Trích dẫn cụ thể từ tài liệu khi có thể
+- Tạo câu trả lời rõ ràng, dễ hiểu và mạch lạc
+- Kết thúc: "{personal_address.title()} có cần em hỗ trợ thêm gì không ạ?"
+- TUYỆT ĐỐI KHÔNG bịa đặt thông tin không có trong tài liệu
+
+Trả lời:"""
+
+        return prompt
 
     # ✅ NEW: Process external API data
     def _generate_external_api_response(self, query, context, session_id=None):
@@ -602,7 +675,7 @@ class GeminiResponseGenerator:
 - Tạo câu trả lời mạch lạc, tránh lặp lại thông tin đã thảo luận
 - Định dạng thông tin dễ đọc, rõ ràng
 - Bao gồm các chi tiết quan trọng: thời gian, địa điểm, môn học
-- Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+- Kết thúc: "{personal_address.title()} có cần em hỗ trợ thêm gì không ạ?"
 - KHÔNG CHẾ TẠO thông tin không có trong dữ liệu
 
 Trả lời:"""
@@ -692,7 +765,7 @@ Trả lời:"""
 
 🎯 QUY TẮC QUAN TRỌNG:
 - LUÔN bắt đầu: "Dạ {personal_address},"
-- Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+- Kết thúc: "{personal_address.title()} có cần em hỗ trợ thêm gì không ạ?"
 - SỬ DỤNG CHÍNH XÁC thông tin từ hệ thống - KHÔNG CHẾ TẠO
 - Trình bày thông tin cá nhân một cách tự nhiên, dễ hiểu
 - KHÔNG dùng format phức tạp với **1. **2. hay bullets khi không cần thiết"""
@@ -828,11 +901,11 @@ Trả lời:"""
             logger.error(f"Error getting personalized prompt: {e}")
             return build_personalized_system_prompt()  # Fallback
 
-    # 🚀 ENHANCED: Generate response với Smart Token Management
+    # 🚀 ENHANCED: Generate response với Smart Token Management và Document Context Support
     def generate_response(self, query: str, context: Optional[Dict] = None, 
                       intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
                       session_id: str = None) -> Dict[str, Any]:
-        """🚀 NÂNG CẤP: Generate response với Smart Token Management & Context Summary"""
+        """🚀 NÂNG CẤP: Generate response với Smart Token Management, Context Summary và Document Context Support"""
         start_time = time.time()
         
         print(f"\n--- 🚀 SMART TOKEN MANAGEMENT REQUEST (Session: {session_id}) ---")
@@ -848,6 +921,68 @@ Trả lời:"""
 
             # ✅ NEW: Check if query is empty after restoration
             instruction = context.get('instruction', '') if context else ''
+            
+            # 🚀 NEW: Handle document context processing
+            if instruction == 'answer_from_document':
+                logger.info("📄 DOCUMENT CONTEXT: Processing document-based query")
+                
+                document_text = context.get('document_text', '')
+                if not document_text or not document_text.strip():
+                    logger.warning("⚠️ Empty document text provided")
+                    personal_address = self._get_personal_address(session_id)
+                    return {
+                        'response': f"Dạ {personal_address}, em không nhận được nội dung tài liệu để trả lời câu hỏi. {personal_address.title()} có thể gửi lại tài liệu không ạ? 🎓",
+                        'method': 'document_context_empty',
+                        'strategy': 'document_error',
+                        'generation_time': time.time() - start_time,
+                        'original_query': original_query,
+                        'restored_query': query,
+                        'vietnamese_restoration_used': query != original_query,
+                        'personalized': bool(session_id in self._user_context_cache),
+                        'document_context_processed': True,
+                        'token_info': {'smart_tokens_used': False, 'method': 'document_error'}
+                    }
+                
+                # Build document context prompt
+                prompt = self._build_document_context_prompt(query, document_text, session_id)
+                
+                # Calculate optimal tokens for document processing
+                optimal_tokens = self.token_manager.calculate_optimal_tokens(
+                    len(prompt), 
+                    'document_context'
+                )
+                
+                logger.info(f"📄 Processing document context with {optimal_tokens} tokens")
+                
+                # Call Gemini API for document processing
+                response = self._call_gemini_api_with_smart_tokens(
+                    prompt, 'document_context', optimal_tokens, session_id
+                )
+                
+                if not response:
+                    personal_address = self._get_personal_address(session_id)
+                    response = f"Dạ {personal_address}, em gặp khó khăn kỹ thuật khi phân tích tài liệu. {personal_address.title()} có thể thử lại hoặc đặt câu hỏi cụ thể hơn không ạ? 🎓"
+                
+                # Save to memory
+                if session_id:
+                    self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
+
+                return {
+                    'response': response,
+                    'method': 'document_context_processing',
+                    'strategy': 'document_context',
+                    'generation_time': time.time() - start_time,
+                    'original_query': original_query,
+                    'restored_query': query,
+                    'vietnamese_restoration_used': query != original_query,
+                    'personalized': bool(session_id in self._user_context_cache),
+                    'document_context_processed': True,
+                    'token_info': {
+                        'smart_tokens_used': True,
+                        'method': 'document_context_processing',
+                        'optimal_tokens': optimal_tokens
+                    }
+                }
             
             if instruction == 'process_external_api_data':
                 # Process external API data
@@ -1074,7 +1209,7 @@ Trả lời:"""
             
             YÊU CẦU:
             - TIẾP TỤC viết để hoàn thiện câu trả lời
-            - Đảm bảo kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+            - Đảm bảo kết thúc: "{personal_address.title()} có cần em hỗ trợ thêm gì không ạ?"
             - CHỈ VIẾT PHẦN TIẾP THEO, không lặp lại phần đã có
             
             Tiếp tục:"""
@@ -1094,7 +1229,7 @@ Trả lời:"""
             YÊU CẦU:
             - SỬA LỖI và viết lại câu trả lời HOÀN CHỈNH
             - Bắt đầu: "Dạ {personal_address},"
-            - Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+            - Kết thúc: "{personal_address.title()} có cần em hỗ trợ thêm gì không ạ?"
             
             Câu trả lời hoàn chỉnh:"""
         
@@ -1190,7 +1325,7 @@ Trả lời:"""
             
             strategy_temp_adjustments = {
                 'quick_clarify': -0.2, 'direct_enhance': 0.0, 'enhanced_generation': +0.2,
-                'completion': -0.3, 'balanced': 0.0
+                'completion': -0.3, 'balanced': 0.0, 'document_context': +0.1  # 🚀 NEW: Document context adjustment
             }
             temp_adjustment = strategy_temp_adjustments.get(strategy, 0.0)
             final_temperature = max(0.1, min(1.0, self.default_generation_config["temperature"] + temp_adjustment))
@@ -1556,8 +1691,8 @@ Trả lời:
         
         if not re.search(proper_ending_pattern, response.lower()):
             # Remove any partial/incorrect endings first
-            response = re.sub(r'\s*🎓.*$', '', response.strip())
-            response = re.sub(r'\s*(có cần.*?không ạ\?|Cần.*?không\?|Có.*?không\?).*$', '', response.strip())
+            response = re.sub(r'\s*🎓.*', '', response.strip())
+            response = re.sub(r'\s*(có cần.*?không ạ\?|Cần.*?không\?|Có.*?không\?).*', '', response.strip())
             
             # Add the correct ending
             if not response.strip().endswith(('.', '!', '?')):
@@ -1761,7 +1896,7 @@ Trả lời:"""
             self.memory.conversations.clear()
 
     def get_system_status(self) -> Dict[str, Any]:
-        """🚀 NÂNG CẤP: Get system status với Smart Token Management, External API info và Consistent Personalization"""
+        """🚀 NÂNG CẤP: Get system status với Smart Token Management, External API info, Consistent Personalization và Document Context Support"""
         try:
             test_prompt = "Test ngắn cho giảng viên"
             # 🚀 CRITICAL FIX: Pass session_id=None for test (có thể pass test session)
@@ -1771,7 +1906,7 @@ Trả lời:"""
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.key_manager.keys),
                 'service_status': 'active' if response else 'error',
-                'mode': 'smart_token_lecturer_focused_with_user_memory_and_context_and_consistent_personalization',  # ✅ Updated
+                'mode': 'smart_token_lecturer_focused_with_user_memory_and_context_and_consistent_personalization_and_document_context',  # ✅ Updated
                 'memory_sessions': len(self.memory.conversations),
                 'personalization_sessions': len(self._user_context_cache),
                 'adaptive_token_range': self.token_manager.adaptive_token_range,
@@ -1800,7 +1935,11 @@ Trả lời:"""
                     'mạch_lạc_response_generation',   # ✅ NEW feature
                     'consistent_personalization_in_errors',  # 🚀 NEW feature
                     'session_id_propagation_in_api_calls',  # 🚀 NEW feature
-                    'graceful_error_handling_with_personalization'  # 🚀 NEW feature
+                    'graceful_error_handling_with_personalization',  # 🚀 NEW feature
+                    'document_context_processing',  # 🚀 NEW feature
+                    'pdf_docx_text_extraction',  # 🚀 NEW feature
+                    'document_based_question_answering',  # 🚀 NEW feature
+                    'ocr_integration_support'  # 🚀 NEW feature
                 ]
             }
         except Exception as e:
@@ -1809,5 +1948,8 @@ Trả lời:"""
                 'service_status': 'error',
                 'error': str(e),
                 'consistent_personalization': True,  # 🚀 NEW: Even in error, personalization is supported
-                'graceful_degradation': True  # 🚀 NEW: System supports graceful degradation
+                'graceful_degradation': True,  # 🚀 NEW: System supports graceful degradation
+                'document_context_support': True  # 🚀 NEW: Document context is supported even in error
             }
+
+gemini_response_generator = GeminiResponseGenerator()
