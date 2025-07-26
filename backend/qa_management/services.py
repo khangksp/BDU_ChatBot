@@ -456,5 +456,11 @@ class GoogleDriveService:
         except Exception as e:
             logger.error(f"❌ Error clearing cache: {str(e)}")
     
-# Tạo một instance duy nhất để toàn bộ hệ thống sử dụng
+    def get_system_status(self):
+        return {
+            'service_name': 'GoogleDriveService',
+            'authenticated': self.service is not None,
+            'shared_drive_id': self.drive_id
+        }
+    
 drive_service = GoogleDriveService()
