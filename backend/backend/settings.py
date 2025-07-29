@@ -233,7 +233,7 @@ CORS_ALLOWED_ORIGINS = [
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
-    "https://fbc4c5586fd0.ngrok-free.app",
+    "https://be230f18b856.ngrok-free.app",
 ]
 
 CORS_ALLOW_CREDENTIALS = True

@@ -1,15 +1,14 @@
-# ai_models/speech_service.py
-
 import os
 import tempfile
 import torch
 import logging
 import time
+import base64
+import re
 from typing import Optional, Dict, Any
 import numpy as np
 from pathlib import Path
 
-# Try to import faster_whisper, fallback if not available
 try:
     from faster_whisper import WhisperModel
     WHISPER_AVAILABLE = True
@@ -17,15 +16,22 @@ except ImportError:
     WHISPER_AVAILABLE = False
     print("Warning: faster_whisper not installed. Speech-to-text will use fallback mode.")
 
-# ✅ THÊM CÁC IMPORT MỚI CHO TTS
+# TTS imports
 import uuid
-import base64
 try:
     from gtts import gTTS
     GTTS_AVAILABLE = True
 except ImportError:
     GTTS_AVAILABLE = False
     print("Warning: gTTS not installed. Text-to-speech will be unavailable.")
+
+# Audio speed control
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+    print("Warning: pydub not installed. Audio speed control will be unavailable.")
 
 logger = logging.getLogger(__name__)
 
@@ -290,85 +296,92 @@ class SpeechToTextService:
                 pass
 
 
-# ✅ THÊM CLASS MỚI CHO TTS
 class TextToSpeechService:
     """
-    Service để chuyển văn bản thành giọng nói (TTS) sử dụng gTTS.
-    Tối ưu cho việc trả về dữ liệu audio qua API.
+    Dịch vụ chuyển văn bản thành giọng nói (TTS) sử dụng gTTS và pydub.
+    Hỗ trợ điều chỉnh tốc độ nói.
     """
     
     def __init__(self):
         self.is_available = GTTS_AVAILABLE
+        self.speed_control_available = PYDUB_AVAILABLE
         self.default_language = "vi"
-        self.default_speed = False  # False = normal speed, True = slow
+        
+        # ✅ ĐIỀU CHỈNH TỐC ĐỘ MẶC ĐỊNH TẠI ĐÂY
+        # 1.0 = tốc độ gốc, 1.25 = nhanh hơn 25%, 1.5 = nhanh hơn 50%
+        self.SPEEDUP_RATE = 1.25
         
         if self.is_available:
-            logger.info("✅ Text-to-Speech service (gTTS) initialized successfully")
+            logger.info("✅ Text-to-Speech service (gTTS) initialized")
+            if self.speed_control_available:
+                logger.info(f"⚡ Audio speed control (pydub) is available. Default rate: {self.SPEEDUP_RATE}x")
+            else:
+                logger.warning("⚠️ pydub not installed, speed control will be unavailable.")
         else:
-            logger.warning("⚠️ gTTS library not installed. TTS service is unavailable.")
+            logger.warning("⚠️ gTTS not installed, TTS service is unavailable.")
     
-    def text_to_audio_base64(self, text: str, language: str = None, slow: bool = None) -> Optional[str]:
+    def text_to_audio_base64(self, text: str, language: str = None, speed_multiplier: float = None) -> Optional[str]:
         """
         Chuyển văn bản thành audio MP3 và trả về dưới dạng chuỗi base64.
+        Hỗ trợ điều chỉnh tốc độ nói.
         
         Args:
             text: Văn bản cần chuyển đổi
             language: Mã ngôn ngữ (mặc định: 'vi')
-            slow: Tốc độ nói (mặc định: False - tốc độ bình thường)
+            speed_multiplier: Hệ số tốc độ (mặc định: self.SPEEDUP_RATE)
+                            1.0 = tốc độ gốc
+                            1.25 = nhanh hơn 25%
+                            1.5 = nhanh hơn 50%
+                            0.8 = chậm hơn 20%
             
         Returns:
             Một chuỗi base64 của file audio MP3, hoặc None nếu có lỗi.
         """
         if not self.is_available:
-            logger.error("❌ gTTS service not available")
+            logger.error("❌ gTTS service not available for TTS generation.")
             return None
             
         if not text or not text.strip():
-            logger.error("❌ Text is empty or None")
+            logger.error("❌ Cannot generate audio from empty text.")
             return None
         
-        # Use default values if not provided
         language = language or self.default_language
-        # slow = slow if slow is not None else self.default_speed
-        slow = False
+        speed_rate = speed_multiplier if speed_multiplier is not None else self.SPEEDUP_RATE
         
         output_path = ""
         
         try:
-            # Clean and prepare text
             clean_text = self._clean_text_for_tts(text)
-            
             if not clean_text:
-                logger.error("❌ No valid text after cleaning")
                 return None
-            
-            logger.info(f"🔊 Generating TTS for text: '{clean_text[:50]}...' (language: {language}, slow: {slow})")
-            
-            # Create gTTS object
-            tts_object = gTTS(text=clean_text, lang=language, slow=slow)
-            
-            # Sử dụng tempfile để quản lý file tạm một cách an toàn
+
+            logger.info(f"🔊 Generating TTS for: '{clean_text[:50]}...'")
+
+            # 1. Tạo file audio gốc với gTTS
+            tts = gTTS(text=clean_text, lang=language, slow=False)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
                 output_path = tmp_file.name
+            tts.save(output_path)
+
+            # 2. Tăng tốc audio nếu pydub có sẵn và tốc độ yêu cầu khác 1.0
+            if self.speed_control_available and speed_rate != 1.0:
+                try:
+                    logger.info(f"🚀 Adjusting audio speed to {speed_rate}x using pydub...")
+                    sound = AudioSegment.from_mp3(output_path)
+                    fast_sound = sound.speedup(playback_speed=speed_rate)
+                    fast_sound.export(output_path, format="mp3")
+                    logger.info("✅ Audio speed adjustment successful.")
+                except Exception as pydub_error:
+                    logger.error(f"⚠️ Pydub processing failed: {pydub_error}. Using original speed audio.")
             
-            # Save audio to temporary file
-            tts_object.save(output_path)
-            
-            # Verify file was created and has content
-            if not os.path.exists(output_path):
-                logger.error("❌ TTS audio file was not created")
+            # 3. Đọc file kết quả và encode sang Base64
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                logger.error("❌ TTS audio file is empty or missing after processing.")
                 return None
             
-            file_size = os.path.getsize(output_path)
-            if file_size == 0:
-                logger.error("❌ TTS audio file is empty")
-                return None
-            
-            # Đọc nội dung file audio vừa tạo dưới dạng bytes
             with open(output_path, 'rb') as audio_file:
                 audio_bytes = audio_file.read()
             
-            # Mã hóa sang base64 để gửi qua JSON
             audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
             
             logger.info(f"✅ Generated TTS audio ({len(audio_bytes)} bytes), encoded to base64 ({len(audio_base64)} chars)")
@@ -376,17 +389,15 @@ class TextToSpeechService:
             return audio_base64
             
         except Exception as e:
-            logger.error(f"❌ Error generating TTS audio: {e}")
+            logger.error(f"❌ Error in TTS generation process: {e}")
             return None
-        
         finally:
-            # Luôn đảm bảo file tạm được xóa
+            # Dọn dẹp file tạm
             if output_path and os.path.exists(output_path):
                 try:
                     os.unlink(output_path)
-                    logger.debug(f"🗑️ Cleaned up temporary TTS file: {output_path}")
-                except Exception as cleanup_error:
-                    logger.warning(f"⚠️ Could not delete temp TTS file {output_path}: {cleanup_error}")
+                except OSError as e:
+                    logger.warning(f"Could not delete temp TTS file {output_path}: {e}")
     
     def _clean_text_for_tts(self, text: str) -> str:
         """
@@ -405,13 +416,10 @@ class TextToSpeechService:
         clean_text = text.strip()
         
         # Replace multiple spaces with single space
-        import re
         clean_text = re.sub(r'\s+', ' ', clean_text)
         
         # Remove markdown formatting that might interfere with TTS
-        clean_text = re.sub(r'\*\*([^*]+)\*\*', r'\1', clean_text)  # Remove bold
-        clean_text = re.sub(r'\*([^*]+)\*', r'\1', clean_text)      # Remove italic
-        clean_text = re.sub(r'`([^`]+)`', r'\1', clean_text)        # Remove code
+        clean_text = re.sub(r'(\*\*|`|\*)([^*`]+)\1', r'\2', clean_text)  # Remove bold, italic, code
         
         # Remove URLs (they don't sound good when spoken)
         clean_text = re.sub(r'https?://[^\s<>]+', '', clean_text)
@@ -439,8 +447,10 @@ class TextToSpeechService:
         return {
             "available": self.is_available,
             "gtts_installed": GTTS_AVAILABLE,
+            "pydub_installed": PYDUB_AVAILABLE,
+            "speed_control_available": self.speed_control_available,
             "default_language": self.default_language,
-            "default_speed": self.default_speed,
+            "default_speed_rate": self.SPEEDUP_RATE,
             "supported_languages": self._get_supported_languages() if self.is_available else []
         }
     
@@ -460,5 +470,4 @@ class TextToSpeechService:
 
 # Global service instances
 speech_service = SpeechToTextService()
-# ✅ TẠO INSTANCE MỚI CHO TTS SERVICE
 tts_service = TextToSpeechService()

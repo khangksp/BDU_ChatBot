@@ -482,6 +482,18 @@ class LecturerDecisionEngine:
                 'enhanced_by_document': True
             }, True
         
+        intent_name = intent_result.get('intent', 'hoi_dap_chung')
+        intent_confidence = intent_result.get('confidence', 0)
+        
+        if intent_name == 'greeting' and intent_confidence > 0.45:
+            logger.info("🏆 GREETING PRIORITY: Greeting intent detected, bypassing standard logic.")
+            return 'direct_greeting', {
+                'instruction': 'direct_answer_lecturer', # Dùng lại instruction đơn giản
+                'db_answer': 'Chào hỏi lại một cách thân thiện và chuyên nghiệp.',
+                'confidence': intent_confidence,
+                'message': 'Greeting detected, generating a direct greeting response.'
+            }, True
+        
         # Xác định đây có phải tin nhắn đầu tiên không
         is_first_message = not session_memory or len(session_memory) == 0
         
@@ -1189,6 +1201,13 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
             )
             personal_address = self._get_personal_address(session_id)
             response_text = response.get('response', f"Dạ {personal_address}, em đã xem xét tài liệu nhưng gặp khó khăn trong việc trả lời. {personal_address.title()} có thể đặt câu hỏi cụ thể hơn không ạ? 🎓")
+        
+        elif decision_type == 'direct_greeting':
+            response = self.response_generator.generate_response(
+                query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
+            )
+            personal_address = self._get_personal_address(session_id)
+            response_text = response.get('response', f"Dạ chào {personal_address}! Em có thể hỗ trợ gì cho {personal_address} về công việc tại BDU ạ? 🎓")
         
         # Lấy response từ Gemini như bình thường
         elif decision_type == 'use_external_api':
