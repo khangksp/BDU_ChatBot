@@ -22,6 +22,15 @@ try:
 except ImportError:
     ocr_service = None
 
+# 🚀 NEW: Import training module with fallback
+try:
+    from ai_models.train_retriever import run_training, check_gpu_availability
+    TRAINING_AVAILABLE = True
+except ImportError:
+    run_training = None
+    check_gpu_availability = None
+    TRAINING_AVAILABLE = False
+
 import uuid
 import time
 import logging
@@ -33,10 +42,25 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.utils import timezone
 from django.db import models
+import threading
+from datetime import datetime
 
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
 logger = logging.getLogger(__name__)
+
+# 🚀 NEW: Global variable to track training status
+TRAINING_STATUS = {
+    'is_running': False,
+    'started_at': None,
+    'completed_at': None,
+    'success': None,
+    'error': None,
+    'progress': 0,
+    'output_dir': None,
+    'training_examples': 0,
+    'evaluation_results': None
+}
 
 def get_client_ip(request):
     """Get client IP address"""
@@ -166,6 +190,64 @@ def auto_setup_user_context_from_jwt(session_id: str, jwt_token: str):
         logger.error(f"❌ Error auto-setup user context from JWT: {str(e)}")
         return False
 
+# 🚀 NEW: Training functions
+def run_training_background(csv_path=None, output_dir='./fine_tuned_phobert'):
+    """Run training in background thread"""
+    global TRAINING_STATUS
+    
+    try:
+        TRAINING_STATUS.update({
+            'is_running': True,
+            'started_at': datetime.now().isoformat(),
+            'progress': 0,
+            'error': None,
+            'success': None
+        })
+        
+        logger.info("🚀 Starting PhoBERT fine-tuning in background...")
+        
+        if not TRAINING_AVAILABLE or not run_training:
+            raise Exception("Training module not available")
+        
+        # Run the actual training
+        TRAINING_STATUS['progress'] = 25
+        result = run_training(csv_path, output_dir)
+        TRAINING_STATUS['progress'] = 90
+        
+        if result and result.get('success'):
+            TRAINING_STATUS.update({
+                'success': True,
+                'completed_at': datetime.now().isoformat(),
+                'progress': 100,
+                'output_dir': result.get('output_dir'),
+                'training_examples': result.get('training_examples', 0),
+                'evaluation_results': result.get('evaluation_results')
+            })
+            
+            # 🚀 CRITICAL: Reload the chatbot with new model
+            if chatbot_ai and hasattr(chatbot_ai, 'reload_after_qa_update'):
+                logger.info("🔄 Reloading chatbot with fine-tuned model...")
+                chatbot_ai.reload_after_qa_update()
+                logger.info("✅ Chatbot reloaded with fine-tuned model")
+            
+            logger.info("✅ Background training completed successfully!")
+            
+        else:
+            error_msg = result.get('error', 'Unknown training error') if result else 'Training function returned None'
+            raise Exception(error_msg)
+            
+    except Exception as e:
+        logger.error(f"❌ Background training failed: {str(e)}")
+        TRAINING_STATUS.update({
+            'success': False,
+            'error': str(e),
+            'completed_at': datetime.now().isoformat(),
+            'progress': 0,
+            'is_running': False
+        })
+    finally:
+        TRAINING_STATUS['is_running'] = False
+
 # ✅ SAFE SYSTEM STATUS FUNCTIONS
 def get_safe_system_status():
     """Get system status with safe fallbacks"""
@@ -208,6 +290,151 @@ def get_safe_tts_status():
         'available': False,
         'error': 'TTS service not available'
     }
+
+# 🚀 NEW: Training endpoint
+class TrainRetrieverView(APIView):
+    """
+    🚀 NEW: Training endpoint for fine-tuning PhoBERT retriever
+    """
+    permission_classes = [AllowAny]  # You might want to restrict this in production
+    
+    def get(self, request):
+        """GET method - Training status and information"""
+        global TRAINING_STATUS
+        
+        try:
+            # Check if training is available
+            training_info = {
+                'training_available': TRAINING_AVAILABLE,
+                'gpu_available': False,
+                'current_status': dict(TRAINING_STATUS),
+                'endpoints': {
+                    'start_training': 'POST /api/train-retriever/',
+                    'training_status': 'GET /api/train-retriever/',
+                    'stop_training': 'DELETE /api/train-retriever/ (not implemented)'
+                }
+            }
+            
+            if TRAINING_AVAILABLE and check_gpu_availability:
+                try:
+                    training_info['gpu_available'] = check_gpu_availability()
+                except:
+                    training_info['gpu_available'] = False
+            
+            # Add system info
+            if chatbot_ai:
+                system_status = chatbot_ai.get_system_status()
+                training_info.update({
+                    'current_model_status': {
+                        'fine_tuned_model_loaded': system_status.get('phobert_fine_tuned', False),
+                        'fine_tuned_model_path': getattr(chatbot_ai.intent_classifier, 'fine_tuned_model_path', ''),
+                        'model_priority': system_status.get('fine_tuned_model_system', {}).get('model_priority_system', []),
+                        'knowledge_entries': system_status.get('knowledge_entries', 0)
+                    }
+                })
+            
+            return Response(training_info, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error getting training status: {str(e)}")
+            return Response({
+                'error': 'Could not get training status',
+                'training_available': TRAINING_AVAILABLE,
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request):
+        """POST method - Start training"""
+        global TRAINING_STATUS
+        
+        try:
+            # Check if training is available
+            if not TRAINING_AVAILABLE:
+                return Response({
+                    'success': False,
+                    'error': 'Training module not available. Please install required dependencies.',
+                    'required_packages': ['sentence-transformers', 'torch', 'transformers']
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+            # Check if already training
+            if TRAINING_STATUS['is_running']:
+                return Response({
+                    'success': False,
+                    'error': 'Training is already in progress',
+                    'started_at': TRAINING_STATUS['started_at'],
+                    'progress': TRAINING_STATUS['progress']
+                }, status=status.HTTP_409_CONFLICT)
+            
+            # Get parameters
+            csv_path = request.data.get('csv_path')  # Optional: custom CSV path
+            output_dir = request.data.get('output_dir', './fine_tuned_phobert')
+            
+            # Validate output directory
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+            except Exception as e:
+                return Response({
+                    'success': False,
+                    'error': f'Cannot create output directory: {str(e)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Start training in background thread
+            training_thread = threading.Thread(
+                target=run_training_background,
+                args=(csv_path, output_dir),
+                daemon=True
+            )
+            training_thread.start()
+            
+            return Response({
+                'success': True,
+                'message': 'Training started in background',
+                'training_id': f"training_{int(time.time())}",
+                'started_at': TRAINING_STATUS['started_at'],
+                'output_dir': output_dir,
+                'estimated_duration': '2-5 minutes (depending on data size and hardware)',
+                'note': 'Training will run in background. Use GET request to check progress.'
+            }, status=status.HTTP_202_ACCEPTED)
+            
+        except Exception as e:
+            logger.error(f"Error starting training: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Failed to start training: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request):
+        """DELETE method - Stop training (basic implementation)"""
+        global TRAINING_STATUS
+        
+        try:
+            if not TRAINING_STATUS['is_running']:
+                return Response({
+                    'success': False,
+                    'message': 'No training in progress'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Note: Actual thread termination is complex and not recommended
+            # This is just a status reset
+            TRAINING_STATUS.update({
+                'is_running': False,
+                'error': 'Training stopped by user',
+                'completed_at': datetime.now().isoformat(),
+                'success': False
+            })
+            
+            return Response({
+                'success': True,
+                'message': 'Training stop requested (status reset)',
+                'note': 'Background thread may continue running until natural completion'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error stopping training: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Failed to stop training: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class APIRootView(APIView):
     """API Root - Hiển thị danh sách endpoints"""
@@ -261,15 +488,23 @@ class APIRootView(APIView):
         except Exception as e:
             logger.error(f"Error getting personalization stats: {e}")
         
+        # 🚀 NEW: Training status
+        training_status = {
+            'training_available': TRAINING_AVAILABLE,
+            'training_endpoint': '/api/train-retriever/',
+            'current_training_status': dict(TRAINING_STATUS) if TRAINING_AVAILABLE else None
+        }
+        
         return Response({
-            'message': 'Enhanced Chatbot API với Text-to-Speech - Đại học Bình Dương',
-            'version': '6.1.0',
+            'message': 'Enhanced Chatbot API với Text-to-Speech và Fine-tuned Model Training - Đại học Bình Dương',
+            'version': '6.2.0',  # 🚀 Updated version
             'status': 'active',
             'system_status': system_status,
             'speech_status': speech_status,
             'tts_status': tts_status,
             'personalization_status': personalization_status,
             'external_api_status': external_api_status,
+            'training_status': training_status,  # 🚀 NEW
             'endpoints': {
                 'chat': '/api/chat/',
                 'health': '/api/health/',
@@ -279,6 +514,7 @@ class APIRootView(APIView):
                 'speech_status': '/api/speech-status/',
                 'personalized_context': '/api/personalized-context/',
                 'personalized_status': '/api/personalized-status/',
+                'train_retriever': '/api/train-retriever/',  # 🚀 NEW
             },
             'features': [
                 'Natural Language Generation',
@@ -300,6 +536,9 @@ class APIRootView(APIView):
                 'External API Integration',
                 'Lecturer Schedule Access',
                 'Personal Information Queries',
+                'Fine-tuned Model Training',  # 🚀 NEW
+                'Two-Stage Re-ranking',  # 🚀 NEW
+                'Advanced RAG Architecture',  # 🚀 NEW
             ]
         })
 
@@ -318,7 +557,7 @@ class HealthCheckView(APIView):
                 'timestamp': timezone.now().isoformat(),
                 'database': 'connected',
                 'encoding': 'utf-8',
-                'version': '6.1.0'
+                'version': '6.2.0'  # 🚀 Updated version
             }
             
             # ✅ SAFE: Add service status only if available
@@ -338,6 +577,13 @@ class HealthCheckView(APIView):
                 }
                 
                 health_data['personalization'] = 'enabled'
+                
+                # 🚀 NEW: Training capability
+                health_data['training_capability'] = {
+                    'available': TRAINING_AVAILABLE,
+                    'current_status': TRAINING_STATUS['is_running'],
+                    'fine_tuned_model_support': True
+                }
                 
             except Exception as e:
                 logger.error(f"Error getting service status in health check: {e}")
@@ -392,7 +638,7 @@ class ChatView(APIView):
                     logger.error(f"Error getting user personalization: {e}")
             
             return Response({
-                'message': 'Enhanced Personalized Chat API với Text-to-Speech - Open Access',
+                'message': 'Enhanced Personalized Chat API với Text-to-Speech và Fine-tuned Training - Open Access',
                 'authentication': 'Optional - Works with or without token',
                 'jwt_token_support': 'Send JWT token for personal schedule/info access',
                 'system_status': system_status,
@@ -417,6 +663,9 @@ class ChatView(APIView):
                 'features': [
                     'PhoBERT Intent Classification',
                     'SBERT + FAISS Retrieval',
+                    'Fine-tuned Model Support',  # 🚀 NEW
+                    'Two-Stage Re-ranking',  # 🚀 NEW
+                    'Advanced RAG Architecture',  # 🚀 NEW
                     'Conversation Memory',
                     'UTF-8 Safe Processing',
                     'Speech-to-Text Integration',
@@ -430,7 +679,8 @@ class ChatView(APIView):
                     'JWT Token Authentication',
                     'External API Integration',
                     'Personal Schedule Access',
-                    'Lecturer Information Queries'
+                    'Lecturer Information Queries',
+                    'Model Training Capability'  # 🚀 NEW
                 ]
             })
         except Exception as e:
@@ -642,7 +892,10 @@ class ChatView(APIView):
                     'tts_generated': bool(audio_content_base64),
                     'tts_processing_time': tts_processing_time,
                     'tts_error': tts_error,
-                    'reference_links': ai_response.get('reference_links', [])
+                    'reference_links': ai_response.get('reference_links', []),  # ✅ PRESERVED
+                    'two_stage_reranking_used': ai_response.get('two_stage_reranking_used', False),  # 🚀 NEW
+                    'fine_tuned_model_used': ai_response.get('fine_tuned_model_used', False),  # 🚀 NEW
+                    'confidence_capped': ai_response.get('confidence_capped', False)  # 🚀 NEW
                 }
                 
                 chat_record = ChatHistory.objects.create(
@@ -669,7 +922,7 @@ class ChatView(APIView):
                 'response_time': processing_time,
                 'status': 'success',
                 'encoding': 'utf-8',
-                'reference_links': ai_response.get('reference_links', []),
+                'reference_links': ai_response.get('reference_links', []),  # ✅ PRESERVED
                 
                 # TTS fields
                 'audio_content': audio_content_base64,
@@ -708,6 +961,15 @@ class ChatView(APIView):
                     'method_used': ai_response.get('method', ''),
                     'personal_info_accessed': ai_response.get('external_api_used', False),
                     'token_valid_format': validate_jwt_token_format(jwt_token)[0] if jwt_token else None
+                },
+                
+                # 🚀 NEW: Advanced RAG information
+                'advanced_rag': {
+                    'two_stage_reranking_used': ai_response.get('two_stage_reranking_used', False),
+                    'fine_tuned_model_used': ai_response.get('fine_tuned_model_used', False),
+                    'confidence_capped': ai_response.get('confidence_capped', False),
+                    'reranking_stats': ai_response.get('reranking_stats', {}),
+                    'enhanced_processing': True
                 }
             }, status=status.HTTP_200_OK)
             
@@ -750,6 +1012,12 @@ class ChatView(APIView):
                     'external_api_used': False,
                     'fallback_used': True,
                     'error': str(e)
+                },
+                'advanced_rag': {  # 🚀 NEW
+                    'two_stage_reranking_used': False,
+                    'fine_tuned_model_used': False,
+                    'confidence_capped': False,
+                    'fallback_used': True
                 }
             }, status=status.HTTP_200_OK)
     
@@ -876,7 +1144,7 @@ Hiện tại hệ thống đang được cải thiện để phục vụ bạn t
 
 Cảm ơn bạn đã kiên nhẫn! 😊"""
 
-# ✅ SIMPLIFIED ADDITIONAL VIEWS
+# ✅ KEEP ALL EXISTING VIEWS UNCHANGED TO PRESERVE MIC/SPEECH FUNCTIONALITY
 
 class SpeechToTextView(APIView):
     """Speech-to-Text API endpoint"""
@@ -1140,7 +1408,7 @@ class TextToSpeechTestView(APIView):
                 'audio_content': None
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# ✅ SIMPLIFIED REMAINING VIEWS
+# ✅ KEEP ALL OTHER EXISTING VIEWS UNCHANGED
 
 class ChatHistoryView(APIView):
     permission_classes = [AllowAny]
@@ -1280,7 +1548,7 @@ class PersonalizedSystemStatusView(APIView):
             
             personalization_status = {
                 'personalization_enabled': True,
-                'version': '6.1.0',
+                'version': '6.2.0',  # 🚀 Updated version
                 'features': {
                     'user_memory_prompt_support': True,
                     'flexible_personalization': True,
@@ -1295,7 +1563,10 @@ class PersonalizedSystemStatusView(APIView):
                     'text_to_speech_support': True,
                     'voice_conversation_mode': True,
                     'speech_to_text_support': True,
-                    'full_voice_interaction': True
+                    'full_voice_interaction': True,
+                    'fine_tuned_model_training': TRAINING_AVAILABLE,  # 🚀 NEW
+                    'two_stage_reranking': True,  # 🚀 NEW
+                    'advanced_rag_architecture': True  # 🚀 NEW
                 },
                 'statistics': {
                     'total_faculty': 0,
@@ -1322,7 +1593,11 @@ class PersonalizedSystemStatusView(APIView):
             status_data.update({
                 'personalization': personalization_status,
                 'speech_status': speech_status,
-                'tts_status': tts_status
+                'tts_status': tts_status,
+                'training_status': {  # 🚀 NEW
+                    'training_available': TRAINING_AVAILABLE,
+                    'current_training': dict(TRAINING_STATUS)
+                }
             })
             
             return Response(status_data, status=status.HTTP_200_OK)
@@ -1445,8 +1720,10 @@ class ChatSessionDetailView(APIView):
                     'confidence': chat.confidence_score,
                     'response_time': chat.response_time,
                     'sources': bot_entities.get('sources', []),
-                    'reference_links': bot_entities.get('reference_links', []),
-                    'chat_id': chat.id
+                    'reference_links': bot_entities.get('reference_links', []),  # ✅ PRESERVED
+                    'chat_id': chat.id,
+                    'two_stage_reranking_used': bot_entities.get('two_stage_reranking_used', False),  # 🚀 NEW
+                    'fine_tuned_model_used': bot_entities.get('fine_tuned_model_used', False)  # 🚀 NEW
                 })
             
             return Response({
@@ -1522,3 +1799,80 @@ class ChatSessionDetailView(APIView):
                 'success': False,
                 'error': 'Could not delete session'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ✅ FUNCTION-BASED VIEWS FOR COMPATIBILITY (Google Drive endpoints)
+def health_check(request):
+    """Health check function-based view"""
+    return JsonResponse({
+        'status': 'healthy',
+        'message': 'BDU ChatBot API is running!',
+        'version': '6.2.0',
+        'advanced_rag': True,
+        'training_available': TRAINING_AVAILABLE
+    })
+
+def speech_status(request):
+    """Speech status function-based view"""
+    try:
+        speech_status = get_safe_speech_status()
+        tts_status = get_safe_tts_status()
+        
+        return JsonResponse({
+            'speech_service': speech_status,
+            'tts_service': tts_status,
+            'voice_interaction_available': speech_status.get('available', False) and tts_status.get('available', False)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'speech_service': {'available': False},
+            'tts_service': {'available': False}
+        })
+
+def speech_to_text(request):
+    """Speech to text function-based view"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=405)
+    
+    # Redirect to class-based view
+    view = SpeechToTextView()
+    return view.post(request)
+
+def force_refresh_drive_data(request):
+    """Force refresh Google Drive data"""
+    try:
+        from qa_management.services import drive_service
+        result = drive_service.force_refresh()
+        
+        # Reload chatbot after data refresh
+        if result.get('success') and chatbot_ai:
+            chatbot_ai.reload_after_qa_update()
+        
+        return JsonResponse(result)
+    except ImportError:
+        return JsonResponse({
+            'success': False,
+            'error': 'QA Management service not available'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+def google_drive_status(request):
+    """Get Google Drive sync status"""
+    try:
+        from qa_management.services import drive_service
+        status = drive_service.get_system_status()
+        return JsonResponse(status)
+    except ImportError:
+        return JsonResponse({
+            'available': False,
+            'error': 'QA Management service not available'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'available': False,
+            'error': str(e)
+        })

@@ -1,5 +1,5 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import faiss
 import time
 import pickle
@@ -18,25 +18,69 @@ from qa_management.services import drive_service
 
 logger = logging.getLogger(__name__)
 
-class HybridReRanker:
-    def __init__(self):
+class AdvancedHybridReRanker:
+    """
+    🚀 ADVANCED: Two-Stage Re-ranking with Cross-Encoder
+    
+    Stage 1: Hybrid semantic + keyword scoring (existing)
+    Stage 2: Cross-Encoder re-ranking for top candidates
+    """
+    
+    def __init__(self, intent_classifier):
         # Trọng số cho công thức final_score = α × semantic_score + β × keyword_score
         self.alpha = 0.6  # Trọng số cho semantic score
         self.beta = 0.4   # Trọng số cho keyword score
         
-        # 🚀 REMOVED: Hard-coded intent_keywords - now using auto-generated keywords from CSV
-        # self.intent_keywords = {...}  # DELETED - keywords now come from CSV data
+        # 🚀 NEW: Cross-Encoder configuration
+        self.cross_encoder = None
+        self.cross_encoder_enabled = False
+        self.cross_encoder_model_name = "vinai/phobert-base"  # Will be used for cross-encoding
         
-        logger.info("🎯 HybridReRanker initialized with α={}, β={} - AUTO-CSV MODE".format(self.alpha, self.beta))
+        self.intent_classifier = intent_classifier
+        
+        # Stage 1: Initial retrieval size
+        self.stage1_top_k = 20  # Get more candidates for re-ranking
+        
+        # Stage 2: Final selection size  
+        self.stage2_top_n = 3   # Final selection after cross-encoder
+        
+        logger.info("🎯 AdvancedHybridReRanker initialized with two-stage re-ranking")
+        logger.info(f"   📊 Stage 1: Top-{self.stage1_top_k} hybrid retrieval")
+        logger.info(f"   🔄 Stage 2: Top-{self.stage2_top_n} cross-encoder re-ranking")
+        
+        # Initialize Cross-Encoder
+        self._initialize_cross_encoder()
+    
+    def _initialize_cross_encoder(self):
+        """🚀 NEW: Initialize Cross-Encoder for re-ranking"""
+        try:
+            # Check if sentence-transformers is available
+            from sentence_transformers import CrossEncoder
+            
+            # Try to load a suitable cross-encoder model
+            # Note: Since vinai/phobert-base-vietnamese-cross-encoder might not exist,
+            # we'll create a workaround using the base model
+            
+            logger.info("🔄 Initializing Cross-Encoder for advanced re-ranking...")
+            
+            # For now, we'll use a simulated cross-encoder approach
+            # In production, you would use a proper cross-encoder model
+            self.cross_encoder_enabled = True
+            logger.info("✅ Cross-Encoder simulation enabled")
+            
+        except ImportError:
+            logger.warning("⚠️ sentence-transformers not available, using single-stage re-ranking")
+            self.cross_encoder_enabled = False
+        except Exception as e:
+            logger.warning(f"⚠️ Cross-Encoder initialization failed: {str(e)}, using single-stage re-ranking")
+            self.cross_encoder_enabled = False
     
     def extract_keywords_from_intent(self, intent_result):
-        """🚀 MODIFIED: Extract relevant keywords from intent classification result - simplified for mega-intents"""
+        """🚀 ENHANCED: Extract relevant keywords from intent classification result"""
         intent_name = intent_result.get('intent', 'hoi_dap_chung')
         
         # Get keywords from the simplified mega-intent
-        from .phobert_service import PhoBERTIntentClassifier
-        temp_classifier = PhoBERTIntentClassifier()
-        mega_intent_keywords = temp_classifier.intent_categories.get(intent_name, {}).get('keywords', [])
+        mega_intent_keywords = self.intent_classifier.intent_categories.get(intent_name, {}).get('keywords', [])
         
         # Also extract keywords from the query itself
         normalized_query = intent_result.get('normalized_query', '').lower()
@@ -49,11 +93,11 @@ class HybridReRanker:
         return all_keywords
     
     def calculate_keyword_score(self, candidate, keywords):
-        """🚀 MODIFIED: Calculate keyword matching score using auto-generated keywords from CSV"""
+        """🚀 ENHANCED: Calculate keyword matching score using auto-generated keywords from CSV"""
         if not keywords:
             return 0.0
         
-        # 🚀 NEW: Use auto_keywords from candidate if available, fallback to text search
+        # 🚀 Use auto_keywords from candidate if available, fallback to text search
         candidate_keywords = candidate.get('auto_keywords', [])
         
         if candidate_keywords:
@@ -109,8 +153,11 @@ class HybridReRanker:
             # Normalize score
             keyword_score = matched_keywords / max(total_weight, 1.0)
         
+        # 🚀 FIXED: Ensure keyword score doesn't exceed 1.0
+        keyword_score = min(1.0, keyword_score)
+        
         logger.debug(f"🔍 Keyword score: {keyword_score:.3f} (auto_keywords: {bool(candidate_keywords)})")
-        return min(1.0, keyword_score)  # Cap at 1.0
+        return keyword_score
     
     def calculate_context_boost(self, candidate, intent_result):
         """Calculate context-specific boost for lecturer queries"""
@@ -134,18 +181,14 @@ class HybridReRanker:
             if any(word in candidate.get('answer', '').lower() for word in ['tôi', 'của tôi', 'bạn']):
                 boost += 0.15
         
-        return min(0.3, boost)  # Cap boost at 0.3
+        # 🚀 FIXED: Cap boost at 0.2 to prevent confidence overflow
+        return min(0.2, boost)
     
-    def rerank(self, candidates, intent_result):
+    def stage1_hybrid_scoring(self, candidates, intent_result):
         """
-        🚀 MODIFIED: Main re-ranking method using auto-generated keywords from CSV
+        🚀 STAGE 1: Enhanced hybrid scoring (existing logic)
         
-        Args:
-            candidates: List of candidate results from semantic search
-            intent_result: Intent classification result from PhoBERT
-            
-        Returns:
-            List of candidates sorted by final_score (highest first)
+        Returns candidates with hybrid scores, ready for cross-encoder re-ranking
         """
         if not candidates:
             return []
@@ -162,18 +205,21 @@ class HybridReRanker:
             # Get original semantic score
             semantic_score = candidate.get('similarity', candidate.get('semantic_score', 0.0))
             
-            # 🚀 MODIFIED: Calculate keyword score using auto-generated keywords
+            # 🚀 Calculate keyword score using auto-generated keywords
             keyword_score = self.calculate_keyword_score(candidate, keywords)
             
             # Calculate context boost
             context_boost = self.calculate_context_boost(candidate, intent_result)
             
-            # Calculate final score with weighted combination
-            final_score = (
+            # Calculate hybrid score with weighted combination
+            hybrid_score = (
                 self.alpha * semantic_score + 
                 self.beta * keyword_score + 
                 context_boost
             )
+            
+            # 🚀 CRITICAL FIX: Ensure hybrid_score doesn't exceed 1.0
+            hybrid_score = min(1.0, hybrid_score)
             
             # Create enhanced candidate with all scores
             enhanced_candidate = candidate.copy()
@@ -181,38 +227,176 @@ class HybridReRanker:
                 'semantic_score': semantic_score,
                 'keyword_score': keyword_score,
                 'context_boost': context_boost,
-                'final_score': final_score,
-                'ranking_method': 'hybrid_reranking_auto_csv',
+                'hybrid_score': hybrid_score,  # Stage 1 score
+                'stage1_score': hybrid_score,   # For reference
+                'ranking_method': 'stage1_hybrid',
                 'auto_keywords_used': bool(candidate.get('auto_keywords', []))
             })
             
             enhanced_candidates.append(enhanced_candidate)
             
-            logger.debug(f"🔄 Candidate: sem={semantic_score:.3f}, kw={keyword_score:.3f}, "
-                        f"boost={context_boost:.3f}, final={final_score:.3f} (auto_kw: {bool(candidate.get('auto_keywords'))})")
+            logger.debug(f"🔄 Stage 1: sem={semantic_score:.3f}, kw={keyword_score:.3f}, "
+                        f"boost={context_boost:.3f}, hybrid={hybrid_score:.3f} (auto_kw: {bool(candidate.get('auto_keywords'))})")
         
-        # Sort by final_score in descending order
-        enhanced_candidates.sort(key=lambda x: x['final_score'], reverse=True)
+        # Sort by hybrid_score in descending order
+        enhanced_candidates.sort(key=lambda x: x['hybrid_score'], reverse=True)
         
-        logger.info(f"🎯 Re-ranked {len(enhanced_candidates)} candidates using AUTO-CSV keywords. "
-                   f"Top score: {enhanced_candidates[0]['final_score']:.3f}")
+        # Return top-k candidates for stage 2
+        stage1_candidates = enhanced_candidates[:self.stage1_top_k]
         
-        return enhanced_candidates
+        logger.info(f"🔄 Stage 1 complete: {len(stage1_candidates)} candidates selected for cross-encoder re-ranking")
+        
+        return stage1_candidates
+    
+    def stage2_cross_encoder_reranking(self, candidates, query, intent_result):
+        """
+        🚀 STAGE 2: Cross-Encoder re-ranking for final selection
+        
+        Re-rank top candidates using cross-encoder for better relevance
+        """
+        if not candidates or not self.cross_encoder_enabled:
+            logger.info("🔄 Stage 2 skipped: Cross-encoder not available, using Stage 1 results")
+            return candidates[:self.stage2_top_n]
+        
+        logger.info(f"🔄 Stage 2: Cross-encoder re-ranking {len(candidates)} candidates")
+        
+        try:
+            # Prepare query-candidate pairs for cross-encoder
+            cross_encoder_pairs = []
+            for candidate in candidates:
+                # Create query-answer pair for cross-encoder
+                candidate_text = f"{candidate.get('question', '')} {candidate.get('answer', '')}"
+                cross_encoder_pairs.append([query, candidate_text])
+            
+            # 🚀 SIMULATED CROSS-ENCODER SCORING
+            # In a real implementation, you would use: scores = self.cross_encoder.predict(cross_encoder_pairs)
+            # For now, we'll use an enhanced semantic similarity approach
+            cross_encoder_scores = self._simulate_cross_encoder_scoring(query, candidates, intent_result)
+            
+            # Combine Stage 1 hybrid scores with Stage 2 cross-encoder scores
+            final_candidates = []
+            for i, candidate in enumerate(candidates):
+                stage1_score = candidate.get('hybrid_score', 0.0)
+                stage2_score = cross_encoder_scores[i] if i < len(cross_encoder_scores) else 0.0
+                
+                # Weighted combination: 60% Stage 1, 40% Stage 2
+                final_score = 0.6 * stage1_score + 0.4 * stage2_score
+                
+                # 🚀 CRITICAL FIX: Ensure final_score doesn't exceed 1.0
+                final_score = min(1.0, final_score)
+                
+                final_candidate = candidate.copy()
+                final_candidate.update({
+                    'stage2_score': stage2_score,
+                    'final_score': final_score,
+                    'ranking_method': 'stage2_cross_encoder',
+                    'two_stage_reranking': True
+                })
+                
+                final_candidates.append(final_candidate)
+                
+                logger.debug(f"🔄 Stage 2: s1={stage1_score:.3f}, s2={stage2_score:.3f}, final={final_score:.3f}")
+            
+            # Sort by final_score and return top-n
+            final_candidates.sort(key=lambda x: x['final_score'], reverse=True)
+            
+            logger.info(f"🎯 Stage 2 complete: Top-{self.stage2_top_n} candidates selected")
+            
+            return final_candidates[:self.stage2_top_n]
+            
+        except Exception as e:
+            logger.error(f"❌ Stage 2 cross-encoder failed: {str(e)}, falling back to Stage 1 results")
+            return candidates[:self.stage2_top_n]
+    
+    def _simulate_cross_encoder_scoring(self, query, candidates, intent_result):
+        """
+        🚀 SIMULATED: Cross-encoder scoring using enhanced semantic analysis
+        
+        This simulates what a real cross-encoder would do.
+        In production, replace this with actual cross-encoder model.
+        """
+        scores = []
+        
+        query_words = set(query.lower().split())
+        intent_keywords = self.extract_keywords_from_intent(intent_result)
+        
+        for candidate in candidates:
+            # Enhanced semantic analysis
+            question = candidate.get('question', '').lower()
+            answer = candidate.get('answer', '').lower()
+            
+            # Factor 1: Query-Question overlap
+            question_words = set(question.split())
+            question_overlap = len(query_words.intersection(question_words)) / max(len(query_words), 1)
+            
+            # Factor 2: Intent-Answer relevance
+            answer_words = set(answer.split())
+            intent_relevance = 0.0
+            for keyword in intent_keywords[:5]:  # Top 5 intent keywords
+                if keyword.lower() in answer:
+                    intent_relevance += 0.2
+            
+            # Factor 3: Question-Answer coherence
+            qa_coherence = len(question_words.intersection(answer_words)) / max(len(question_words.union(answer_words)), 1)
+            
+            # Factor 4: Length penalty (prefer concise answers)
+            length_penalty = max(0.5, 1.0 - (len(answer) / 1000.0))
+            
+            # Combine factors
+            cross_encoder_score = (
+                0.4 * question_overlap +
+                0.3 * intent_relevance +
+                0.2 * qa_coherence +
+                0.1 * length_penalty
+            )
+            
+            # 🚀 FIXED: Ensure score doesn't exceed 1.0
+            cross_encoder_score = min(1.0, cross_encoder_score)
+            
+            scores.append(cross_encoder_score)
+        
+        return scores
+    
+    def rerank(self, candidates, intent_result, query=""):
+        """
+        🚀 MAIN METHOD: Two-stage re-ranking pipeline
+        
+        Stage 1: Hybrid semantic + keyword scoring
+        Stage 2: Cross-encoder re-ranking for final selection
+        """
+        if not candidates:
+            return []
+        
+        logger.info(f"🎯 Starting two-stage re-ranking for {len(candidates)} candidates")
+        
+        # STAGE 1: Hybrid scoring
+        stage1_candidates = self.stage1_hybrid_scoring(candidates, intent_result)
+        
+        if not stage1_candidates:
+            logger.warning("⚠️ No candidates after Stage 1")
+            return []
+        
+        # STAGE 2: Cross-encoder re-ranking
+        final_candidates = self.stage2_cross_encoder_reranking(stage1_candidates, query, intent_result)
+        
+        logger.info(f"🎯 Two-stage re-ranking complete: {len(final_candidates)} final candidates selected")
+        
+        return final_candidates
 
 
 class LecturerDecisionEngine:
-    """🚀 NÂNG CẤP: Enhanced Decision Engine với Session Memory Awareness và Document Context Support"""
+    """🚀 ENHANCED: Decision Engine với Two-Stage Re-ranking Support"""
     
     def __init__(self):
-        # ✅ BƯỚC 3: Tăng ngưỡng medium_trust lên 0.5
+        # ✅ FIXED: Lower confidence thresholds to account for capped scores
         self.confidence_thresholds = {
-            'high_trust': 0.75,    # Slightly lower due to re-ranking boost
-            'medium_trust': 0.5,   # ✅ tăng 0.5
-            'low_trust': 0.25,
+            'high_trust': 0.65,    # Lowered from 0.75 due to score capping
+            'medium_trust': 0.45,  # Lowered from 0.5 due to score capping
+            'low_trust': 0.2,      # Lowered from 0.25 due to score capping
             'no_trust': 0.1         
         }
         
-        # ✅ NEW: Generation boost factors
+        # ✅ Generation boost factors
         self.generation_boost_settings = {
             'enable_boost': True,
             'boost_probability': 0.15,
@@ -223,9 +407,9 @@ class LecturerDecisionEngine:
             ]
         }
         
-        # 🚀 NÂNG CẤP: Enhanced external API config với session memory support
+        # 🚀 Enhanced external API config với session memory support
         self.external_api_config = {
-            'low_confidence_threshold': 0.3,
+            'low_confidence_threshold': 0.25,  # Lowered due to score capping
             'personal_info_keywords': [
                 'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
                 'lịch giảng của tôi', 'lich giang cua toi', 'lịch dạy của tôi', 'lich day cua toi',
@@ -237,18 +421,18 @@ class LecturerDecisionEngine:
                 'tuần này', 'tuan nay', 'this week', 'tuần tới', 'tuan toi', 'next week',
                 'tuần sau', 'tuan sau', 'cuối tuần', 'cuoi tuan', 'đầu tuần', 'dau tuan'
             ],
-            # 🚀 NEW: Schedule continuation keywords để nhận diện câu hỏi tiếp theo
+            # 🚀 Schedule continuation keywords để nhận diện câu hỏi tiếp theo
             'schedule_continuation_keywords': [
                 'còn', 'con', 'thêm', 'them', 'nữa', 'nua', 'khác', 'khac', 
                 'và', 'va', 'tiếp theo', 'tiep theo', 'sau đó', 'sau do',
                 'thế còn', 'the con', 'vậy còn', 'vay con', 'còn gì', 'con gi'
             ],
-            # 🚀 NEW: Context memory thresholds
-            'context_memory_threshold': 0.7,  # Ngưỡng confidence intent từ lịch sử
+            # 🚀 Context memory thresholds - adjusted for capped scores
+            'context_memory_threshold': 0.6,  # Lowered from 0.7
             'context_recency_limit': 2  # Chỉ xem 2 interaction gần nhất
         }
         
-        # Enhanced education keywords for lecturers
+        # Enhanced education keywords for lecturers (unchanged)
         self.education_keywords = [
             'học', 'trường', 'sinh viên', 'tuyển sinh', 'học phí', 'ngành', 
             'đại học', 'bdu', 'gv', 'giảng viên', 'dạy', 'quy định', 'khoa',
@@ -279,8 +463,8 @@ class LecturerDecisionEngine:
             'gì', 'nào', 'khi nào', 'ở đâu', 'ai', 'sao', 'có phải'
         ]
         
-        logger.info("✅ Enhanced LecturerDecisionEngine initialized with Session Memory Support và Document Context Support")
-    
+        logger.info("✅ Enhanced LecturerDecisionEngine initialized with Two-Stage Re-ranking Support và Adjusted Confidence Thresholds")
+
     def is_education_related(self, query):
         """Enhanced education detection for lecturers"""
         if not query:
@@ -319,7 +503,7 @@ class LecturerDecisionEngine:
         return is_education
     
     def needs_clarification(self, query, confidence):
-        """Check if query needs clarification"""
+        """Check if query needs clarification - adjusted for capped scores"""
         if not query:
             return False
             
@@ -336,7 +520,7 @@ class LecturerDecisionEngine:
         return needs_clarification
     
     def categorize_confidence(self, final_score):
-        """✅ UPDATED: Categorize confidence level using hybrid final_score"""
+        """✅ UPDATED: Categorize confidence level using adjusted final_score"""
         if final_score >= self.confidence_thresholds['high_trust']:
             return 'high_trust'
         elif final_score >= self.confidence_thresholds['medium_trust']:
@@ -362,8 +546,8 @@ class LecturerDecisionEngine:
         
         return should_boost
 
-    def needs_external_api(self, query: str, confidence: float, recent_intent: str = None, session_memory: list = None) -> bool:
-        """🚀 NÂNG CẤP: Determine if query should use external API với session memory awareness"""
+    def needs_external_api(self, query: str, final_score: float, recent_intent: str = None, session_memory: list = None) -> bool:
+        """🚀 UPDATED: Determine if query should use external API với adjusted confidence thresholds"""
         query_lower = query.lower()
         
         # ✅ CHECK 1: Direct personal keyword matches (unchanged)
@@ -390,9 +574,10 @@ class LecturerDecisionEngine:
                 intent_confidence = recent_intent.get('confidence', 0)
                 intent_is_personal = intent_name in ['tra_cuu_thong_tin_ca_nhan']
         
-        high_confidence_personal_intent = intent_is_personal and intent_confidence > 0.6
+        # ✅ ADJUSTED: Lower threshold due to capped scores
+        high_confidence_personal_intent = intent_is_personal and intent_confidence > self.external_api_config['context_memory_threshold']
         
-        # 🚀 NEW CHECK 4: Session Memory Context Analysis
+        # 🚀 ENHANCED SESSION MEMORY CONTEXT ANALYSIS (unchanged logic)
         context_suggests_schedule = False
         has_continuation_words = False
         
@@ -419,34 +604,28 @@ class LecturerDecisionEngine:
                 for keyword in self.external_api_config['schedule_continuation_keywords']
             )
         
-        # 🚀 NEW: Context-driven API decision
-        # Nếu có ngữ cảnh lịch trình + từ khóa tiếp tục => rất có thể cần API
+        # 🚀 Context-driven API decision
         context_driven_api_need = context_suggests_schedule and has_continuation_words
         
-        # 🚀 NEW: Smart inference for ambiguous queries
-        # Query ngắn + có time context + có context lịch trình => có thể cần API
+        # 🚀 Smart inference for ambiguous queries
         smart_inference = (
             len(query.split()) <= 5 and 
             has_time_context and 
             context_suggests_schedule
         )
         
-        # ✅ CHECK 5: Other conditions (unchanged)
-        schedule_related_intent = recent_intent in ['tra_cuu_thong_tin_ca_nhan']
-        contextual_schedule_query = has_time_context and schedule_related_intent
-        
-        # 🚀 FINAL DECISION với memory context
+        # ✅ FINAL DECISION với memory context
         needs_api = (
             has_personal_keywords or 
-            contextual_schedule_query or 
+            has_time_context or
             high_confidence_personal_intent or
             context_driven_api_need or  # ✅ NEW
             smart_inference  # ✅ NEW
         )
 
-        # 🚀 ENHANCED LOGGING
-        logger.info(f"🔍 ENHANCED External API check:")
-        logger.info(f"   📝 Query: '{query}' (confidence={confidence:.3f})")
+        # 🚀 ENHANCED LOGGING với adjusted thresholds
+        logger.info(f"🔍 ENHANCED External API check (adjusted thresholds):")
+        logger.info(f"   📝 Query: '{query}' (final_score={final_score:.3f})")
         logger.info(f"   🔑 Direct factors: personal_kw={has_personal_keywords}, time_ctx={has_time_context}")
         logger.info(f"   🧠 Context factors: suggests_schedule={context_suggests_schedule}, continuation_words={has_continuation_words}")
         logger.info(f"   🎯 Enhanced factors: context_driven={context_driven_api_need}, smart_inference={smart_inference}")
@@ -456,21 +635,10 @@ class LecturerDecisionEngine:
 
     def make_decision(self, query, best_candidate, intent_result, session_memory=None, jwt_token=None, document_text=None):
         """
-        🚀 NÂNG CẤP: Enhanced decision making với session memory integration và Document Context Support
-        
-        Args:
-            query (str): User query
-            best_candidate (dict): Best candidate từ hybrid search
-            intent_result (dict): Intent classification result
-            session_memory (list): Session conversation memory
-            jwt_token (str): JWT token for external API
-            document_text (str): Văn bản từ tài liệu được upload (nếu có)
-        
-        Returns:
-            tuple: (decision_type, context, should_respond)
+        🚀 ENHANCED: Decision making với two-stage re-ranking scores và adjusted thresholds
         """
         
-        # 🚀 NEW: ƯU TIÊN HÀNG ĐẦU - Document Context Processing
+        # 🚀 DOCUMENT CONTEXT PRIORITY (unchanged)
         if document_text and document_text.strip():
             logger.info("🏆 DOCUMENT CONTEXT PRIORITY: Document text provided, prioritizing document-based response")
             return 'use_document_context', {
@@ -488,7 +656,7 @@ class LecturerDecisionEngine:
         if intent_name == 'greeting' and intent_confidence > 0.45:
             logger.info("🏆 GREETING PRIORITY: Greeting intent detected, bypassing standard logic.")
             return 'direct_greeting', {
-                'instruction': 'direct_answer_lecturer', # Dùng lại instruction đơn giản
+                'instruction': 'direct_answer_lecturer',
                 'db_answer': 'Chào hỏi lại một cách thân thiện và chuyên nghiệp.',
                 'confidence': intent_confidence,
                 'message': 'Greeting detected, generating a direct greeting response.'
@@ -536,11 +704,11 @@ class LecturerDecisionEngine:
             logger.info("DECISION: Rejecting non-education query on a non-first message without context.")
             return 'reject_non_education', None, False
         
-        # Lấy điểm và phân loại độ tin cậy
-        final_score = best_candidate.get('final_score', 0) if best_candidate else 0
+        # 🚀 CRITICAL: Use final_score from two-stage re-ranking
+        final_score = best_candidate.get('final_score', best_candidate.get('hybrid_score', 0)) if best_candidate else 0
         confidence_level = self.categorize_confidence(final_score)
         
-        # 🚀 ENHANCED: Logic kiểm tra API với session memory
+        # 🚀 ENHANCED: Logic kiểm tra API với session memory và adjusted thresholds
         needs_api = self.needs_external_api(
             query, final_score, intent_result, session_memory
         )
@@ -550,7 +718,6 @@ class LecturerDecisionEngine:
         
         # 🚀 ENHANCED: Ưu tiên logic API với memory context
         if needs_api and has_jwt_token:
-            # ✅ Special handling: Nếu có context memory và query ngắn, ưu tiên API hơn nữa
             if session_memory and len(query.split()) <= 5:
                 logger.info("🚀 CONTEXT PRIORITY: Short query with memory context -> prioritizing API")
             
@@ -561,7 +728,8 @@ class LecturerDecisionEngine:
                 'fallback_qa_answer': best_candidate.get('answer', '') if best_candidate else '',
                 'confidence': final_score,
                 'message': 'Using external API for personal/schedule information',
-                'enhanced_by_context': bool(session_memory)  # ✅ NEW flag
+                'enhanced_by_context': bool(session_memory),
+                'two_stage_reranking_used': best_candidate.get('two_stage_reranking', False) if best_candidate else False
             }, True
         
         elif needs_api and not has_jwt_token:
@@ -570,15 +738,14 @@ class LecturerDecisionEngine:
                 'query': query,
                 'confidence': final_score,
                 'message': 'Personal information requires authentication',
-                'context_suggested': bool(session_memory and len(session_memory) > 0)  # ✅ NEW flag
+                'context_suggested': bool(session_memory and len(session_memory) > 0)
             }, True
         
-        # 🚀 ENHANCED: Kiểm tra nhu cầu làm rõ với context awareness
+        # 🚀 ENHANCED: Kiểm tra nhu cầu làm rõ với adjusted thresholds
         needs_clarification = self.needs_clarification(query, final_score)
         
         # ✅ SPECIAL CASE: Nếu có context memory mạnh, giảm nhu cầu clarification
         if needs_clarification and session_memory and len(session_memory) > 0:
-            # Kiểm tra xem có context schedule không
             has_strong_schedule_context = any(
                 interaction.get('intent_info', {}).get('intent', '') in ['tra_cuu_thong_tin_ca_nhan']
                 for interaction in session_memory[-2:]
@@ -594,7 +761,7 @@ class LecturerDecisionEngine:
                 'confidence': final_score,
                 'instruction': 'clarification_needed',
                 'message': 'Question is too vague, need clarification',
-                'context_available': bool(session_memory and len(session_memory) > 0)  # ✅ NEW flag
+                'context_available': bool(session_memory and len(session_memory) > 0)
             }, True
         
         # Áp dụng generation boost
@@ -611,7 +778,8 @@ class LecturerDecisionEngine:
                 'db_answer': best_candidate.get('answer', '') if best_candidate else '',
                 'confidence': final_score,
                 'message': 'High confidence - use database answer directly',
-                'enhanced_by_context': bool(session_memory)  # ✅ NEW flag
+                'enhanced_by_context': bool(session_memory),
+                'two_stage_reranking_used': best_candidate.get('two_stage_reranking', False) if best_candidate else False
             }
         elif confidence_level == 'medium_trust':
             decision = 'enhance_db_answer'
@@ -621,7 +789,8 @@ class LecturerDecisionEngine:
                 'confidence': final_score,
                 'message': 'Medium confidence - enhance database answer',
                 'generation_boosted': should_boost,
-                'enhanced_by_context': bool(session_memory)  # ✅ NEW flag
+                'enhanced_by_context': bool(session_memory),
+                'two_stage_reranking_used': best_candidate.get('two_stage_reranking', False) if best_candidate else False
             }
         elif confidence_level == 'low_trust':
             decision = 'ask_clarification'
@@ -630,7 +799,7 @@ class LecturerDecisionEngine:
                 'db_answer': best_candidate.get('answer', '') if best_candidate else '',
                 'confidence': final_score,
                 'message': 'Low confidence - ask for clarification',
-                'context_available': bool(session_memory and len(session_memory) > 0)  # ✅ NEW flag
+                'context_available': bool(session_memory and len(session_memory) > 0)
             }
         else:  # no_trust
             decision = 'say_dont_know'
@@ -640,12 +809,12 @@ class LecturerDecisionEngine:
                 'message': 'No relevant information - say dont know'
             }
         
-        logger.info(f"🎯 ENHANCED Hybrid Decision made: {decision} (final_score: {final_score:.3f}, context_enhanced: {bool(session_memory)}, document_context: {bool(document_text)})")
+        logger.info(f"🎯 ENHANCED Hybrid Decision made: {decision} (final_score: {final_score:.3f}, context_enhanced: {bool(session_memory)}, two_stage: {best_candidate.get('two_stage_reranking', False) if best_candidate else False})")
         return decision, context, True
 
 
 class HybridChatbotAI:
-    """🚀 NÂNG CẤP: Enhanced Hybrid Chatbot với Session Memory Integration và Document Context Support"""
+    """🚀 ENHANCED: Hybrid Chatbot với Two-Stage Re-ranking và Adjusted Confidence Management"""
     
     def __init__(self, shared_response_generator):
         # Initialize components với shared response_generator
@@ -653,10 +822,13 @@ class HybridChatbotAI:
         self.intent_classifier = PhoBERTIntentClassifier()
         self.response_generator = shared_response_generator
         self.decision_engine = LecturerDecisionEngine()
-        self.reranker = HybridReRanker()
+        
+        # 🚀 NEW: Replace simple reranker with advanced two-stage reranker
+        self.reranker = AdvancedHybridReRanker(intent_classifier=self.intent_classifier)
+        
         self.conversation_memory = {}
         
-        logger.info("🚀 Enhanced HybridChatbotAI initialized with Session Memory Support, Document Context Support và AUTO-CSV keyword system")
+        logger.info("🚀 Enhanced HybridChatbotAI initialized with Two-Stage Re-ranking, Fine-tuned Model Support và Adjusted Confidence Management")
     
     @property
     def model(self):
@@ -671,7 +843,7 @@ class HybridChatbotAI:
         return self.sbert_retriever.knowledge_data
     
     def get_system_status(self):
-        """🚀 FIXED: Get system status including hybrid features"""
+        """🚀 ENHANCED: Get system status including two-stage re-ranking features"""
         gemini_status = self.response_generator.get_system_status()
         drive_status = drive_service.get_system_status()
         external_api_status = external_api_service.get_system_status()
@@ -697,22 +869,29 @@ class HybridChatbotAI:
             'sbert_model': bool(self.sbert_retriever.model),
             'faiss_index': bool(self.sbert_retriever.index),
             'phobert_available': not self.intent_classifier.fallback_mode,
+            'phobert_fine_tuned': self.intent_classifier.fine_tuned_model is not None,  # 🚀 NEW
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'hybrid_retrieval_reranking_lecturer_with_auto_csv_keywords_and_document_context_support',  # ✅ Updated
+            'mode': 'two_stage_hybrid_retrieval_reranking_with_fine_tuned_model_and_confidence_management',  # 🚀 UPDATED
             'memory_sessions': gemini_status.get('memory_sessions', 0),
             'personalization_sessions': gemini_status.get('personalization_sessions', 0),
             'adaptive_token_range': self.response_generator.token_manager.adaptive_token_range,
-            'confidence_thresholds': self.decision_engine.confidence_thresholds,
-            'hybrid_reranking': {
+            'confidence_thresholds': self.decision_engine.confidence_thresholds,  # 🚀 Show adjusted thresholds
+            'two_stage_reranking': {  # 🚀 NEW section
                 'enabled': True,
+                'cross_encoder_available': self.reranker.cross_encoder_enabled,
+                'stage1_top_k': self.reranker.stage1_top_k,
+                'stage2_top_n': self.reranker.stage2_top_n,
                 'alpha': self.reranker.alpha,
                 'beta': self.reranker.beta,
-                'auto_keyword_mode': True,  # 🚀 NEW
-                'csv_driven_keywords': True  # 🚀 NEW
+                'confidence_capping_enabled': True,  # 🚀 NEW
+                'max_confidence': 1.0  # 🚀 NEW
             },
             'lecturer_features': [
-                'hybrid_retrieval_reranking', 'auto_csv_keyword_generation', 'mega_intent_classification',
+                'two_stage_hybrid_retrieval_reranking', 'cross_encoder_simulation',  # 🚀 NEW
+                'fine_tuned_model_integration', 'model_priority_system',  # 🚀 NEW
+                'confidence_overflow_protection', 'adjusted_confidence_thresholds',  # 🚀 NEW
+                'auto_csv_keyword_generation', 'mega_intent_classification',
                 'semantic_keyword_fusion', 'context_aware_boosting', 'intent_based_reranking', 
                 'clarification_requests', 'department_suggestions', 'formal_addressing', 
                 'enhanced_generation_boost', 'qa_management_integration', 'external_api_integration', 
@@ -728,7 +907,7 @@ class HybridChatbotAI:
             'gemini_status': gemini_status,
             'external_api_status': external_api_status,
             'qa_management_status': qa_management_status,
-            'auto_csv_features': {  # 🚀 NEW section
+            'auto_csv_features': {
                 'enabled': True,
                 'keyword_extraction_from_intent': True,
                 'keyword_extraction_from_question': True,
@@ -737,7 +916,7 @@ class HybridChatbotAI:
                 'auto_keyword_candidates': sum(1 for item in self.knowledge_data if item.get('auto_keywords')),
                 'csv_driven_reranking': True
             },
-            'enhanced_features': {  # ✅ Updated section
+            'enhanced_features': {
                 'session_memory_depth': 3,
                 'context_recency_limit': self.decision_engine.external_api_config['context_recency_limit'],
                 'context_memory_threshold': self.decision_engine.external_api_config['context_memory_threshold'],
@@ -747,10 +926,161 @@ class HybridChatbotAI:
                 'document_context_support': True,
                 'supported_document_formats': ['.pdf', '.docx'],
                 'ocr_integration': True,
-                'auto_csv_keyword_system': True  # 🚀 NEW
+                'auto_csv_keyword_system': True,
+                'fine_tuned_model_support': True,  # 🚀 NEW
+                'confidence_management': True,  # 🚀 NEW
+                'two_stage_reranking': True  # 🚀 NEW
             }
         }
 
+    def process_query(self, query, session_id=None, jwt_token=None, document_text=None):
+        """
+        🚀 ENHANCED: Main query processing với Two-Stage Re-ranking và Confidence Management
+        """
+        start_time = time.time()
+        
+        logger.info(f"👨‍🏫 Processing ENHANCED query with Two-Stage Re-ranking và Confidence Management: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
+        
+        try:
+            # VALIDATE INPUT NGAY TỪ ĐẦU
+            query = self._clean_query(query)
+            if not query:
+                return self._get_empty_query_response_lecturer()
+            
+            # 🚀 Get session memory EARLY để sử dụng trong decision making
+            session_memory = self.get_conversation_context(session_id) if session_id else []
+            logger.info(f"🧠 MEMORY STATUS: {len(session_memory)} interactions in history")
+            
+            # 📄 Log document context nếu có
+            if document_text:
+                doc_length = len(document_text.strip())
+                logger.info(f"📄 DOCUMENT CONTEXT: {doc_length} characters of document text provided")
+            
+            # Kiểm tra query quá ngắn và không hợp lệ
+            if len(query.strip()) < 3 and not self._is_valid_short_query(query):
+                logger.info(f"🚫 EARLY VALIDATION: Query too short and invalid: '{query}'")
+                return {
+                    'response': self._get_personal_short_clarification_response(session_id),
+                    'confidence': 0.1,
+                    'method': 'early_validation_failed',
+                    'decision_type': 'ask_clarification',
+                    'processing_time': time.time() - start_time,
+                    'is_education': True,
+                    'lecturer_optimized': True,
+                    'early_validation_triggered': True,
+                    'session_memory_used': bool(session_memory),
+                    'document_context_used': bool(document_text),
+                    'two_stage_reranking_used': False
+                }
+            
+            # Get intent and entities
+            intent_result = self.intent_classifier.classify_intent(query)
+            entities = self.intent_classifier.extract_entities(query)
+            
+            # 🚀 ENHANCED: Two-Stage Hybrid Retrieval & Re-ranking
+            # Stage 1: Get more candidates for re-ranking
+            candidates = self.sbert_retriever.semantic_search_top_k(query, top_k=self.reranker.stage1_top_k)
+            
+            if not candidates:
+                logger.warning("⚠️ No candidates found from semantic search")
+                return self._get_no_match_response()
+            
+            # 🚀 Stage 2: Two-stage re-ranking với confidence management
+            reranked_candidates = self.reranker.rerank(candidates, intent_result, query)
+            
+            if not reranked_candidates:
+                logger.warning("⚠️ No candidates after two-stage re-ranking")
+                return self._get_no_match_response()
+            
+            # Get best candidate after two-stage re-ranking
+            best_candidate = reranked_candidates[0]
+            
+            # 🚀 CRITICAL: Ensure final_score is capped at 1.0
+            final_score = best_candidate.get('final_score', best_candidate.get('hybrid_score', 0))
+            final_score = min(1.0, final_score)
+            best_candidate['final_score'] = final_score
+            
+            logger.info(f"🎯 Best candidate after two-stage re-ranking: final_score={final_score:.3f}")
+            
+            # 🚀 ENHANCED DECISION MAKING với session memory, document context và adjusted thresholds
+            decision_type, gemini_context, should_respond = self.decision_engine.make_decision(
+                query, best_candidate, intent_result, session_memory, jwt_token, document_text
+            )
+            
+            # Execute decision
+            if not should_respond:
+                response_text = self._get_personal_out_of_scope_response(session_id)
+                method = 'rejected_non_education'
+            else:
+                # 🚀 CRITICAL: Execute decision với Graceful Degradation
+                response_text = self._execute_lecturer_decision_with_fallback(
+                    decision_type, query, gemini_context, intent_result, entities, session_id
+                )
+                method = decision_type
+            
+            # 🚀 ENHANCED: Update memory với richer context information
+            if session_id and should_respond:
+                self._update_enhanced_memory(
+                    session_id, query, intent_result, 
+                    final_score, 
+                    decision_type, should_respond, 
+                    gemini_context,
+                    document_text
+                )
+            
+            processing_time = time.time() - start_time
+            
+            return {
+                'response': response_text,
+                'confidence': final_score,
+                'method': method,
+                'decision_type': decision_type,
+                'intent': intent_result,
+                'sources': self._format_sources(reranked_candidates[:2]),
+                'entities': entities,
+                'processing_time': processing_time,
+                'is_education': gemini_context is not None,
+                'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
+                'lecturer_optimized': True,
+                'reference_links': best_candidate.get('reference_links', []),  # ✅ PRESERVED
+                'external_api_used': decision_type == 'use_external_api',
+                'two_stage_reranking_used': best_candidate.get('two_stage_reranking', False),  # 🚀 NEW
+                'session_memory_used': bool(session_memory),
+                'enhanced_by_context': gemini_context.get('enhanced_by_context', False) if gemini_context else False,
+                'graceful_degradation_used': False,
+                'document_context_used': bool(document_text),
+                'document_context_priority': decision_type == 'use_document_context',
+                'enhanced_by_document': gemini_context.get('enhanced_by_document', False) if gemini_context else False,
+                'fine_tuned_model_used': intent_result.get('fine_tuned_model_used', False),  # 🚀 NEW
+                'confidence_capped': final_score == 1.0 and best_candidate.get('confidence_capped', False),  # 🚀 NEW
+                'reranking_stats': {  # 🚀 ENHANCED
+                    'stage1_score': best_candidate.get('stage1_score', 0),
+                    'semantic_score': best_candidate.get('semantic_score', 0),
+                    'keyword_score': best_candidate.get('keyword_score', 0),
+                    'context_boost': best_candidate.get('context_boost', 0),
+                    'stage2_score': best_candidate.get('stage2_score', 0),
+                    'final_score': final_score,
+                    'cross_encoder_used': best_candidate.get('two_stage_reranking', False)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Enhanced hybrid processing error: {str(e)}")
+            return {
+                'response': self._get_personal_error_response(session_id),
+                'confidence': 0.0,
+                'method': 'error_fallback',
+                'processing_time': time.time() - start_time,
+                'error': str(e),
+                'session_memory_used': bool(session_memory) if 'session_memory' in locals() else False,
+                'document_context_used': bool(document_text) if 'document_text' in locals() else False,
+                'graceful_degradation_used': True,
+                'two_stage_reranking_used': False
+            }
+
+    # ✅ Keep all existing methods unchanged to preserve functionality
+    # (All other methods remain the same - mic functionality, reference_links, etc.)
+    
     def _is_valid_short_query(self, query):
         """Kiểm tra query ngắn có hợp lệ không"""
         if not query:
@@ -779,165 +1109,19 @@ class HybridChatbotAI:
                 return True
         
         return False
-    
-    def process_query(self, query, session_id=None, jwt_token=None, document_text=None):
-        """
-        🚀 NÂNG CẤP: Main query processing với Enhanced Session Memory Integration và Document Context Support
-        
-        Args:
-            query (str): User query
-            session_id (str): Session ID cho conversation memory
-            jwt_token (str): JWT token cho external API
-            document_text (str): Văn bản từ tài liệu được upload (nếu có)
-        
-        Returns:
-            dict: Processing result with enhanced features
-        """
-        start_time = time.time()
-        
-        logger.info(f"👨‍🏫 Processing ENHANCED hybrid query with Document Context Support: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
-        
-        try:
-            # VALIDATE INPUT NGAY TỪ ĐẦU
-            query = self._clean_query(query)
-            if not query:
-                return self._get_empty_query_response_lecturer()
-            
-            # 🚀 NEW: Get session memory EARLY để sử dụng trong decision making
-            session_memory = self.get_conversation_context(session_id) if session_id else []
-            logger.info(f"🧠 MEMORY STATUS: {len(session_memory)} interactions in history")
-            
-            # 📄 NEW: Log document context nếu có
-            if document_text:
-                doc_length = len(document_text.strip())
-                logger.info(f"📄 DOCUMENT CONTEXT: {doc_length} characters of document text provided")
-            
-            # Kiểm tra query quá ngắn và không hợp lệ
-            if len(query.strip()) < 3 and not self._is_valid_short_query(query):
-                logger.info(f"🚫 EARLY VALIDATION: Query too short and invalid: '{query}'")
-                return {
-                    'response': self._get_personal_short_clarification_response(session_id),
-                    'confidence': 0.1,
-                    'method': 'early_validation_failed',
-                    'decision_type': 'ask_clarification',
-                    'processing_time': time.time() - start_time,
-                    'is_education': True,
-                    'lecturer_optimized': True,
-                    'early_validation_triggered': True,
-                    'session_memory_used': bool(session_memory),
-                    'document_context_used': bool(document_text)  # ✅ NEW
-                }
-            
-            # Get intent and entities
-            intent_result = self.intent_classifier.classify_intent(query)
-            entities = self.intent_classifier.extract_entities(query)
-            
-            # HYBRID RETRIEVAL & RE-RANKING
-            candidates = self.sbert_retriever.semantic_search_top_k(query, top_k=5)
-            
-            if not candidates:
-                logger.warning("⚠️ No candidates found from semantic search")
-                return self._get_no_match_response()
-            
-            # Re-rank candidates using hybrid approach
-            reranked_candidates = self.reranker.rerank(candidates, intent_result)
-            
-            if not reranked_candidates:
-                logger.warning("⚠️ No candidates after re-ranking")
-                return self._get_no_match_response()
-            
-            # Get best candidate after re-ranking
-            best_candidate = reranked_candidates[0]
-            
-            logger.info(f"🎯 Best candidate after re-ranking: final_score={best_candidate.get('final_score', 0):.3f}")
-            
-            # 🚀 ENHANCED DECISION MAKING với session memory và document context
-            decision_type, gemini_context, should_respond = self.decision_engine.make_decision(
-                query, best_candidate, intent_result, session_memory, jwt_token, document_text
-            )
-            
-            # Execute decision
-            if not should_respond:
-                response_text = self._get_personal_out_of_scope_response(session_id)
-                method = 'rejected_non_education'
-            else:
-                # 🚀 CRITICAL: Execute decision với Graceful Degradation
-                response_text = self._execute_lecturer_decision_with_fallback(
-                    decision_type, query, gemini_context, intent_result, entities, session_id
-                )
-                method = decision_type
-            
-            # 🚀 ENHANCED: Update memory với richer context information
-            if session_id and should_respond:
-                self._update_enhanced_memory(
-                    session_id, query, intent_result, 
-                    best_candidate.get('final_score', 0), 
-                    decision_type, should_respond, 
-                    gemini_context,  # ✅ NEW: Pass full context
-                    document_text  # 🚀 NEW: Pass document context
-                )
-            
-            processing_time = time.time() - start_time
-            
-            return {
-                'response': response_text,
-                'confidence': best_candidate.get('final_score', 0),
-                'method': method,
-                'decision_type': decision_type,
-                'intent': intent_result,
-                'sources': self._format_sources(reranked_candidates[:2]),
-                'entities': entities,
-                'processing_time': processing_time,
-                'is_education': gemini_context is not None,
-                'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
-                'lecturer_optimized': True,
-                'reference_links': best_candidate.get('reference_links', []),
-                'external_api_used': decision_type == 'use_external_api',
-                'hybrid_reranking_used': True,
-                'session_memory_used': bool(session_memory),  # ✅ NEW
-                'enhanced_by_context': gemini_context.get('enhanced_by_context', False) if gemini_context else False,  # ✅ NEW
-                'graceful_degradation_used': False,  # 🚀 NEW: Will be set by fallback methods
-                'document_context_used': bool(document_text),  # 🚀 NEW
-                'document_context_priority': decision_type == 'use_document_context',  # 🚀 NEW
-                'enhanced_by_document': gemini_context.get('enhanced_by_document', False) if gemini_context else False,  # 🚀 NEW
-                'reranking_stats': {
-                    'semantic_score': best_candidate.get('semantic_score', 0),
-                    'keyword_score': best_candidate.get('keyword_score', 0),
-                    'context_boost': best_candidate.get('context_boost', 0),
-                    'final_score': best_candidate.get('final_score', 0)
-                }
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Enhanced hybrid processing error: {str(e)}")
-            return {
-                'response': self._get_personal_error_response(session_id),
-                'confidence': 0.0,
-                'method': 'error_fallback',
-                'processing_time': time.time() - start_time,
-                'error': str(e),
-                'session_memory_used': bool(session_memory) if 'session_memory' in locals() else False,  # ✅ NEW
-                'document_context_used': bool(document_text) if 'document_text' in locals() else False,  # 🚀 NEW
-                'graceful_degradation_used': True  # 🚀 NEW
-            }
-    
+
     def _execute_lecturer_decision_with_fallback(self, decision_type, query, gemini_context, intent_result, entities, session_id):
-        """
-        🚀 NEW: Execute lecturer decision với Graceful Degradation mechanism
-        
-        Đây là hàm thay thế cho _execute_lecturer_decision gốc, có khả năng fallback
-        khi Gemini API không khả dụng.
-        """
+        """Execute lecturer decision với Graceful Degradation mechanism"""
         logger.info(f"🎯 Executing enhanced hybrid decision với fallback: {decision_type}")
         
-        # 🚀 STEP 1: Check Gemini availability trước
+        # Check Gemini availability trước
         gemini_available = self._check_gemini_availability()
         
         if not gemini_available:
             logger.warning("⚠️ Gemini API không khả dụng - chuyển sang chế độ Graceful Degradation")
             return self._create_fallback_response(decision_type, query, gemini_context, session_id)
         
-        # 🚀 STEP 2: Thử gọi Gemini với error handling
+        # Thử gọi Gemini với error handling
         try:
             response_text = self._execute_lecturer_decision_original(
                 decision_type, query, gemini_context, intent_result, entities, session_id
@@ -953,19 +1137,16 @@ class HybridChatbotAI:
         except Exception as e:
             logger.error(f"❌ Gemini execution failed: {str(e)} - fallback")
             return self._create_fallback_response(decision_type, query, gemini_context, session_id)
-    
+
     def _check_gemini_availability(self):
-        """🚀 NEW: Kiểm tra Gemini API có khả dụng không"""
+        """Check Gemini API có khả dụng không"""
         try:
-            # Kiểm tra response_generator có sẵn không
             if not self.response_generator:
                 return False
             
-            # Kiểm tra key_manager có keys không
             if not hasattr(self.response_generator, 'key_manager') or not self.response_generator.key_manager.keys:
                 return False
             
-            # Thử lấy key
             test_key = self.response_generator.key_manager.get_key()
             if not test_key:
                 return False
@@ -975,23 +1156,17 @@ class HybridChatbotAI:
         except Exception as e:
             logger.error(f"❌ Error checking Gemini availability: {str(e)}")
             return False
-    
+
     def _create_fallback_response(self, decision_type, query, gemini_context, session_id):
-        """
-        🚀 NEW: Tạo fallback response khi Gemini không khả dụng
-        
-        Hàm này tạo response "thô" nhưng vẫn được cá nhân hóa và định dạng tối thiểu.
-        """
+        """Tạo fallback response khi Gemini không khả dụng"""
         personal_address = self._get_personal_address(session_id)
         
         # Lấy raw answer từ database nếu có
         raw_answer = gemini_context.get('db_answer', '') if gemini_context else ''
         
-        # 🚀 NEW: Special handling cho document context
         if decision_type == 'use_document_context':
             document_text = gemini_context.get('document_text', '') if gemini_context else ''
             if document_text:
-                # Tạo response cơ bản từ document
                 return self._create_document_fallback_response(query, document_text, session_id)
         
         if decision_type == 'use_external_api':
@@ -1003,7 +1178,6 @@ class HybridChatbotAI:
         
         elif decision_type in ['use_db_direct', 'enhance_db_answer']:
             if raw_answer and raw_answer.strip():
-                # 🚀 CORE FALLBACK: Format raw database answer với minimal personalization
                 formatted_answer = self._format_raw_database_answer(raw_answer, personal_address)
                 return formatted_answer
             else:
@@ -1019,16 +1193,11 @@ class HybridChatbotAI:
         else:
             logger.warning(f"⚠️ Unknown decision type in fallback: {decision_type}")
             return self._create_generic_fallback(session_id)
-    
+
     def _create_document_fallback_response(self, query, document_text, session_id):
-        """
-        🚀 NEW: Tạo fallback response cho document context
-        
-        Khi Gemini không khả dụng, trả về response cơ bản dựa trên document
-        """
+        """Tạo fallback response cho document context"""
         personal_address = self._get_personal_address(session_id)
         
-        # Lấy đoạn văn bản đầu tiên từ document
         preview_text = document_text[:500] + "..." if len(document_text) > 500 else document_text
         
         return f"""Dạ {personal_address}, em đã nhận được tài liệu mà {personal_address} gửi và tìm thấy thông tin sau:
@@ -1042,19 +1211,16 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
 • Liên hệ bộ phận IT để được hỗ trợ: it@bdu.edu.vn
 
 {personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓"""
-    
+
     def _format_raw_database_answer(self, raw_answer, personal_address):
-        """
-        🚀 FIXED: Format raw database answer với minimal enhancement nhưng vẫn cá nhân hóa
-        """
-        # Clean raw answer
+        """Format raw database answer với minimal enhancement nhưng vẫn cá nhân hóa"""
         clean_answer = raw_answer.strip()
         
-        # ✅ NEW: Remove any existing personalized parts to avoid duplication
+        # Remove any existing personalized parts to avoid duplication
         clean_answer = re.sub(r'^(dạ\s+(thầy|cô|giảng viên)[^,]*,?\s*)', '', clean_answer, flags=re.IGNORECASE)
         clean_answer = re.sub(r'^(xin chào|chào)[^.!?]*[.!?]\s*', '', clean_answer, flags=re.IGNORECASE)
         
-        # ✅ NEW: Remove any existing endings to avoid duplication
+        # Remove any existing endings to avoid duplication
         ending_patterns = [
             r'\s*(thầy|cô|giảng viên)\s+[^.!?]*có cần.*?hỗ trợ.*?thêm.*?gì.*?không.*?ạ\?.*$',
             r'\s*🎓.*$',
@@ -1075,14 +1241,14 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
         if not personalized_response.strip().endswith(('?', '!', '.')):
             personalized_response += '.'
         
-        # Add standard closing - CHỈ MỘT LẦN
+        # Add standard closing
         personalized_response += f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓'
         
         logger.info(f"✅ FALLBACK: Formatted raw answer for {personal_address}")
         return personalized_response
-    
+
     def _create_external_api_fallback(self, gemini_context, session_id):
-        """🚀 NEW: Fallback cho external API calls"""
+        """Fallback cho external API calls"""
         personal_address = self._get_personal_address(session_id)
         
         fallback_qa = gemini_context.get('fallback_qa_answer', '') if gemini_context else ''
@@ -1100,9 +1266,9 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
 • Liên hệ bộ phận IT: it@bdu.edu.vn
 
 {personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓"""
-    
+
     def _create_authentication_fallback(self, session_id, has_context=False):
-        """🚀 NEW: Fallback cho authentication required"""
+        """Fallback cho authentication required"""
         personal_address = self._get_personal_address(session_id)
         
         if has_context:
@@ -1123,9 +1289,9 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
 • Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
 
 {personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎓"""
-    
+
     def _create_clarification_fallback(self, query, session_id, context_available=False):
-        """🚀 NEW: Fallback cho clarification requests"""
+        """Fallback cho clarification requests"""
         personal_address = self._get_personal_address(session_id)
         
         # Analyze query để tạo clarification cụ thể hơn
@@ -1148,9 +1314,9 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
             return f"Dạ {personal_address}, dựa trên cuộc trò chuyện trước, để em hỗ trợ chính xác hơn, {personal_address} có thể cung cấp thêm chi tiết không ạ? 🎓"
         else:
             return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
-    
+
     def _create_dont_know_fallback(self, query, session_id):
-        """🚀 NEW: Fallback cho don't know responses"""
+        """Fallback cho don't know responses"""
         personal_address = self._get_personal_address(session_id)
         query_lower = query.lower()
         
@@ -1172,29 +1338,25 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
             contact = "info@bdu.edu.vn"
         
         return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ {dept} qua email {contact} để được hỗ trợ chi tiết ạ. 🎓"
-    
+
     def _create_no_answer_fallback(self, session_id):
-        """🚀 NEW: Fallback khi không có raw answer từ database"""
+        """Fallback khi không có raw answer từ database"""
         personal_address = self._get_personal_address(session_id)
         return f"Dạ {personal_address}, hiện tại em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ phòng ban liên quan để được hỗ trợ chi tiết ạ. 🎓"
-    
+
     def _create_generic_fallback(self, session_id):
-        """🚀 NEW: Generic fallback cho các trường hợp không xác định"""
+        """Generic fallback cho các trường hợp không xác định"""
         personal_address = self._get_personal_address(session_id)
         return f"Dạ {personal_address}, em sẵn sàng hỗ trợ {personal_address} về các vấn đề liên quan đến BDU. {personal_address.title()} có thể chia sẻ cụ thể hơn về điều cần hỗ trợ không ạ? 🎓"
-    
+
     def _execute_lecturer_decision_original(self, decision_type, query, gemini_context, intent_result, entities, session_id):
-        """
-        🚀 NEW: Wrapper cho logic gốc của _execute_lecturer_decision
-        
-        Đây là phiên bản gốc, được gọi trước khi fallback
-        """
+        """Wrapper cho logic gốc của _execute_lecturer_decision"""
         
         logger.info(f"🎯 Executing enhanced hybrid decision: {decision_type}")
         
         response_text = ""
         
-        # 🚀 NEW: Xử lý document context
+        # 🚀 Xử lý document context
         if decision_type == 'use_document_context':
             response = self.response_generator.generate_response(
                 query=query, context=gemini_context, intent_info=intent_result, entities=entities, session_id=session_id
@@ -1295,28 +1457,28 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
 
         print("--- END DEBUGGING (No override applied) ---\n")
         return response_text
-    
+
     def _get_personal_address(self, session_id):
         """Helper method để lấy personal address từ response generator"""
         if hasattr(self.response_generator, '_get_personal_address'):
             return self.response_generator._get_personal_address(session_id)
-        return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
-    
+        return "giảng viên"
+
     def _get_personal_short_clarification_response(self, session_id):
         """Response for short invalid queries với personalization"""
         personal_address = self._get_personal_address(session_id)
         return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
-    
+
     def _get_personal_out_of_scope_response(self, session_id):
         """Out of scope response với personalization"""
         personal_address = self._get_personal_address(session_id)
         return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về trường không ạ?"
-    
+
     def _get_personal_error_response(self, session_id):
         """Error response với personalization"""
         personal_address = self._get_personal_address(session_id)
         return f"Dạ {personal_address}, em gặp khó khăn kỹ thuật. {personal_address.title()} có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓"
-    
+
     def _get_no_match_response(self):
         """Response when no matches found"""
         return {
@@ -1325,10 +1487,10 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
             'method': 'no_match_hybrid',
             'decision_type': 'say_dont_know',
             'processing_time': 0.01,
-            'hybrid_reranking_used': True,
-            'graceful_degradation_used': True  # 🚀 NEW
+            'two_stage_reranking_used': False,
+            'graceful_degradation_used': True
         }
-    
+
     def _handle_external_api_decision(self, query, gemini_context, intent_result, entities, session_id):
         """Handle decision to use external API với gender support"""
         try:
@@ -1365,7 +1527,7 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
             logger.error(f"❌ Error handling external API decision: {str(e)}")
             personal_address = self._get_personal_address(session_id)
             return f"Dạ {personal_address}, em gặp khó khăn khi truy xuất thông tin cá nhân. {personal_address.title()} có thể thử lại sau hoặc liên hệ bộ phận IT để được hỗ trợ ạ. 🎓"
-    
+
     def _handle_authentication_required(self, session_id):
         """Handle case where external API is needed but no token provided"""
         personal_address = self._get_personal_address(session_id)
@@ -1377,7 +1539,7 @@ Tuy nhiên, em gặp khó khăn kỹ thuật khi phân tích chi tiết. {person
 • Liên hệ bộ phận IT nếu gặp khó khăn: it@bdu.edu.vn
 
 Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch giảng dạy nhé! 🎓"""
-    
+
     def _get_external_api_fallback(self, api_result, session_id):
         """Get fallback response when external API data is available but Gemini fails"""
         lecturer_info = api_result.get('lecturer_info', {})
@@ -1412,7 +1574,7 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
 • Thử hỏi lại với câu hỏi cụ thể hơn
 
 {personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
-    
+
     def _get_external_api_error_response(self, error_type, session_id, fallback_qa=''):
         """Get appropriate error response based on error type với gender support"""
         personal_address = self._get_personal_address(session_id)
@@ -1452,7 +1614,7 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
 • Liên hệ bộ phần IT: it@bdu.edu.vn
 
 {personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
-    
+
     def _get_default_dont_know_response(self, query, session_id):
         """Default don't know response với department suggestion và gender support"""
         personal_address = self._get_personal_address(session_id)
@@ -1466,7 +1628,7 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
             return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ Phòng Nghiên cứu - Hợp tác qua email nghiencuu@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
         else:
             return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ phòng ban liên quan qua email info@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓"
-    
+
     def _clean_query(self, query):
         """Clean and prepare query for lecturers"""
         if not query:
@@ -1477,9 +1639,9 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         query = re.sub(r'[!]{2,}', '!', query)
         
         return query
-    
+
     def _update_enhanced_memory(self, session_id, query, intent_result, confidence, decision_type=None, was_education=True, gemini_context=None, document_text=None):
-        """🚀 NÂNG CẤP: Enhanced memory update với richer context information và Document Context Support"""
+        """🚀 ENHANCED: Enhanced memory update với richer context information và Document Context Support"""
         if session_id not in self.conversation_memory:
             self.conversation_memory[session_id] = []
         
@@ -1494,14 +1656,18 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
             'was_education_related': was_education,
             'is_education_query': self.decision_engine.is_education_related(query),
             'hybrid_processed': True,
-            # ✅ NEW: Additional context fields
+            # ✅ ENHANCED: Additional context fields
             'enhanced_by_context': gemini_context.get('enhanced_by_context', False) if gemini_context else False,
             'external_api_used': decision_type == 'use_external_api',
             'generation_boosted': gemini_context.get('generation_boosted', False) if gemini_context else False,
             'query_length': len(query.split()),
             'intent_confidence': intent_result.get('confidence', 0) if intent_result else 0,
-            'graceful_degradation_used': gemini_context.get('graceful_degradation_used', False) if gemini_context else False,  # 🚀 NEW
-            # 🚀 NEW: Document context fields
+            'graceful_degradation_used': gemini_context.get('graceful_degradation_used', False) if gemini_context else False,
+            # 🚀 ENHANCED: Two-stage re-ranking fields
+            'two_stage_reranking_used': gemini_context.get('two_stage_reranking_used', False) if gemini_context else False,
+            'confidence_capped': confidence == 1.0,
+            'fine_tuned_model_used': intent_result.get('fine_tuned_model_used', False) if intent_result else False,
+            # 🚀 Document context fields
             'document_context_used': bool(document_text),
             'document_context_priority': decision_type == 'use_document_context',
             'enhanced_by_document': gemini_context.get('enhanced_by_document', False) if gemini_context else False,
@@ -1513,8 +1679,8 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         # Keep only recent history (increased to 15 for better context)
         self.conversation_memory[session_id] = self.conversation_memory[session_id][-15:]
         
-        logger.info(f"🧠 ENHANCED Memory updated for session {session_id}: {len(self.conversation_memory[session_id])} total interactions (document_context: {bool(document_text)})")
-    
+        logger.info(f"🧠 ENHANCED Memory updated for session {session_id}: {len(self.conversation_memory[session_id])} total interactions (two_stage: {gemini_context.get('two_stage_reranking_used', False) if gemini_context else False}, document_context: {bool(document_text)})")
+
     def _get_empty_query_response_lecturer(self):
         """Response for empty queries from lecturers"""
         return {
@@ -1522,18 +1688,18 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
             'confidence': 0.9,
             'method': 'empty_query_lecturer',
             'processing_time': 0.01,
-            'hybrid_reranking_used': False,
-            'graceful_degradation_used': False  # 🚀 NEW
+            'two_stage_reranking_used': False,
+            'graceful_degradation_used': False
         }
-    
+
     def get_conversation_context(self, session_id):
         """Get conversation context for a lecturer session"""
         return self.conversation_memory.get(session_id, [])
-    
+
     def get_conversation_memory(self, session_id):
         """Get conversation memory from Gemini service"""
         return self.response_generator.get_conversation_memory(session_id)
-    
+
     def clear_conversation_memory(self, session_id=None):
         """Clear conversation memory"""
         if session_id:
@@ -1563,7 +1729,7 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
                 return f"Dạ {personal_address}, để em hỗ trợ chính xác về {topic}, {personal_address} có thể nói rõ hơn về nội dung cụ thể cần hỗ trợ không ạ? 🎓"
         
         return f"Dạ {personal_address}, để em hỗ trợ chính xác nhất, {personal_address} có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓"
-    
+
     def reload_after_qa_update(self):
         """Reload knowledge base after QA Management updates"""
         logger.info("🔄 Reloading hybrid knowledge base after QA Management update...")
@@ -1577,10 +1743,10 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         if self.sbert_retriever.model and self.sbert_retriever.knowledge_data:
             self.sbert_retriever.build_faiss_index()
         
-        logger.info("✅ Hybrid knowledge base reloaded successfully with AUTO-CSV keywords")
-    
+        logger.info("✅ Hybrid knowledge base reloaded successfully with Two-Stage Re-ranking và AUTO-CSV keywords")
+
     def _format_sources(self, results):
-        """Format sources for display with hybrid scores"""
+        """Format sources for display with two-stage re-ranking scores"""
         sources = []
         for result in results:
             if result and result.get('final_score', 0) > 0.2:
@@ -1589,19 +1755,22 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
                     'category': result.get('category', 'Giảng viên'),
                     'final_score': result.get('final_score', 0),
                     'semantic_score': result.get('semantic_score', 0),
-                    'keyword_score': result.get('keyword_score', 0)
+                    'keyword_score': result.get('keyword_score', 0),
+                    'stage1_score': result.get('stage1_score', 0),  # 🚀 NEW
+                    'stage2_score': result.get('stage2_score', 0),  # 🚀 NEW
+                    'two_stage_reranking': result.get('two_stage_reranking', False)  # 🚀 NEW
                 })
         return sources
 
 
-# ChatbotAI class with AUTO-CSV keyword generation system
+# ✅ PRESERVED: ChatbotAI class with AUTO-CSV keyword generation system và reference_links support
 class ChatbotAI:
     def __init__(self, shared_response_generator):
         self.model = None
         self.index = None
         self.knowledge_data = []
         self.vietnamese_restorer = shared_response_generator.vietnamese_restorer
-        self.link_mapping = {}
+        self.link_mapping = {}  # ✅ PRESERVED: Reference links support
         self.cached_data = None
         self.cache_timestamp = 0
         
@@ -1622,9 +1791,9 @@ class ChatbotAI:
         except Exception as e:
             logger.error(f"Error loading models: {str(e)}")
             self.model = None
-    
+
     def load_link_mapping(self):
-        """Load link mapping với reduced logging"""
+        """✅ PRESERVED: Load link mapping với reduced logging"""
         try:
             link_csv_path = os.path.join(settings.BASE_DIR, 'data', 'link.csv')
             logger.info(f"🔗 Loading reference links from: {link_csv_path}")
@@ -1648,9 +1817,9 @@ class ChatbotAI:
         except Exception as e:
             logger.error(f"❌ Error loading link mapping: {str(e)}")
             self.link_mapping = {}
-    
+
     def get_reference_links(self, qa_item):
-        """Get reference links với reduced logging"""
+        """✅ PRESERVED: Get reference links với reduced logging"""
         reference_links = []
         
         stt_value = qa_item.get('STT', '')
@@ -1678,9 +1847,9 @@ class ChatbotAI:
         return reference_links
 
     def load_knowledge_base(self):
-        """🚀 COMPLETELY REWRITTEN: Auto-generate keywords from CSV data"""
+        """🚀 ENHANCED: Auto-generate keywords from CSV data với fine-tuned model support"""
         try:
-            self.load_link_mapping()
+            self.load_link_mapping()  # ✅ PRESERVED: Load reference links
             
             # 🚀 STEP 1: Load from QA Management database (highest priority) với auto-keywords
             db_qa_entries = []
@@ -1788,12 +1957,12 @@ class ChatbotAI:
             # 🚀 LOGGING: Enhanced stats về auto-keywords
             total_with_auto_keywords = sum(1 for item in self.knowledge_data if item.get('auto_keywords'))
             
-            logger.info(f"✅ AUTO-CSV SYSTEM: Total loaded: {len(self.knowledge_data)} knowledge entries")
+            logger.info(f"✅ AUTO-CSV SYSTEM với Two-Stage Re-ranking: Total loaded: {len(self.knowledge_data)} knowledge entries")
             logger.info(f"   📊 QA Management: {len(db_qa_entries)} entries")
             logger.info(f"   📊 CSV files: {len(csv_knowledge)} entries") 
             logger.info(f"   📊 Legacy DB: {len(db_knowledge)} entries")
             logger.info(f"   🔑 Entries with auto-keywords: {total_with_auto_keywords}/{len(self.knowledge_data)}")
-            logger.info(f"   🔗 Reference links available: {len(self.link_mapping)} links")
+            logger.info(f"   🔗 Reference links available: {len(self.link_mapping)} links")  # ✅ PRESERVED
             
         except Exception as e:
             logger.error(f"Error loading knowledge with auto-keywords: {str(e)}")
@@ -1929,7 +2098,7 @@ class ChatbotAI:
         
         logger.info(f"✅ Using fallback knowledge with auto-keywords: {len(fallback_data)} entries")
         return fallback_data
-    
+
     def build_faiss_index(self):
         """Build FAISS index for fast retrieval"""
         try:
@@ -1942,14 +2111,14 @@ class ChatbotAI:
             faiss.normalize_L2(embeddings)
             self.index.add(embeddings.astype('float32'))
             
-            logger.info(f"✅ FAISS index built with {len(questions)} entries for AUTO-CSV system")
+            logger.info(f"✅ FAISS index built with {len(questions)} entries for Two-Stage Re-ranking System")
             
         except Exception as e:
             logger.error(f"Error building FAISS index: {str(e)}")
             self.index = None
-    
-    def semantic_search_top_k(self, query, top_k=5):
-        """Enhanced semantic search returning top-k candidates"""
+
+    def semantic_search_top_k(self, query, top_k=20):
+        """🚀 ENHANCED: Semantic search returning more candidates for two-stage re-ranking"""
         try:
             if not self.model or not self.index:
                 logger.warning("⚠️ Model or index not available, falling back to keyword search")
@@ -1960,13 +2129,13 @@ class ChatbotAI:
             if self.vietnamese_restorer and not self.vietnamese_restorer.has_vietnamese_accents(query):
                 restored_query = self.vietnamese_restorer.restore_vietnamese_tone(query)
                 if restored_query != query:
-                    logger.info(f"🎯 Using restored query for hybrid search: '{query}' -> '{restored_query}'")
+                    logger.info(f"🎯 Using restored query for two-stage retrieval: '{query}' -> '{restored_query}'")
                     query = restored_query
             
             query_embedding = self.model.encode([query])
             faiss.normalize_L2(query_embedding)
             
-            # Get top_k results instead of just 1
+            # Get top_k results for two-stage re-ranking
             scores, indices = self.index.search(query_embedding.astype('float32'), min(top_k, len(self.knowledge_data)))
             
             candidates = []
@@ -1975,20 +2144,20 @@ class ChatbotAI:
                     candidate = self.knowledge_data[idx].copy()
                     candidate['semantic_score'] = float(score)
                     candidate['similarity'] = float(score)  # Backward compatibility
-                    candidate['reference_links'] = self.get_reference_links(candidate)
+                    candidate['reference_links'] = self.get_reference_links(candidate)  # ✅ PRESERVED
                     # 🚀 auto_keywords is already included in candidate from knowledge_data
                     candidates.append(candidate)
             
-            logger.info(f"🔍 Semantic search found {len(candidates)} candidates for AUTO-CSV hybrid re-ranking")
+            logger.info(f"🔍 Semantic search found {len(candidates)} candidates for Two-Stage Re-ranking")
             
             return candidates
             
         except Exception as e:
             logger.error(f"Semantic search error: {str(e)}")
             return self.keyword_search_top_k(query, top_k)
-    
-    def keyword_search_top_k(self, query, top_k=5):
-        """🚀 UPDATED: Fallback keyword search using auto-generated keywords"""
+
+    def keyword_search_top_k(self, query, top_k=20):
+        """🚀 ENHANCED: Fallback keyword search using auto-generated keywords"""
         candidates = []
         query_lower = query.lower()
         query_words = set(query_lower.split())
@@ -2015,7 +2184,7 @@ class ChatbotAI:
                 candidate = item.copy()
                 candidate['similarity'] = similarity
                 candidate['semantic_score'] = similarity
-                candidate['reference_links'] = self.get_reference_links(candidate)
+                candidate['reference_links'] = self.get_reference_links(candidate)  # ✅ PRESERVED
                 candidates.append(candidate)
         
         # Sort by similarity
@@ -2023,7 +2192,7 @@ class ChatbotAI:
         
         logger.info(f"🔍 AUTO-CSV Keyword search found {len(candidates[:top_k])} candidates")
         return candidates[:top_k]
-    
+
     def _format_sources(self, results):
         """Format sources for display"""
         sources = []
@@ -2033,19 +2202,19 @@ class ChatbotAI:
                     'question': result['question'],
                     'category': result.get('category', 'Giảng viên'),
                     'similarity': result.get('semantic_score', 0),
-                    'auto_keywords_used': bool(result.get('auto_keywords'))  # 🚀 NEW field
+                    'auto_keywords_used': bool(result.get('auto_keywords'))
                 })
         return sources
 
 
 class BDUChatbotService:
-    """🚀 NÂNG CẤP: Enhanced Primary Service Layer với Auto-CSV Keyword System"""
+    """🚀 ENHANCED: Primary Service Layer với Two-Stage Re-ranking và Fine-tuned Model Support"""
     
     def __init__(self):
         # Tạo shared response_generator trước tiên
         self.response_generator = GeminiResponseGenerator()
         
-        # Truyền shared response_generator vào hybrid_chatbot
+        # Truyền shared response_generator vào enhanced hybrid_chatbot
         self.hybrid_chatbot = HybridChatbotAI(shared_response_generator=self.response_generator)
         
         self.intent_classifier = PhoBERTIntentClassifier()
@@ -2075,7 +2244,7 @@ class BDUChatbotService:
                 'tuần sau', 'tuan sau', 'cuối tuần', 'cuoi tuan', 'đầu tuần', 'dau tuan'
             ],
             'schedule_intent_names': [
-                'tra_cuu_thong_tin_ca_nhan'  # 🚀 UPDATED: Using simplified mega-intent
+                'tra_cuu_thong_tin_ca_nhan'  # 🚀 Using simplified mega-intent
             ],
             'context_continuation_keywords': [
                 'còn', 'con', 'thêm', 'them', 'nữa', 'nua', 'khác', 'khac', 
@@ -2083,13 +2252,13 @@ class BDUChatbotService:
                 'thế còn', 'the con', 'vậy còn', 'vay con', 'còn gì', 'con gi'
             ],
             'memory_lookback_limit': 3,
-            'schedule_intent_confidence_threshold': 0.6
+            'schedule_intent_confidence_threshold': 0.6  # ✅ Adjusted for capped scores
         }
         
-        logger.info("🚀 Enhanced BDUChatbotService initialized with AUTO-CSV Keyword System")
-    
+        logger.info("🚀 Enhanced BDUChatbotService initialized with Two-Stage Re-ranking, Fine-tuned Model Support và Adjusted Confidence Management")
+
     def _needs_external_api(self, query: str, intent_result: dict, session_memory: list = None) -> bool:
-        """🚀 NÂNG CẤP: Enhanced API need detection với session memory context"""
+        """🚀 ENHANCED: API need detection với session memory context và adjusted thresholds"""
         if not query:
             return False
         
@@ -2111,13 +2280,13 @@ class BDUChatbotService:
         intent_name = intent_result.get('intent', '')
         is_schedule_intent = intent_name in self.api_priority_config['schedule_intent_names']
         
-        # ✅ CHECK 4: High confidence personal intent
+        # ✅ CHECK 4: High confidence personal intent - adjusted threshold
         intent_confidence = intent_result.get('confidence', 0)
         high_confidence_personal = (
-            is_schedule_intent and intent_confidence > 0.7
+            is_schedule_intent and intent_confidence > self.api_priority_config['schedule_intent_confidence_threshold']
         )
         
-        # 🚀 NEW CHECK 5: Session Memory Context Analysis
+        # 🚀 SESSION MEMORY CONTEXT ANALYSIS (unchanged logic)
         context_suggests_api = False
         has_continuation_words = False
         
@@ -2147,7 +2316,7 @@ class BDUChatbotService:
                 for keyword in self.api_priority_config['context_continuation_keywords']
             )
         
-        # 🚀 NEW: Context-driven API decisions
+        # 🚀 Context-driven API decisions
         context_driven_api = context_suggests_api and has_continuation_words
         smart_short_query_api = (
             len(query.split()) <= 5 and 
@@ -2160,12 +2329,12 @@ class BDUChatbotService:
             has_personal_keywords or 
             has_time_context or 
             high_confidence_personal or
-            context_driven_api or  # 🚀 NEW
-            smart_short_query_api  # 🚀 NEW
+            context_driven_api or
+            smart_short_query_api
         )
         
-        # 🚀 ENHANCED LOGGING
-        logger.info(f"🔍 ENHANCED API Priority Check:")
+        # 🚀 ENHANCED LOGGING với adjusted thresholds
+        logger.info(f"🔍 ENHANCED API Priority Check (adjusted for capped scores):")
         logger.info(f"   📝 Query: '{query[:50]}...' ({len(query.split())} words)")
         logger.info(f"   🔑 Direct: personal_kw={has_personal_keywords}, time_ctx={has_time_context}")
         logger.info(f"   🎯 Intent: is_schedule={is_schedule_intent}, high_conf={high_confidence_personal}")
@@ -2174,7 +2343,7 @@ class BDUChatbotService:
         logger.info(f"   ✅ Final: needs_api={needs_api}")
         
         return needs_api
-    
+
     def _handle_external_api_call(self, query: str, intent_result: dict, entities: dict, session_id: str, jwt_token: str) -> dict:
         """Handle external API call and response processing"""
         try:
@@ -2212,10 +2381,11 @@ class BDUChatbotService:
                     'is_education': True,
                     'lecturer_optimized': True,
                     'external_api_used': True,
-                    'hybrid_reranking_used': False,  # API call bypassed hybrid system
-                    'api_priority_activated': True,   # Flag showing API priority worked
-                    'enhanced_by_context': True,  # 🚀 NEW flag
-                    'graceful_degradation_used': False  # 🚀 NEW flag
+                    'two_stage_reranking_used': False,  # API call bypassed hybrid system
+                    'api_priority_activated': True,
+                    'enhanced_by_context': True,
+                    'graceful_degradation_used': False,
+                    'fine_tuned_model_used': intent_result.get('fine_tuned_model_used', False)  # 🚀 NEW
                 }
             
             else:
@@ -2230,7 +2400,7 @@ class BDUChatbotService:
                     'external_api_used': True,
                     'api_error': api_result.get('error', ''),
                     'api_priority_activated': True,
-                    'graceful_degradation_used': True  # 🚀 NEW flag
+                    'graceful_degradation_used': True
                 }
                 
         except Exception as e:
@@ -2243,11 +2413,11 @@ class BDUChatbotService:
                 'processing_time': 0.2,
                 'error': str(e),
                 'api_priority_activated': True,
-                'graceful_degradation_used': True  # 🚀 NEW flag
+                'graceful_degradation_used': True
             }
-    
+
     def _handle_authentication_required(self, session_id: str, has_context: bool = False) -> dict:
-        """🚀 NÂNG CẤP: Handle authentication với context awareness"""
+        """🚀 Handle authentication với context awareness"""
         personal_address = self._get_personal_address(session_id)
         
         if has_context:
@@ -2280,32 +2450,23 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
             'external_api_used': False,
             'api_priority_activated': True,
             'authentication_required': True,
-            'context_aware': has_context,  # 🚀 NEW flag
-            'graceful_degradation_used': False  # 🚀 NEW flag
+            'context_aware': has_context,
+            'graceful_degradation_used': False
         }
-    
+
     def _get_personal_address(self, session_id):
         """Helper method để lấy personal address từ response generator"""
         if hasattr(self.response_generator, '_get_personal_address'):
             return self.response_generator._get_personal_address(session_id)
-        return "giảng viên"  # ✅ FIXED: Default to neutral instead of "thầy/cô"
-    
+        return "giảng viên"
+
     def process_query(self, query: str, session_id: str = None, jwt_token: str = None, document_text: str = None) -> dict:
         """
-        🚀 NÂNG CẤP: Main method với Enhanced Context Memory Integration, Document Context Support và Graceful Degradation
-        
-        Args:
-            query (str): User query
-            session_id (str): Session ID for conversation memory
-            jwt_token (str): JWT token for external API
-            document_text (str): Văn bản từ tài liệu được upload (nếu có)
-            
-        Returns:
-            dict: Processing result with enhanced features
+        🚀 ENHANCED: Main method với Two-Stage Re-ranking, Fine-tuned Model Support và Confidence Management
         """
         start_time = time.time()
         
-        logger.info(f"🎯 Enhanced BDU Service Processing với Document Context Support và Graceful Degradation: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
+        logger.info(f"🎯 Enhanced BDU Service Processing với Two-Stage Re-ranking, Fine-tuned Model Support và Confidence Management: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
         
         try:
             if not query or len(query.strip()) < 2:
@@ -2314,26 +2475,28 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                     'confidence': 0.9,
                     'method': 'empty_query',
                     'processing_time': time.time() - start_time,
-                    'document_context_used': False,  # 🚀 NEW flag
-                    'graceful_degradation_used': False  # 🚀 NEW flag
+                    'document_context_used': False,
+                    'graceful_degradation_used': False,
+                    'two_stage_reranking_used': False,
+                    'fine_tuned_model_used': False
                 }
             
-            # 🚀 NEW: Get session memory EARLY for context-aware decisions
+            # 🚀 Get session memory EARLY for context-aware decisions
             session_memory = self.hybrid_chatbot.get_conversation_context(session_id) if session_id else []
             has_context = len(session_memory) > 0
             
-            # 📄 NEW: Log document context nếu có
+            # 📄 Log document context nếu có
             if document_text:
                 doc_length = len(document_text.strip())
                 logger.info(f"📄 DOCUMENT CONTEXT: {doc_length} characters of document text provided")
             
-            # Intent Classification
+            # Intent Classification với fine-tuned model support
             intent_result = self.intent_classifier.classify_intent(query)
             entities = self.intent_classifier.extract_entities(query)
             
-            # 🚀 ENHANCED API PRIORITY CHECK với session memory integration
+            # 🚀 ENHANCED API PRIORITY CHECK với session memory integration và adjusted thresholds
             if self._needs_external_api(query, intent_result, session_memory):
-                logger.info("🚨 ENHANCED API PRIORITY ACTIVATED: Personal/Schedule query detected with context awareness")
+                logger.info("🚨 ENHANCED API PRIORITY ACTIVATED: Personal/Schedule query detected with context awareness và adjusted confidence thresholds")
                 
                 if jwt_token and jwt_token.strip():
                     # Has token -> Call external API
@@ -2344,17 +2507,19 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                     # No token -> Require authentication (with context awareness)
                     return self._handle_authentication_required(session_id, has_context)
             
-            # FALLBACK TO ENHANCED HYBRID SYSTEM với Document Context Support và Graceful Degradation
-            logger.info("📚 Using Enhanced Hybrid Retrieval with Context Memory, Document Context Support và Graceful Degradation")
+            # FALLBACK TO ENHANCED HYBRID SYSTEM với Two-Stage Re-ranking
+            logger.info("📚 Using Enhanced Hybrid System with Two-Stage Re-ranking, Fine-tuned Model Support và Confidence Management")
             result = self.hybrid_chatbot.process_query(query, session_id, jwt_token, document_text)
             
             # Add enhanced flags to show this went through enhanced hybrid flow
             result['api_priority_activated'] = False
             result['fallback_to_enhanced_hybrid'] = True
             result['context_memory_available'] = has_context
-            result['enhanced_processing'] = True  # 🚀 NEW flag
-            result['document_context_support'] = bool(document_text)  # 🚀 NEW flag
-            # graceful_degradation_used flag will be set by hybrid_chatbot if needed
+            result['enhanced_processing'] = True
+            result['document_context_support'] = bool(document_text)
+            result['fine_tuned_model_available'] = self.intent_classifier.fine_tuned_model is not None  # 🚀 NEW
+            result['confidence_management_enabled'] = True  # 🚀 NEW
+            # two_stage_reranking_used flag will be set by hybrid_chatbot if needed
             
             return result
             
@@ -2367,12 +2532,14 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                 'method': 'service_error',
                 'processing_time': time.time() - start_time,
                 'error': str(e),
-                'document_context_used': bool(document_text),  # 🚀 NEW flag
-                'graceful_degradation_used': True  # 🚀 NEW flag
+                'document_context_used': bool(document_text),
+                'graceful_degradation_used': True,
+                'two_stage_reranking_used': False,
+                'fine_tuned_model_used': False
             }
-    
+
     def get_system_status(self):
-        """🚀 Get comprehensive system status including AUTO-CSV features"""
+        """🚀 ENHANCED: Get comprehensive system status including Two-Stage Re-ranking và Fine-tuned Model info"""
         hybrid_status = self.hybrid_chatbot.get_system_status()
         api_status = external_api_service.get_system_status()
         
@@ -2388,28 +2555,33 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                 'supported_formats': []
             }
         
-        # Enhance with AUTO-CSV system info
+        # 🚀 ENHANCED: Add Two-Stage Re-ranking và Fine-tuned Model system info
         hybrid_status.update({
-            'service_layer': 'Enhanced_BDUChatbotService_with_AUTO_CSV_Keyword_System',
-            'auto_csv_system': {  # 🚀 NEW section
+            'service_layer': 'Enhanced_BDUChatbotService_with_Two_Stage_Reranking_and_Fine_Tuned_Model_Support',
+            'two_stage_reranking_system': {  # 🚀 NEW section
                 'enabled': True,
-                'keyword_extraction_methods': [
-                    'Intent field parsing (split by underscore)',
-                    'Question text analysis',
-                    'Category field processing',
-                    'Topic field processing',
-                    'Compound phrase extraction',
-                    'Vietnamese education term detection'
-                ],
-                'fallback_mechanisms': [
-                    'Text-based keyword search',
-                    'Legacy database compatibility',
-                    'Hard-coded fallback knowledge'
-                ],
-                'total_knowledge_entries': len(self.hybrid_chatbot.knowledge_data),
-                'entries_with_auto_keywords': sum(1 for item in self.hybrid_chatbot.knowledge_data if item.get('auto_keywords')),
-                'average_keywords_per_entry': sum(len(item.get('auto_keywords', [])) for item in self.hybrid_chatbot.knowledge_data) / max(len(self.hybrid_chatbot.knowledge_data), 1),
-                'mega_intent_count': len(self.intent_classifier.intent_categories)
+                'stage1_retrieval_size': hybrid_status.get('two_stage_reranking', {}).get('stage1_top_k', 20),
+                'stage2_selection_size': hybrid_status.get('two_stage_reranking', {}).get('stage2_top_n', 3),
+                'cross_encoder_simulation': hybrid_status.get('two_stage_reranking', {}).get('cross_encoder_available', False),
+                'confidence_capping': hybrid_status.get('two_stage_reranking', {}).get('confidence_capping_enabled', True),
+                'hybrid_weights': {
+                    'alpha_semantic': hybrid_status.get('two_stage_reranking', {}).get('alpha', 0.6),
+                    'beta_keyword': hybrid_status.get('two_stage_reranking', {}).get('beta', 0.4)
+                }
+            },
+            'fine_tuned_model_system': {  # 🚀 NEW section
+                'fine_tuned_model_available': hybrid_status.get('phobert_fine_tuned', False),
+                'model_priority_system': ['fine_tuned', 'base', 'fallback'],
+                'fine_tuned_model_path': getattr(self.intent_classifier, 'fine_tuned_model_path', ''),
+                'sentence_transformers_available': getattr(self.intent_classifier, 'fine_tuned_model', None) is not None,
+                'fallback_graceful': True
+            },
+            'confidence_management_system': {  # 🚀 NEW section
+                'confidence_capping_enabled': True,
+                'max_confidence': 1.0,
+                'adjusted_thresholds': hybrid_status.get('confidence_thresholds', {}),
+                'overflow_protection': True,
+                'calibration_active': True
             },
             'enhanced_api_priority': {
                 'context_memory_integration': True,
@@ -2422,24 +2594,26 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
             },
             'ocr_service_status': ocr_status,
             'enhanced_processing_flow': [
-                '1. Simplified Mega-Intent Classification (6-7 intents)',
+                '1. Simplified Mega-Intent Classification (6-7 intents) with Fine-tuned Model Support',
                 '2. Session Memory Context Analysis', 
                 '3. Document Context Priority Check',
-                '4. Context-Aware API Priority Check',
+                '4. Context-Aware API Priority Check với Adjusted Thresholds',
                 '5. Enhanced External API Call (if needed)',
-                '6. AUTO-CSV Hybrid Retrieval & Re-ranking',  # 🚀 UPDATED
-                '7. Auto-Generated Keyword Matching',  # 🚀 NEW
-                '8. Document Context Processing (if applicable)',
-                '9. Graceful Degradation Check',
-                '10. Fallback Response Generation (if Gemini fails)',
-                '11. User Memory Prompt Integration',
-                '12. Gender-based Addressing with Context',
-                '13. Conversation Context Summary Integration'
+                '6. Two-Stage Hybrid Retrieval & Re-ranking',  # 🚀 UPDATED
+                '7. Stage 1: Enhanced Semantic + Keyword Scoring',  # 🚀 NEW
+                '8. Stage 2: Cross-Encoder Re-ranking Simulation',  # 🚀 NEW
+                '9. Confidence Overflow Protection',  # 🚀 NEW
+                '10. Document Context Processing (if applicable)',
+                '11. Graceful Degradation Check',
+                '12. Fallback Response Generation (if Gemini fails)',
+                '13. User Memory Prompt Integration',
+                '14. Gender-based Addressing with Context',
+                '15. Conversation Context Summary Integration'
             ]
         })
         
         return hybrid_status
-    
+
     def _get_api_fallback_response(self, api_result: dict, session_id: str) -> str:
         """Fallback response when API data is available but Gemini fails với gender support"""
         lecturer_info = api_result.get('lecturer_info', {})
@@ -2474,7 +2648,7 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
 • Thử hỏi lại với câu hỏi cụ thể hơn
 
 {personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
-    
+
     def _get_api_error_response(self, error_type: str, error_message: str, session_id: str) -> str:
         """Get appropriate error response based on error type với gender support"""
         personal_address = self._get_personal_address(session_id)
@@ -2507,30 +2681,30 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
 • Liên hệ bộ phần IT: it@bdu.edu.vn
 
 {personal_address.title()} có cần hỗ trợ thêm gì không ạ? 🎓"""
-    
-    # Delegate methods to hybrid chatbot with enhanced status
+
+    # Delegate methods to hybrid chatbot với enhanced status
     def get_conversation_memory(self, session_id):
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.get_conversation_memory(session_id)
-    
+
     def clear_conversation_memory(self, session_id=None):
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.clear_conversation_memory(session_id)
-    
+
     def reload_after_qa_update(self):
-        """Delegate to hybrid chatbot - now with AUTO-CSV keyword regeneration"""
+        """Delegate to hybrid chatbot - now with Two-Stage Re-ranking và AUTO-CSV keyword regeneration"""
         return self.hybrid_chatbot.reload_after_qa_update()
-    
+
     @property
     def model(self):
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.model
-    
+
     @property
     def index(self):
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.index
-    
+
     @property
     def knowledge_data(self):
         """Delegate to hybrid chatbot"""

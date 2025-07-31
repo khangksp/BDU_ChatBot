@@ -96,6 +96,107 @@ def build_personalized_system_prompt(user_memory_prompt: str = None, personal_ad
     
     return base_prompt + custom_prompt_section
 
+class AdvancedConfidenceManager:
+    """
+    🚀 NEW: Advanced Confidence Management System 
+    Đảm bảo confidence scores luôn ≤ 1.0 và xử lý overflow
+    """
+    
+    def __init__(self):
+        self.MAX_CONFIDENCE = 1.0
+        self.confidence_calibration_rules = {
+            'high_semantic_match': 0.95,
+            'medium_semantic_match': 0.75, 
+            'low_semantic_match': 0.45,
+            'keyword_match_bonus': 0.1,
+            'context_match_bonus': 0.05,
+            'document_context_bonus': 0.1
+        }
+        
+        # Thresholds for decision making - adjusted cho Advanced RAG
+        self.decision_thresholds = {
+            'direct_answer': 0.8,      # Lowered from 0.85 due to re-ranking boost
+            'enhanced_answer': 0.45,   # Lowered from 0.5 
+            'ask_clarification': 0.25, # Lowered from 0.3
+            'dont_know': 0.1
+        }
+        
+        logger.info("✅ AdvancedConfidenceManager initialized with overflow protection")
+    
+    def normalize_confidence(self, raw_confidence: float, source: str = "unknown") -> float:
+        """
+        🛡️ CRITICAL: Normalize confidence to ensure it never exceeds 1.0
+        """
+        if raw_confidence is None or not isinstance(raw_confidence, (int, float)):
+            logger.warning(f"⚠️ Invalid confidence value: {raw_confidence} from {source}")
+            return 0.1  # Safe default
+        
+        # Cap at maximum confidence
+        normalized = min(self.MAX_CONFIDENCE, abs(float(raw_confidence)))
+        
+        if raw_confidence > self.MAX_CONFIDENCE:
+            logger.info(f"🛡️ Confidence capped: {raw_confidence:.3f} -> {normalized:.3f} (source: {source})")
+        
+        return normalized
+    
+    def calculate_response_confidence(self, semantic_score: float = 0, 
+                                   keyword_score: float = 0,
+                                   context_bonus: float = 0,
+                                   method: str = "hybrid") -> float:
+        """
+        🧮 Calculate final response confidence với advanced calibration
+        """
+        base_confidence = 0.0
+        
+        # Base từ semantic score
+        if semantic_score >= 0.8:
+            base_confidence = self.confidence_calibration_rules['high_semantic_match']
+        elif semantic_score >= 0.6:
+            base_confidence = self.confidence_calibration_rules['medium_semantic_match']
+        else:
+            base_confidence = self.confidence_calibration_rules['low_semantic_match']
+        
+        # Apply bonuses
+        if keyword_score > 0.5:
+            base_confidence += self.confidence_calibration_rules['keyword_match_bonus']
+        
+        if context_bonus > 0:
+            base_confidence += self.confidence_calibration_rules['context_match_bonus']
+        
+        # Method-specific adjustments
+        method_adjustments = {
+            'two_stage_reranking': 0.05,    # Slight boost for advanced method
+            'document_context': 0.1,        # Higher confidence for document-based
+            'external_api': 0.15,           # Highest confidence for API data
+            'hybrid': 0.0,                  # Baseline
+            'fallback': -0.2                # Lower confidence for fallback
+        }
+        
+        base_confidence += method_adjustments.get(method, 0.0)
+        
+        # 🛡️ CRITICAL: Ensure final confidence ≤ 1.0
+        final_confidence = self.normalize_confidence(base_confidence, f"response_calculation_{method}")
+        
+        logger.debug(f"🧮 Confidence calculation: semantic={semantic_score:.3f}, "
+                    f"keyword={keyword_score:.3f}, method={method} -> {final_confidence:.3f}")
+        
+        return final_confidence
+    
+    def get_response_strategy(self, confidence: float) -> str:
+        """
+        🎯 Determine response strategy based on confidence
+        """
+        confidence = self.normalize_confidence(confidence, "strategy_decision")
+        
+        if confidence >= self.decision_thresholds['direct_answer']:
+            return 'direct_answer'
+        elif confidence >= self.decision_thresholds['enhanced_answer']:
+            return 'enhanced_answer'
+        elif confidence >= self.decision_thresholds['ask_clarification']:
+            return 'ask_clarification'
+        else:
+            return 'dont_know'
+
 class SmartTokenManager:
     """🧠 Smart Token Management System - Tự động tăng token và hoàn thiện response"""
     
@@ -143,8 +244,8 @@ class SmartTokenManager:
             
         # ✅ ADJUSTMENT dựa trên complexity hint
         if complexity_hint:
-            if complexity_hint in ['enhanced_generation', 'detailed_explanation', 'document_context']:
-                base_tokens += 100  # 🚀 NEW: Document context needs more tokens
+            if complexity_hint in ['enhanced_generation', 'detailed_explanation', 'document_context', 'two_stage_reranking']:
+                base_tokens += 100  # 🚀 NEW: Advanced methods need more tokens
             elif complexity_hint in ['quick_clarify', 'simple_answer']:
                 base_tokens -= 40
                 
@@ -456,7 +557,7 @@ class SimpleVietnameseRestorer:
                 del self.cache[k]
 
 class GeminiResponseGenerator:
-    """🚀 NÂNG CẤP: Advanced Gemini Response Generator với Smart Token Management, Context Summary và Document Context Support"""
+    """🚀 NÂNG CẤP: Advanced Gemini Response Generator với Smart Token Management, Advanced Confidence Management, và Two-Stage Re-ranking Integration"""
     
     def __init__(self):
         self.key_manager = GeminiApiKeyManager()
@@ -468,6 +569,9 @@ class GeminiResponseGenerator:
         
         # ✅ NEW: Smart Token Manager
         self.token_manager = SmartTokenManager()
+        
+        # 🚀 NEW: Advanced Confidence Manager
+        self.confidence_manager = AdvancedConfidenceManager()
         
         # User context cache for personalization
         self._user_context_cache = {}
@@ -489,7 +593,7 @@ class GeminiResponseGenerator:
             ]
         }
         
-        logger.info("✅ Enhanced Gemini Response Generator initialized with Smart Token Management, Consistent Personalization và Document Context Support")
+        logger.info("✅ Enhanced Gemini Response Generator initialized with Advanced Confidence Management, Smart Token Management, và Two-Stage Re-ranking Integration")
 
     # 🚀 NEW: Document Context Processing Methods
     def _build_document_context_prompt(self, query: str, document_text: str, session_id: str = None) -> str:
@@ -527,7 +631,7 @@ class GeminiResponseGenerator:
         if len(document_text) > max_doc_length:
             document_text = document_text[:max_doc_length] + "\n\n[...tài liệu còn tiếp...]"
         
-        # ⭐ NHIỆM VỤ 1: Thêm khối chỉ dẫn đặc biệt cho việc xử lý dữ liệu OCR "bẩn"
+        # ⭐ NHIỆM VỤ 2: Thêm khối chỉ dẫn đặc biệt cho việc xử lý dữ liệu OCR "bẩn"
         ocr_guidance = """---
 ⭐ HƯỚNG DẪN XỬ LÝ DỮ LIỆU OCR ĐẶC BIỆT (Rất quan trọng)
 Dữ liệu dưới đây được trích xuất tự động từ file PDF/DOCX, do đó có thể chứa các lỗi định dạng, đặc biệt là các bảng (table) bị chuyển thành văn bản thuần túy.
@@ -901,14 +1005,14 @@ Trả lời:"""
             logger.error(f"Error getting personalized prompt: {e}")
             return build_personalized_system_prompt()  # Fallback
 
-    # 🚀 ENHANCED: Generate response với Smart Token Management và Document Context Support
+    # 🚀 ENHANCED: Generate response với Smart Token Management, Advanced Confidence Management và Two-Stage Re-ranking Integration
     def generate_response(self, query: str, context: Optional[Dict] = None, 
                       intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
                       session_id: str = None) -> Dict[str, Any]:
-        """🚀 NÂNG CẤP: Generate response với Smart Token Management, Context Summary và Document Context Support"""
+        """🚀 NÂNG CẤP: Generate response với Advanced Confidence Management, Smart Token Management, Context Summary và Two-Stage Re-ranking Integration"""
         start_time = time.time()
         
-        print(f"\n--- 🚀 SMART TOKEN MANAGEMENT REQUEST (Session: {session_id}) ---")
+        print(f"\n--- 🚀 ADVANCED RAG GENERATION REQUEST (Session: {session_id}) ---")
         print(f"🧠 MEMORY DEBUG: Total active sessions = {len(self.memory.conversations)}")
 
         try:
@@ -930,10 +1034,15 @@ Trả lời:"""
                 if not document_text or not document_text.strip():
                     logger.warning("⚠️ Empty document text provided")
                     personal_address = self._get_personal_address(session_id)
+                    
+                    # 🛡️ CONFIDENCE CAP: Document error response
+                    response_confidence = self.confidence_manager.normalize_confidence(0.1, "document_error")
+                    
                     return {
                         'response': f"Dạ {personal_address}, em không nhận được nội dung tài liệu để trả lời câu hỏi. {personal_address.title()} có thể gửi lại tài liệu không ạ? 🎓",
                         'method': 'document_context_empty',
                         'strategy': 'document_error',
+                        'confidence': response_confidence,  # 🛡️ CAPPED
                         'generation_time': time.time() - start_time,
                         'original_query': original_query,
                         'restored_query': query,
@@ -963,6 +1072,14 @@ Trả lời:"""
                     personal_address = self._get_personal_address(session_id)
                     response = f"Dạ {personal_address}, em gặp khó khăn kỹ thuật khi phân tích tài liệu. {personal_address.title()} có thể thử lại hoặc đặt câu hỏi cụ thể hơn không ạ? 🎓"
                 
+                # 🛡️ CONFIDENCE CAP: Document processing response
+                response_confidence = self.confidence_manager.calculate_response_confidence(
+                    semantic_score=0.85,  # High for document-based
+                    keyword_score=0.0,
+                    context_bonus=0.1,
+                    method='document_context'
+                )
+                
                 # Save to memory
                 if session_id:
                     self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
@@ -971,6 +1088,7 @@ Trả lời:"""
                     'response': response,
                     'method': 'document_context_processing',
                     'strategy': 'document_context',
+                    'confidence': response_confidence,  # 🛡️ CAPPED
                     'generation_time': time.time() - start_time,
                     'original_query': original_query,
                     'restored_query': query,
@@ -988,6 +1106,14 @@ Trả lời:"""
                 # Process external API data
                 response = self._generate_external_api_response(query, context, session_id)
                 
+                # 🛡️ CONFIDENCE CAP: External API response
+                response_confidence = self.confidence_manager.calculate_response_confidence(
+                    semantic_score=0.9,   # Very high for API data
+                    keyword_score=0.0,
+                    context_bonus=0.15,   # High context bonus for personal data
+                    method='external_api'
+                )
+                
                 token_info = {
                     'smart_tokens_used': True,
                     'method': 'external_api_processing'
@@ -1001,6 +1127,7 @@ Trả lời:"""
                     'response': response,
                     'method': 'external_api_processing',
                     'strategy': 'external_api',
+                    'confidence': response_confidence,  # 🛡️ CAPPED
                     'generation_time': time.time() - start_time,
                     'original_query': original_query,
                     'restored_query': query,
@@ -1028,17 +1155,31 @@ Trả lời:"""
                 query, context, intent_info, conversation_context
             )
             
-            # ✅ ENHANCED: Handle instruction-based responses với Smart Tokens
+            # 🛡️ CONFIDENCE CAP: Extract and normalize confidence from context
+            raw_confidence = context.get('confidence', 0.5) if context else 0.5
+            normalized_confidence = self.confidence_manager.normalize_confidence(raw_confidence, "input_context")
+            
+            # Update context with normalized confidence
+            if context:
+                context['confidence'] = normalized_confidence
+            
+            # ✅ ENHANCED: Handle instruction-based responses với Smart Tokens và Advanced Confidence
             instruction = context.get('instruction', '') if context else ''
             
             if instruction == 'direct_answer_lecturer':
                 response, token_info = self._generate_direct_lecturer_answer_smart(query, context, session_id)
+                # Confidence từ context đã được normalized
+                final_confidence = normalized_confidence
             elif instruction in ['enhance_answer_lecturer', 'enhance_answer_lecturer_boosted']:
                 response, token_info = self._generate_enhanced_lecturer_answer_smart(query, context, intent_info, entities, session_id)
+                # Slight boost for enhanced methods, but still capped
+                final_confidence = self.confidence_manager.normalize_confidence(normalized_confidence + 0.05, "enhanced_method")
             elif instruction == 'clarification_needed':
                 response, token_info = self._generate_clarification_request_smart(query, context, session_id)
+                final_confidence = self.confidence_manager.normalize_confidence(0.3, "clarification")
             elif instruction == 'dont_know_lecturer':
                 response, token_info = self._generate_dont_know_response_smart(query, context, session_id)
+                final_confidence = self.confidence_manager.normalize_confidence(0.1, "dont_know")
             else:
                 # Check out of scope and generate response
                 if context and context.get('emergency_education', False):
@@ -1047,6 +1188,7 @@ Trả lời:"""
                 elif not self._is_lecturer_education_related(query) and not context.get('force_education_response', False):
                     response = self._get_contextual_out_of_scope_response_lecturer(conversation_context, session_id)
                     token_info = {'smart_tokens_used': False, 'method': 'predefined_template'}
+                    final_confidence = self.confidence_manager.normalize_confidence(0.9, "out_of_scope")
                     
                     if session_id:
                         self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
@@ -1054,7 +1196,7 @@ Trả lời:"""
                     return {
                         'response': response,
                         'method': 'out_of_scope_lecturer',
-                        'confidence': 0.9,
+                        'confidence': final_confidence,  # 🛡️ CAPPED
                         'generation_time': time.time() - start_time,
                         'original_query': original_query,
                         'restored_query': query,
@@ -1062,10 +1204,25 @@ Trả lời:"""
                         'token_info': token_info
                     }
                 
-                # ✅ ENHANCED: Use Smart Token Generation
+                # ✅ ENHANCED: Use Smart Token Generation với Advanced Confidence
                 response, token_info = self._generate_smart_response(query, context, session_id, response_strategy)
+                
+                # Calculate confidence based on context and method
+                semantic_score = context.get('semantic_score', 0.5) if context else 0.5
+                keyword_score = context.get('keyword_score', 0.0) if context else 0.0
+                
+                final_confidence = self.confidence_manager.calculate_response_confidence(
+                    semantic_score=semantic_score,
+                    keyword_score=keyword_score,
+                    context_bonus=0.05 if conversation_context.get('recent_conversation_summary') else 0.0,
+                    method='two_stage_reranking' if context and context.get('two_stage_reranking_used') else 'hybrid'
+                )
             
             final_response = response or self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id)
+            
+            # 🛡️ FINAL CONFIDENCE NORMALIZATION
+            if not 'final_confidence' in locals():
+                final_confidence = self.confidence_manager.normalize_confidence(normalized_confidence, "final_response")
             
             # Save to memory
             if session_id:
@@ -1074,21 +1231,32 @@ Trả lời:"""
 
             return {
                 'response': final_response,
-                'method': f'smart_lecturer_aware_gemini_{response_strategy}',
+                'method': f'advanced_rag_lecturer_aware_gemini_{response_strategy}',
                 'strategy': response_strategy,
                 'conversation_context': conversation_context,
+                'confidence': final_confidence,  # 🛡️ GUARANTEED ≤ 1.0
                 'generation_time': time.time() - start_time,
                 'original_query': original_query,
                 'restored_query': query,
                 'vietnamese_restoration_used': query != original_query,
                 'personalized': bool(user_context),
                 'enhanced_generation': response_strategy == 'enhanced_generation',
-                'token_info': token_info  # ✅ NEW: Smart token information
+                'token_info': token_info,  # ✅ NEW: Smart token information
+                'confidence_management': {  # 🚀 NEW: Advanced confidence info
+                    'raw_confidence': raw_confidence,
+                    'normalized_confidence': normalized_confidence,
+                    'final_confidence': final_confidence,
+                    'confidence_capped': final_confidence == 1.0,
+                    'confidence_source': 'advanced_calculation'
+                }
             }
             
         except Exception as e:
             logger.error(f"Gemini API error: {str(e)}")
             fallback_response = self._get_smart_fallback_with_context_lecturer(query, intent_info, conversation_context, session_id)
+            
+            # 🛡️ CONFIDENCE CAP: Error fallback
+            error_confidence = self.confidence_manager.normalize_confidence(0.1, "error_fallback")
             
             if session_id:
                 self.memory.add_interaction(session_id, original_query, fallback_response, intent_info, entities)
@@ -1097,6 +1265,7 @@ Trả lời:"""
                 'response': fallback_response,
                 'method': 'lecturer_context_aware_fallback',
                 'error': str(e),
+                'confidence': error_confidence,  # 🛡️ CAPPED
                 'generation_time': time.time() - start_time,
                 'original_query': original_query,
                 'restored_query': query,
@@ -1107,7 +1276,7 @@ Trả lời:"""
     # 🧠 SMART TOKEN GENERATION METHODS
 
     def _generate_smart_response(self, query: str, context=None, session_id=None, strategy='balanced'):
-        """🚀 Generate response with Smart Token Management"""
+        """🚀 Generate response with Smart Token Management and Advanced Confidence"""
         
         prompt = self._build_enhanced_prompt(query, context, None, None, session_id)
         
@@ -1325,7 +1494,8 @@ Trả lời:"""
             
             strategy_temp_adjustments = {
                 'quick_clarify': -0.2, 'direct_enhance': 0.0, 'enhanced_generation': +0.2,
-                'completion': -0.3, 'balanced': 0.0, 'document_context': +0.1  # 🚀 NEW: Document context adjustment
+                'completion': -0.3, 'balanced': 0.0, 'document_context': +0.1,  # 🚀 NEW: Document context adjustment
+                'two_stage_reranking': +0.05  # 🚀 NEW: Slight adjustment for advanced method
             }
             temp_adjustment = strategy_temp_adjustments.get(strategy, 0.0)
             final_temperature = max(0.1, min(1.0, self.default_generation_config["temperature"] + temp_adjustment))
@@ -1389,10 +1559,10 @@ Trả lời:"""
             logger.error(f"Smart Gemini API call failed: {str(e)}")
             return None
 
-    # 🚀 SMART VERSIONS of generation methods
+    # 🚀 SMART VERSIONS of generation methods với Advanced Confidence Management
     def _generate_direct_lecturer_answer_smart(self, query, context, session_id=None):
         """
-        🚀 NÂNG CẤP: Use refined prompt với gender-based addressing và conversation context
+        🚀 NÂNG CẤP: Use refined prompt với gender-based addressing, conversation context và confidence management
         """
         
         # ✅ NEW: Lấy cách xưng hô cá nhân hóa
@@ -1446,17 +1616,18 @@ Trả lời:
         
         token_info = {
             'smart_tokens_used': True, 
-            'method': 'direct_answer_smart_v5_context', 
+            'method': 'direct_answer_smart_v6_advanced_confidence', 
             'optimal_tokens': optimal_tokens,
             'personal_addressing': personal_address,  # ✅ NEW: Track addressing used
-            'context_aware': bool(recent_summary)  # ✅ NEW: Track context usage
+            'context_aware': bool(recent_summary),  # ✅ NEW: Track context usage
+            'confidence_managed': True  # 🚀 NEW: Advanced confidence management applied
         }
 
         return response or fallback, token_info
 
     def _generate_enhanced_lecturer_answer_smart(self, query, context, intent_info, entities, session_id):
         """
-        🚀 NÂNG CẤP: Use a refined prompt với gender-based addressing và conversation context
+        🚀 NÂNG CẤP: Enhanced answer generation với advanced confidence management
         """
         personal_address = self._get_personal_address(session_id)
         system_prompt = self._get_personalized_system_prompt(session_id)
@@ -1494,11 +1665,12 @@ BỐI CẢNH VÀ NHIỆM VỤ
     Hãy sử dụng "Kiến thức nền" để trả lời "Câu hỏi của giảng viên" trong khi vẫn duy trì đúng vai trò đó.
     Nếu "GHI NHỚ RIÊNG" trống, hãy trả lời một cách chuyên nghiệp, rõ ràng theo quy tắc mặc định.
     Tạo câu trả lời mạch lạc, tự nhiên, tránh lặp lại thông tin đã thảo luận.
+    ĐẶC BIỆT: Tạo câu trả lời chi tiết và toàn diện hơn.
 ---
 Trả lời:
 """
 
-        complexity_hint = 'enhanced_generation' if context.get('generation_boosted', False) else 'balanced'
+        complexity_hint = 'enhanced_generation' if context.get('generation_boosted', False) else 'two_stage_reranking'
         optimal_tokens = self.token_manager.calculate_optimal_tokens(len(prompt), complexity_hint)
         # 🚀 CRITICAL FIX: Pass session_id
         response = self._call_gemini_api_with_smart_tokens(prompt, complexity_hint, optimal_tokens, session_id)
@@ -1508,20 +1680,22 @@ Trả lời:
         
         token_info = {
             'smart_tokens_used': True, 
-            'method': 'enhanced_answer_smart_v5_context', 
+            'method': 'enhanced_answer_smart_v6_advanced_confidence', 
             'optimal_tokens': optimal_tokens, 
             'generation_boosted': context.get('generation_boosted', False),
-            'context_aware': bool(recent_summary)  # ✅ NEW
+            'context_aware': bool(recent_summary),  # ✅ NEW
+            'confidence_managed': True,  # 🚀 NEW
+            'two_stage_compatible': True  # 🚀 NEW: Compatible with Two-Stage Re-ranking
         }
 
         return response or fallback, token_info
 
     def _generate_clarification_request_smart(self, query, context, session_id=None):
-        """Generate clarification request with Smart Token Management"""
+        """Generate clarification request with Smart Token Management và advanced confidence"""
         
         personal_address = self._get_personal_address(session_id)
         
-        # ✅ PREDEFINED smart responses
+        # ✅ PREDEFINED smart responses với advanced confidence management
         clarification_templates = {
             'friendly': f"Dạ {personal_address}, để em có thể hỗ trợ {personal_address} tốt nhất, {personal_address} có thể chia sẻ thêm chi tiết về vấn đề này được không ạ? 😊 Em rất sẵn lòng giúp đỡ!",
             'brief': f"Dạ {personal_address}, cần thêm thông tin chi tiết ạ. 🎓",
@@ -1534,13 +1708,15 @@ Trả lời:
         
         token_info = {
             'smart_tokens_used': False,  # Used predefined template
-            'method': 'clarification_template'
+            'method': 'clarification_template_v2',
+            'confidence_managed': True,  # 🚀 NEW
+            'template_type': 'professional'
         }
         
         return response, token_info
 
     def _generate_dont_know_response_smart(self, query, context, session_id=None):
-        """Generate don't know response with Smart Token Management và gender-based addressing"""
+        """Generate don't know response với Smart Token Management, gender-based addressing và advanced confidence"""
         
         # ✅ NEW: Lấy cách xưng hô cá nhân hóa dựa trên giới tính
         personal_address = self._get_personal_address(session_id)
@@ -1569,17 +1745,16 @@ Trả lời:
         
         token_info = {
             'smart_tokens_used': False,  # Used predefined template
-            'method': 'dont_know_template',
+            'method': 'dont_know_template_v2',
             'suggested_department': dept,
-            'personal_addressing': personal_address  # ✅ NEW: Track addressing used
+            'personal_addressing': personal_address,  # ✅ NEW: Track addressing used
+            'confidence_managed': True  # 🚀 NEW
         }
         
         return response, token_info
 
-    # Keep existing methods but update names and add token info where needed...
-
     def _determine_lecturer_response_strategy(self, query, context, intent_info, conversation_context):
-        """✅ ENHANCED: Response strategy with generation bias"""
+        """✅ ENHANCED: Response strategy với generation bias và advanced confidence"""
         
         has_real_history = bool(conversation_context.get('history') and len(conversation_context['history']) > 0)
         
@@ -1637,13 +1812,16 @@ Trả lời:
             if current_main_topic is not None and last_main_topic is not None and current_main_topic != last_main_topic:
                 return 'topic_shift'
         
-        # ✅ MODIFIED: Default strategy logic with generation bias
-        if isinstance(context, dict) and context.get('confidence', 0) > 0.85:  # Slightly lower due to re-ranking boost
+        # ✅ MODIFIED: Default strategy logic với generation bias và adjusted confidence thresholds
+        raw_confidence = context.get('confidence', 0.5) if context else 0.5
+        normalized_confidence = self.confidence_manager.normalize_confidence(raw_confidence, "strategy_decision")
+        
+        if normalized_confidence > 0.75:  # Adjusted threshold for Advanced RAG
             return 'direct_enhance'
         
-        # ✅ NEW: Favor enhancement over brief responses
-        if isinstance(context, dict) and context.get('confidence', 0) > 0.45:  # New range for enhancement
-            return 'enhanced_generation'  # New strategy for more generation
+        # ✅ NEW: Favor enhancement over brief responses với Two-Stage Re-ranking
+        if normalized_confidence > 0.4:  # Lower threshold due to advanced re-ranking
+            return 'enhanced_generation'  # Enhanced strategy for better generation
         
         if intent_info and intent_info.get('intent') in ['greeting', 'general'] and len(query.split()) <= 5:
             return 'quick_clarify'
@@ -1654,7 +1832,7 @@ Trả lời:
         return 'balanced'
 
     def _post_process_with_lecturer_consistency(self, response, query, context, strategy, conversation_context, session_id=None):
-        """🚀 FIXED: Post-process với better duplication detection"""
+        """🚀 FIXED: Post-process với better duplication detection và advanced confidence awareness"""
         if not response:
             return response
         
@@ -1713,7 +1891,7 @@ Trả lời:
         return response.strip()
     
     def _get_contextual_out_of_scope_response_lecturer(self, conversation_context, session_id=None):
-        """Out of scope response cho giảng viên với personalization"""
+        """Out of scope response cho giảng viên với personalization và advanced confidence"""
         
         personal_address = self._get_personal_address(session_id)
         user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
@@ -1731,7 +1909,7 @@ Trả lời:
             return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về trường không ạ?"
     
     def _get_smart_fallback_with_context_lecturer(self, query, intent_info, conversation_context, session_id=None):
-        """Smart fallback với conversation context cho giảng viên và personalization"""
+        """Smart fallback với conversation context cho giảng viên, personalization và advanced confidence"""
         
         personal_address = self._get_personal_address(session_id)
         user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
@@ -1819,7 +1997,7 @@ Trả lời:
 
     # Keep the remaining essential methods...
     def _build_enhanced_prompt(self, query: str, context=None, intent_info=None, entities=None, session_id=None):
-        """🚀 NÂNG CẤP: Build enhanced prompt với conversation context"""
+        """🚀 NÂNG CẤP: Build enhanced prompt với conversation context và advanced confidence"""
         system_prompt = self._get_personalized_system_prompt(session_id)
         personal_address = self._get_personal_address(session_id)
         
@@ -1896,7 +2074,7 @@ Trả lời:"""
             self.memory.conversations.clear()
 
     def get_system_status(self) -> Dict[str, Any]:
-        """🚀 NÂNG CẤP: Get system status với Smart Token Management, External API info, Consistent Personalization và Document Context Support"""
+        """🚀 NÂNG CẤP: Get system status với Advanced Confidence Management, Smart Token Management, Two-Stage Re-ranking Integration và Document Context Support"""
         try:
             test_prompt = "Test ngắn cho giảng viên"
             # 🚀 CRITICAL FIX: Pass session_id=None for test (có thể pass test session)
@@ -1906,11 +2084,23 @@ Trả lời:"""
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.key_manager.keys),
                 'service_status': 'active' if response else 'error',
-                'mode': 'smart_token_lecturer_focused_with_user_memory_and_context_and_consistent_personalization_and_document_context',  # ✅ Updated
+                'mode': 'advanced_rag_gemini_with_two_stage_reranking_integration_and_advanced_confidence_management',  # 🚀 Updated
                 'memory_sessions': len(self.memory.conversations),
                 'personalization_sessions': len(self._user_context_cache),
                 'adaptive_token_range': self.token_manager.adaptive_token_range,
+                'confidence_management': {  # 🚀 NEW: Advanced confidence management info
+                    'max_confidence': self.confidence_manager.MAX_CONFIDENCE,
+                    'decision_thresholds': self.confidence_manager.decision_thresholds,
+                    'calibration_rules': self.confidence_manager.confidence_calibration_rules,
+                    'overflow_protection_enabled': True,
+                    'confidence_normalization_active': True
+                },
                 'features': [
+                    'advanced_confidence_management',  # 🚀 NEW
+                    'confidence_overflow_protection',  # 🚀 NEW
+                    'confidence_normalization',  # 🚀 NEW
+                    'two_stage_reranking_integration',  # 🚀 NEW
+                    'advanced_rag_compatibility',  # 🚀 NEW
                     'smart_token_management',
                     'auto_response_completion',
                     'adaptive_token_allocation',
@@ -1939,7 +2129,10 @@ Trả lời:"""
                     'document_context_processing',  # 🚀 NEW feature
                     'pdf_docx_text_extraction',  # 🚀 NEW feature
                     'document_based_question_answering',  # 🚀 NEW feature
-                    'ocr_integration_support'  # 🚀 NEW feature
+                    'ocr_integration_support',  # 🚀 NEW feature
+                    'fine_tuned_model_compatibility',  # 🚀 NEW feature
+                    'cross_encoder_simulation_support',  # 🚀 NEW feature
+                    'hybrid_retrieval_enhancement'  # 🚀 NEW feature
                 ]
             }
         except Exception as e:
@@ -1949,7 +2142,9 @@ Trả lời:"""
                 'error': str(e),
                 'consistent_personalization': True,  # 🚀 NEW: Even in error, personalization is supported
                 'graceful_degradation': True,  # 🚀 NEW: System supports graceful degradation
-                'document_context_support': True  # 🚀 NEW: Document context is supported even in error
+                'document_context_support': True,  # 🚀 NEW: Document context is supported even in error
+                'advanced_confidence_management': True,  # 🚀 NEW: Advanced confidence is always active
+                'confidence_overflow_protection': True  # 🚀 NEW: Overflow protection is always active
             }
 
 gemini_response_generator = GeminiResponseGenerator()

@@ -2,10 +2,12 @@ import torch
 import numpy as np
 import logging
 import re
+import os
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict, Counter
 import time
 from typing import Dict, List, Tuple, Optional
+from django.conf import settings
 
 # Try to import transformers, fallback if not available
 try:
@@ -15,13 +17,22 @@ except ImportError:
     TRANSFORMERS_AVAILABLE = False
     print("Warning: transformers not installed. PhoBERT will use fallback mode.")
 
+# Try to import sentence-transformers for fine-tuned model
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    print("Warning: sentence-transformers not installed. Fine-tuned model will not be available.")
+
 logger = logging.getLogger(__name__)
 
 class PhoBERTIntentClassifier:
     """
-    🚀 Simplified PhoBERT-based Intent Classification for BDU Lecturers - AUTO-CSV VERSION
+    🚀 Enhanced PhoBERT-based Intent Classification with Fine-tuned Model Support
     
     Features:
+    - Fine-tuned model integration with fallback to base model
     - Simplified to 6-7 mega-intents instead of 25+ specific intents
     - Keywords now loaded automatically from CSV data
     - Ensemble methods (PhoBERT + Keyword + Pattern + Context)
@@ -35,9 +46,13 @@ class PhoBERTIntentClassifier:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if TRANSFORMERS_AVAILABLE else None
         self.tokenizer = None
         self.model = None
+        self.fine_tuned_model = None  # 🚀 NEW: Fine-tuned sentence transformer model
         
         # ESSENTIAL: Set fallback_mode FIRST
         self.fallback_mode = True  # Default to fallback mode
+        
+        # Fine-tuned model path
+        self.fine_tuned_model_path = os.path.join(settings.BASE_DIR, 'fine_tuned_phobert')
         
         # 🆕 Enhanced components
         self.ensemble_weights = {
@@ -53,7 +68,7 @@ class PhoBERTIntentClassifier:
         # 🆕 Context-aware intent boosting
         self.context_boosting_rules = self._initialize_context_boosting()
         
-        # 🆕 Intent confidence calibration
+        # 🆕 Intent confidence calibration - 🚀 FIXED: Max confidence is 1.0
         self.confidence_calibration = self._initialize_confidence_calibration()
         
         # Initialize simplified mega-intent categories
@@ -71,15 +86,8 @@ class PhoBERTIntentClassifier:
             # Create dummy normalizer
             self.normalizer = self._create_dummy_normalizer()
         
-        # Try to load model only if transformers available
-        if TRANSFORMERS_AVAILABLE:
-            try:
-                self.load_model()
-            except Exception as e:
-                logger.warning(f"PhoBERT model failed to load: {str(e)}")
-                self.fallback_mode = True
-        else:
-            logger.warning("PhoBERT running in enhanced fallback mode (keyword-based) for lecturers")
+        # 🚀 NEW: Load fine-tuned model first, then fallback to base model
+        self._load_models_with_priority()
 
     def _create_dummy_normalizer(self):
         """Create dummy normalizer if import fails"""
@@ -91,6 +99,89 @@ class PhoBERTIntentClassifier:
                 return [query, query.lower()]
         
         return DummyNormalizer()
+    
+    def _load_models_with_priority(self):
+        """🚀 NEW: Load models with priority: Fine-tuned > Base model > Fallback"""
+        
+        # Priority 1: Try to load fine-tuned sentence transformer model
+        if self._load_fine_tuned_model():
+            logger.info("✅ Using fine-tuned PhoBERT model for enhanced retrieval")
+            self.fallback_mode = False
+            return
+        
+        # Priority 2: Try to load base PhoBERT model
+        if self._load_base_model():
+            logger.info("✅ Using base PhoBERT model")
+            self.fallback_mode = False
+            return
+        
+        # Priority 3: Fallback mode
+        logger.warning("⚠️ Using enhanced fallback mode (keyword-based) for lecturers")
+        self.fallback_mode = True
+
+    def _load_fine_tuned_model(self):
+        """🚀 NEW: Load fine-tuned sentence transformer model"""
+        try:
+            if not SENTENCE_TRANSFORMERS_AVAILABLE:
+                logger.info("📦 sentence-transformers not available, skipping fine-tuned model")
+                return False
+            
+            if not os.path.exists(self.fine_tuned_model_path):
+                logger.info(f"📁 Fine-tuned model not found at {self.fine_tuned_model_path}")
+                return False
+            
+            # Check if it's a valid sentence-transformers model
+            required_files = ['config.json', 'pytorch_model.bin']
+            if not all(os.path.exists(os.path.join(self.fine_tuned_model_path, f)) for f in required_files):
+                logger.warning(f"⚠️ Fine-tuned model directory incomplete at {self.fine_tuned_model_path}")
+                return False
+            
+            logger.info(f"📥 Loading fine-tuned sentence transformer model from: {self.fine_tuned_model_path}")
+            self.fine_tuned_model = SentenceTransformer(self.fine_tuned_model_path)
+            
+            # Test the model with a simple encoding
+            test_text = "Test encoding for PhoBERT"
+            test_embedding = self.fine_tuned_model.encode([test_text])
+            
+            if test_embedding is not None and len(test_embedding) > 0:
+                logger.info("✅ Fine-tuned PhoBERT model loaded and tested successfully")
+                return True
+            else:
+                logger.error("❌ Fine-tuned model test failed")
+                self.fine_tuned_model = None
+                return False
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to load fine-tuned model: {str(e)}")
+            self.fine_tuned_model = None
+            return False
+
+    def _load_base_model(self):
+        """Load base PhoBERT model as fallback"""
+        try:
+            if not TRANSFORMERS_AVAILABLE:
+                return False
+                
+            model_name = "vinai/phobert-base"
+            logger.info(f"📥 Loading base PhoBERT model: {model_name}")
+            
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModel.from_pretrained(model_name)
+            self.model.to(self.device)
+            self.model.eval()
+            
+            logger.info("✅ Base PhoBERT model loaded successfully")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Base PhoBERT not available: {str(e)}")
+            self.tokenizer = None
+            self.model = None
+            return False
+
+    def load_model(self):
+        """Legacy method for backward compatibility"""
+        return self._load_models_with_priority()
     
     def _initialize_multi_intent_patterns(self):
         """🆕 Patterns để detect multi-intent queries"""
@@ -136,7 +227,7 @@ class PhoBERTIntentClassifier:
         }
     
     def _initialize_confidence_calibration(self):
-        """🆕 Confidence calibration parameters"""
+        """🆕 Confidence calibration parameters - 🚀 FIXED: Ensure max confidence is 1.0"""
         return {
             'base_thresholds': {
                 'very_high': 0.9,
@@ -147,12 +238,13 @@ class PhoBERTIntentClassifier:
             },
             'calibration_factors': {
                 'single_keyword_match': 0.8,     # Reduce confidence for single keyword
-                'multiple_keyword_match': 1.2,   # Boost for multiple keywords
-                'exact_phrase_match': 1.5,       # Strong boost for exact phrases
-                'semantic_similarity_high': 1.3, # Boost for high semantic similarity
-                'context_continuity': 1.2,       # Boost for context continuity
+                'multiple_keyword_match': 1.0,   # 🚀 FIXED: Reduced from 1.2 to 1.0
+                'exact_phrase_match': 1.0,       # 🚀 FIXED: Reduced from 1.5 to 1.0  
+                'semantic_similarity_high': 1.0, # 🚀 FIXED: Reduced from 1.3 to 1.0
+                'context_continuity': 1.0,       # 🚀 FIXED: Reduced from 1.2 to 1.0
                 'multi_intent_detected': 0.9     # Slight reduction for multi-intent
-            }
+            },
+            'max_confidence': 1.0  # 🚀 NEW: Hard cap at 1.0
         }
     
     def _initialize_mega_intents(self):
@@ -321,36 +413,12 @@ class PhoBERTIntentClassifier:
             ]
         }
     
-    def load_model(self):
-        """Load PhoBERT model with enhanced error handling"""
-        try:
-            if not TRANSFORMERS_AVAILABLE:
-                raise ImportError("Transformers not available")
-                
-            model_name = "vinai/phobert-base"
-            logger.info(f"Loading PhoBERT model: {model_name}")
-            
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModel.from_pretrained(model_name)
-            self.model.to(self.device)
-            self.model.eval()
-            
-            # Only set fallback_mode to False if everything loaded successfully
-            self.fallback_mode = False
-            logger.info("✅ PhoBERT model loaded successfully for lecturers")
-            
-        except Exception as e:
-            logger.warning(f"⚠️ PhoBERT not available, using enhanced fallback for lecturers: {str(e)}")
-            self.tokenizer = None
-            self.model = None
-            self.fallback_mode = True  # Ensure fallback mode is set
-    
     def classify_intent(self, query):
         """🚀 Main classify method - Enhanced intent classification với ensemble methods"""
         return self.enhanced_classify_intent(query)
     
     def enhanced_classify_intent(self, query, conversation_context=None):
-        """🚀 Enhanced intent classification với ensemble methods"""
+        """🚀 Enhanced intent classification với ensemble methods và fine-tuned model"""
         if not query or not query.strip():
             return self._get_default_intent()
         
@@ -379,8 +447,13 @@ class PhoBERTIntentClassifier:
         context_results = self._context_aware_classification(normalized_query, conversation_context)
         ensemble_results['context_analysis'] = context_results
         
-        # Method 4: PhoBERT Semantic (if available)
-        if not self.fallback_mode and self.model:
+        # Method 4: Semantic Classification (Fine-tuned > Base model > Skip)
+        if self.fine_tuned_model:
+            # 🚀 NEW: Use fine-tuned model for semantic classification
+            semantic_results = self._fine_tuned_semantic_classification(normalized_query)
+            ensemble_results['phobert_semantic'] = semantic_results
+        elif not self.fallback_mode and self.model:
+            # Use base model
             semantic_results = self._semantic_classification(normalized_query)
             ensemble_results['phobert_semantic'] = semantic_results
         
@@ -390,12 +463,44 @@ class PhoBERTIntentClassifier:
         # 🎯 Multi-Intent Detection
         multi_intent_result = self._detect_multi_intent(query, final_result)
         
-        # 🎯 Confidence Calibration
+        # 🎯 Confidence Calibration - 🚀 FIXED: Ensure confidence <= 1.0
         calibrated_result = self._calibrate_intent_confidence(final_result, query, conversation_context)
         
         logger.info(f"🎯 Final Intent: {calibrated_result['intent']} (confidence: {calibrated_result['confidence']:.3f})")
         
         return calibrated_result
+
+    def _fine_tuned_semantic_classification(self, query):
+        """🚀 NEW: Use fine-tuned sentence transformer for semantic classification"""
+        intent_scores = defaultdict(float)
+        
+        try:
+            if not self.fine_tuned_model:
+                return dict(intent_scores)
+            
+            # Encode the query using fine-tuned model
+            query_embedding = self.fine_tuned_model.encode([query])
+            
+            if query_embedding is None or len(query_embedding) == 0:
+                return dict(intent_scores)
+            
+            # Compare with intent descriptions and keywords
+            for intent_name, config in self.intent_categories.items():
+                # Create intent representation from description and keywords
+                intent_text = f"{config['description']} {' '.join(config['keywords'][:5])}"
+                intent_embedding = self.fine_tuned_model.encode([intent_text])
+                
+                if intent_embedding is not None and len(intent_embedding) > 0:
+                    # Calculate cosine similarity
+                    similarity = cosine_similarity(query_embedding, intent_embedding)[0][0]
+                    intent_scores[intent_name] = float(similarity)
+            
+            logger.debug(f"🚀 Fine-tuned semantic scores: {dict(intent_scores)}")
+            
+        except Exception as e:
+            logger.warning(f"Fine-tuned semantic classification failed: {e}")
+        
+        return dict(intent_scores)
     
     def _enhanced_keyword_classification(self, query_variants):
         """🚀 Enhanced keyword matching với multiple variants"""
@@ -456,7 +561,7 @@ class PhoBERTIntentClassifier:
         return dict(intent_scores)
     
     def _semantic_classification(self, query):
-        """🆕 PhoBERT semantic classification"""
+        """🆕 Base PhoBERT semantic classification"""
         intent_scores = defaultdict(float)
         
         try:
@@ -474,7 +579,7 @@ class PhoBERTIntentClassifier:
                     intent_scores[intent_name] = float(similarity)
         
         except Exception as e:
-            logger.warning(f"Semantic classification failed: {e}")
+            logger.warning(f"Base semantic classification failed: {e}")
         
         return dict(intent_scores)
     
@@ -532,7 +637,7 @@ class PhoBERTIntentClassifier:
         return primary_intent_result
     
     def _calibrate_intent_confidence(self, intent_result, query, conversation_context):
-        """🆕 Calibrate confidence based on various factors"""
+        """🆕 Confidence calibration - 🚀 FIXED: Ensure confidence never exceeds 1.0"""
         base_confidence = intent_result['confidence']
         calibration_factor = 1.0
         
@@ -542,9 +647,17 @@ class PhoBERTIntentClassifier:
                 calibration_factor *= factor_value
                 logger.debug(f"🎯 Confidence calibration: {factor_name} -> {factor_value}")
         
-        calibrated_confidence = min(1.0, base_confidence * calibration_factor)
+        # 🚀 CRITICAL FIX: Ensure confidence never exceeds max_confidence (1.0)
+        max_confidence = self.confidence_calibration['max_confidence']
+        calibrated_confidence = min(max_confidence, base_confidence * calibration_factor)
+        
         intent_result['confidence'] = calibrated_confidence
         intent_result['calibration_factor'] = calibration_factor
+        intent_result['confidence_capped'] = calibrated_confidence == max_confidence
+        
+        # 🚀 ADDITIONAL: Log if confidence was capped
+        if calibrated_confidence == max_confidence and base_confidence * calibration_factor > max_confidence:
+            logger.info(f"🛡️ Confidence capped: {base_confidence * calibration_factor:.3f} -> {max_confidence}")
         
         return intent_result
     
@@ -614,23 +727,33 @@ class PhoBERTIntentClassifier:
         return min(0.5, booster_score)  # Cap booster contribution
     
     def encode_text(self, text):
-        """Encode text using PhoBERT with error handling"""
-        if self.fallback_mode or not self.model or not self.tokenizer:
-            return None
+        """Encode text using available model (fine-tuned > base > None)"""
         
-        try:
-            inputs = self.tokenizer(text, return_tensors="pt", 
-                                  padding=True, truncation=True, max_length=256)
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                embeddings = outputs.pooler_output
-            
-            return embeddings.cpu().numpy()
-        except Exception as e:
-            logger.error(f"Error encoding text: {str(e)}")
-            return None
+        # Priority 1: Use fine-tuned model
+        if self.fine_tuned_model:
+            try:
+                embeddings = self.fine_tuned_model.encode([text])
+                return embeddings.reshape(1, -1) if embeddings is not None else None
+            except Exception as e:
+                logger.error(f"Error encoding with fine-tuned model: {str(e)}")
+        
+        # Priority 2: Use base model
+        if not self.fallback_mode and self.model and self.tokenizer:
+            try:
+                inputs = self.tokenizer(text, return_tensors="pt", 
+                                      padding=True, truncation=True, max_length=256)
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+                    embeddings = outputs.pooler_output
+                
+                return embeddings.cpu().numpy()
+            except Exception as e:
+                logger.error(f"Error encoding text with base model: {str(e)}")
+        
+        # Priority 3: No encoding available
+        return None
     
     def extract_entities(self, query):
         """Enhanced entity extraction for lecturers WITH PERSONAL CONTEXT"""
@@ -707,7 +830,8 @@ class PhoBERTIntentClassifier:
                 'sentiment': self._detect_lecturer_sentiment(query, entities),
                 'processing_time': time.time() - start_time,
                 'fallback_mode': self.fallback_mode,
-                'lecturer_optimized': True
+                'lecturer_optimized': True,
+                'fine_tuned_model_used': bool(self.fine_tuned_model)  # 🚀 NEW
             }
             
             return analysis
@@ -725,7 +849,8 @@ class PhoBERTIntentClassifier:
                 'sentiment': 'neutral',
                 'processing_time': time.time() - start_time,
                 'fallback_mode': True,
-                'lecturer_optimized': True
+                'lecturer_optimized': True,
+                'fine_tuned_model_used': False  # 🚀 NEW
             }
     
     def _detect_lecturer_urgency(self, query):
@@ -803,32 +928,44 @@ class PhoBERTIntentClassifier:
             'intent': 'hoi_dap_chung',
             'confidence': 0.3,
             'description': 'Hỏi đáp chung',
-            'lecturer_optimized': True
+            'lecturer_optimized': True,
+            'fine_tuned_model_used': bool(self.fine_tuned_model)  # 🚀 NEW
         }
     
     def get_system_status(self):
-        """Get PhoBERT system status for lecturers WITH simplified mega-intents"""
+        """Get PhoBERT system status for lecturers WITH fine-tuned model info"""
         return {
             'model_loaded': bool(self.model),
+            'fine_tuned_model_loaded': bool(self.fine_tuned_model),  # 🚀 NEW
+            'fine_tuned_model_path': self.fine_tuned_model_path,     # 🚀 NEW
+            'model_priority': 'fine_tuned' if self.fine_tuned_model else 'base' if self.model else 'fallback',  # 🚀 NEW
             'fallback_mode': self.fallback_mode,
             'transformers_available': TRANSFORMERS_AVAILABLE,
+            'sentence_transformers_available': SENTENCE_TRANSFORMERS_AVAILABLE,  # 🚀 NEW
             'device': str(self.device) if self.device else 'cpu',
             'intents_available': len(self.intent_categories),
             'mega_intents': list(self.intent_categories.keys()),
             'lecturer_optimized': True,
             'ensemble_methods': list(self.ensemble_weights.keys()),
+            'confidence_calibration': {  # 🚀 NEW: Show confidence limits
+                'max_confidence': self.confidence_calibration['max_confidence'],
+                'calibration_factors': self.confidence_calibration['calibration_factors']
+            },
             'features': [
                 'simplified_mega_intent_classification',
                 'csv_auto_keyword_loading',
                 'ensemble_classification',
                 'multi_intent_detection',
                 'context_aware_boosting',
-                'confidence_calibration',
+                'confidence_calibration_with_caps',  # 🚀 UPDATED
                 'pattern_matching',
                 'enhanced_keyword_matching',
                 'vietnamese_normalization',
                 'personal_context_detection',
                 'semantic_similarity',
-                'lecturer_specific_intents'
+                'lecturer_specific_intents',
+                'fine_tuned_model_support',  # 🚀 NEW
+                'model_priority_system',     # 🚀 NEW
+                'confidence_overflow_protection'  # 🚀 NEW
             ]
         }
