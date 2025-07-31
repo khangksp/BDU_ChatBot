@@ -309,7 +309,7 @@ class TextToSpeechService:
         
         # ✅ ĐIỀU CHỈNH TỐC ĐỘ MẶC ĐỊNH TẠI ĐÂY
         # 1.0 = tốc độ gốc, 1.25 = nhanh hơn 25%, 1.5 = nhanh hơn 50%
-        self.SPEEDUP_RATE = 1.25
+        self.SPEEDUP_RATE = 1.2
         
         if self.is_available:
             logger.info("✅ Text-to-Speech service (gTTS) initialized")

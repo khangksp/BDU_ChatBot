@@ -22,10 +22,12 @@ DEBUG = os.getenv('DEBUG', 'True').lower() in ['true', '1', 'yes']
 
 # 🔥 KHI DEPLOY: Thêm IP server thật vào đây
 ALLOWED_HOSTS = [
-    '*',
+    '*', # Chỉ dùng khi test, không khuyến khích khi deploy thật
     'localhost',           # Cho development trên máy local
     '127.0.0.1',          # IP local
     '0.0.0.0',            # Cho phép tất cả IP (chỉ dùng khi test)
+    '192.168.69.108', # IP máy của Khang
+    '192.168.69.0/24', # Dải IP trong mạng nội bộ
     # '192.168.1.100',    # 🔥 DEPLOY: Bỏ # và thay bằng IP server thật
     # 'your-domain.com',  # 🔥 DEPLOY: Nếu có tên miền thì bỏ # và sửa
     '*.ngrok.io',  # Allow all ngrok subdomains
@@ -227,14 +229,18 @@ REST_FRAMEWORK = {
 # 🔥 KHI DEPLOY: Thêm IP frontend thật vào đây
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",      # Development - React dev server
-    "http://127.0.0.1:3000",     # Development - Local  
+    "http://127.0.0.1:3000",     # Development - Local
     "http://localhost:8080",      # Port khác
     "http://127.0.0.1:8080",     # Port khác
+    "http://192.168.69.108:3000",  # IP thật của frontend của Khang
+    "http://192.168.69.104:3000"
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
-    "https://be230f18b856.ngrok-free.app",
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
+
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Chỉ cho phép tất cả khi DEBUG=True
