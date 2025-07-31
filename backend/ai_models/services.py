@@ -390,9 +390,9 @@ class LecturerDecisionEngine:
     def __init__(self):
         # ✅ FIXED: Lower confidence thresholds to account for capped scores
         self.confidence_thresholds = {
-            'high_trust': 0.65,    # Lowered from 0.75 due to score capping
-            'medium_trust': 0.45,  # Lowered from 0.5 due to score capping
-            'low_trust': 0.2,      # Lowered from 0.25 due to score capping
+            'high_trust': 0.6,
+            'medium_trust': 0.35,
+            'low_trust': 0.15,
             'no_trust': 0.1         
         }
         

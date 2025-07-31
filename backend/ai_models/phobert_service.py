@@ -131,9 +131,12 @@ class PhoBERTIntentClassifier:
                 return False
             
             # Check if it's a valid sentence-transformers model
-            required_files = ['config.json', 'pytorch_model.bin']
-            if not all(os.path.exists(os.path.join(self.fine_tuned_model_path, f)) for f in required_files):
-                logger.warning(f"⚠️ Fine-tuned model directory incomplete at {self.fine_tuned_model_path}")
+            config_path = os.path.join(self.fine_tuned_model_path, 'config.json')
+            model_bin_path = os.path.join(self.fine_tuned_model_path, 'pytorch_model.bin')
+            model_safetensors_path = os.path.join(self.fine_tuned_model_path, 'model.safetensors')
+
+            if not os.path.exists(config_path) or not (os.path.exists(model_bin_path) or os.path.exists(model_safetensors_path)):
+                logger.warning(f"⚠️ Fine-tuned model directory incomplete at {self.fine_tuned_model_path}. Missing config.json or model weights (.bin/.safetensors).")
                 return False
             
             logger.info(f"📥 Loading fine-tuned sentence transformer model from: {self.fine_tuned_model_path}")
