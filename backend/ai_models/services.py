@@ -15,6 +15,7 @@ import random
 
 from .external_api_service import external_api_service
 from qa_management.services import drive_service
+from .query_response_cache import query_response_cache
 
 logger = logging.getLogger(__name__)
 
@@ -2214,6 +2215,9 @@ class BDUChatbotService:
         # Tạo shared response_generator trước tiên
         self.response_generator = GeminiResponseGenerator()
         
+        # Khởi tạo conversation memory
+        self.query_cache = query_response_cache
+        
         # Truyền shared response_generator vào enhanced hybrid_chatbot
         self.hybrid_chatbot = HybridChatbotAI(shared_response_generator=self.response_generator)
         
@@ -2462,11 +2466,11 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
 
     def process_query(self, query: str, session_id: str = None, jwt_token: str = None, document_text: str = None) -> dict:
         """
-        🚀 ENHANCED: Main method với Two-Stage Re-ranking, Fine-tuned Model Support và Confidence Management
+        🚀 ENHANCED: Main method với Two-Stage Re-ranking, Fine-tuned Model Support, Confidence Management và Query-Response Cache
         """
         start_time = time.time()
         
-        logger.info(f"🎯 Enhanced BDU Service Processing với Two-Stage Re-ranking, Fine-tuned Model Support và Confidence Management: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
+        logger.info(f"🎯 Enhanced BDU Service Processing với Cache, Two-Stage Re-ranking, Fine-tuned Model Support và Confidence Management: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
         
         try:
             if not query or len(query.strip()) < 2:
@@ -2478,8 +2482,21 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                     'document_context_used': False,
                     'graceful_degradation_used': False,
                     'two_stage_reranking_used': False,
-                    'fine_tuned_model_used': False
+                    'fine_tuned_model_used': False,
+                    'cache_hit': False
                 }
+            
+            # 🚀 CACHE CHECK: Kiểm tra cache trước khi xử lý
+            # Chỉ check cache cho non-personal queries (cache sẽ tự động bỏ qua personal queries)
+            cached_response = self.query_cache.get(query)
+            if cached_response:
+                # Cache hit - trả về ngay lập tức
+                cached_response['processing_time'] = time.time() - start_time
+                logger.info(f"⚡ CACHE HIT: Response served in {cached_response['processing_time']:.3f}s")
+                return cached_response
+            
+            # Cache miss - tiếp tục xử lý bình thường
+            logger.info("💨 CACHE MISS: Proceeding with full processing pipeline")
             
             # 🚀 Get session memory EARLY for context-aware decisions
             session_memory = self.hybrid_chatbot.get_conversation_context(session_id) if session_id else []
@@ -2499,13 +2516,19 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                 logger.info("🚨 ENHANCED API PRIORITY ACTIVATED: Personal/Schedule query detected with context awareness và adjusted confidence thresholds")
                 
                 if jwt_token and jwt_token.strip():
-                    # Has token -> Call external API
-                    return self._handle_external_api_call(
+                    # Has token -> Call external API (KHÔNG CACHE vì là thông tin cá nhân)
+                    api_result = self._handle_external_api_call(
                         query, intent_result, entities, session_id, jwt_token
                     )
+                    api_result['cache_hit'] = False
+                    api_result['cache_skipped'] = 'personal_query'
+                    return api_result
                 else:
-                    # No token -> Require authentication (with context awareness)
-                    return self._handle_authentication_required(session_id, has_context)
+                    # No token -> Require authentication (KHÔNG CACHE)
+                    auth_result = self._handle_authentication_required(session_id, has_context)
+                    auth_result['cache_hit'] = False
+                    auth_result['cache_skipped'] = 'authentication_required'
+                    return auth_result
             
             # FALLBACK TO ENHANCED HYBRID SYSTEM với Two-Stage Re-ranking
             logger.info("📚 Using Enhanced Hybrid System with Two-Stage Re-ranking, Fine-tuned Model Support và Confidence Management")
@@ -2517,11 +2540,38 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
             result['context_memory_available'] = has_context
             result['enhanced_processing'] = True
             result['document_context_support'] = bool(document_text)
-            result['fine_tuned_model_available'] = self.intent_classifier.fine_tuned_model is not None  # 🚀 NEW
-            result['confidence_management_enabled'] = True  # 🚀 NEW
-            # two_stage_reranking_used flag will be set by hybrid_chatbot if needed
+            result['fine_tuned_model_available'] = self.intent_classifier.fine_tuned_model is not None
+            result['confidence_management_enabled'] = True
+            result['cache_hit'] = False
+            
+            # 🚀 CACHE STORE: Lưu kết quả vào cache (nếu đủ điều kiện)
+            cache_stored = self.query_cache.set(query, result)
+            if cache_stored:
+                result['cache_stored'] = True
+                logger.info(f"💾 Response cached for future requests (confidence: {result.get('confidence', 0.0)})")
+            else:
+                result['cache_stored'] = False
+                logger.debug("🚫 Response not cached (confidence too low or other restrictions)")
             
             return result
+            
+        except Exception as e:
+            logger.error(f"❌ Enhanced BDU Service Error: {str(e)}")
+            personal_address = self._get_personal_address(session_id)
+            error_response = {
+                'response': f"Dạ {personal_address}, em gặp khó khăn kỹ thuật. {personal_address.title()} có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎓",
+                'confidence': 0.0,
+                'method': 'service_error',
+                'processing_time': time.time() - start_time,
+                'error': str(e),
+                'document_context_used': bool(document_text),
+                'graceful_degradation_used': True,
+                'two_stage_reranking_used': False,
+                'fine_tuned_model_used': False,
+                'cache_hit': False,
+                'cache_stored': False
+            }
+            return error_response
             
         except Exception as e:
             logger.error(f"❌ Enhanced BDU Service Error: {str(e)}")
@@ -2554,6 +2604,8 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                 'error': str(e),
                 'supported_formats': []
             }
+            
+        cache_stats = self.query_cache.get_cache_stats()
         
         # 🚀 ENHANCED: Add Two-Stage Re-ranking và Fine-tuned Model system info
         hybrid_status.update({
@@ -2609,10 +2661,59 @@ Sau khi đăng nhập, {personal_address} có thể hỏi lại em về lịch g
                 '13. User Memory Prompt Integration',
                 '14. Gender-based Addressing with Context',
                 '15. Conversation Context Summary Integration'
-            ]
+            ],
+            'cache_system': cache_stats,  # 🚀 NEW
+            'enhanced_features': [
+                'query_response_cache',  # 🚀 NEW
+                'cache_quality_control',  # 🚀 NEW
+                'ttl_management',  # 🚀 NEW
+                'personal_query_detection',  # 🚀 NEW
+                'two_stage_reranking', 
+                'fine_tuned_model_support', 
+                'confidence_management', 
+                'enhanced_intent_classification',
+                'advanced_hybrid_reranker', 
+                'cross_encoder_reranking', 
+                'context_aware_decision_engine',
+                'session_memory_integration', 
+                'api_priority_detection', 
+                'external_api_integration',
+                'jwt_token_authentication', 
+                'lecturer_schedule_access', 
+                'personal_information_queries', 
+                'user_memory_prompt_support', 
+                'flexible_personalization', 
+                'dynamic_system_prompts', 
+                'custom_user_instructions', 
+                'gender_based_addressing', 
+                'no_fallback_addressing',
+                'session_memory_integration', 
+                'context_driven_api_decisions', 
+                'enhanced_conversation_continuity', 
+                'smart_clarification_reduction', 
+                'graceful_degradation_support', 
+                'fallback_response_mechanism', 
+                'consistent_personalization_in_errors', 
+                'document_context_processing', 
+                'pdf_docx_support', 
+                'document_based_answering'
+            ],
+            'cache_info': {  # 🚀 NEW
+                'enabled': True,
+                'backend': 'django_cache',
+                'default_ttl_minutes': self.query_cache.default_ttl // 60,
+                'min_confidence_threshold': self.query_cache.min_confidence_threshold,
+                'personal_query_detection': True,
+                'quality_control_enabled': True
+            }
         })
         
-        return hybrid_status
+        return {
+            'chatbot_service': hybrid_status,
+            'external_api_service': api_status,
+            'ocr_service': ocr_status,
+            'cache_performance': cache_stats  # 🚀 NEW
+        }
 
     def _get_api_fallback_response(self, api_result: dict, session_id: str) -> str:
         """Fallback response when API data is available but Gemini fails với gender support"""
@@ -2710,4 +2811,17 @@ Tuy nhiên em gặp khó khăn trong việc trình bày chi tiết. {personal_ad
         """Delegate to hybrid chatbot"""
         return self.hybrid_chatbot.knowledge_data
 
+    def get_cache_stats(self):
+        """🚀 NEW: Get cache statistics"""
+        return self.query_cache.get_cache_stats()
+
+    def clear_cache(self):
+        """🚀 NEW: Clear query response cache"""
+        return self.query_cache.clear_cache()
+
+    def update_cache_ttl(self, new_ttl: int):
+        """🚀 NEW: Update cache TTL"""
+        self.query_cache.update_ttl(new_ttl)
+        logger.info(f"🔄 Cache TTL updated to {new_ttl} seconds")
+    
 chatbot_ai = BDUChatbotService()
