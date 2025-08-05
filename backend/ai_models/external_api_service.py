@@ -330,11 +330,33 @@ class ExternalAPIService:
         }
         
         for weekday_name, target_weekday in weekday_patterns.items():
-            if weekday_name in query_lower:
-                target_date = self._get_next_weekday(today, target_weekday)
-                target_date_str = target_date.strftime('%d-%m-%Y')
-                logger.info(f"✅ WEEKDAY PATTERN: '{weekday_name}' -> {target_date_str}")
-                return {k: v for k, v in schedule.items() if k == target_date_str}
+            # Sử dụng regex để đảm bảo khớp từ hoàn chỉnh (tránh "thứ" trong "thứ bậc")
+            pattern = r'\b' + re.escape(weekday_name) + r'\b'
+            
+            if re.search(pattern, query_lower):
+                # KIỂM TRA NGỮ CẢNH: Chỉ kích hoạt khi có ý định xem lịch rõ ràng
+                
+                # Ngữ cảnh 1: Có từ bổ nghĩa thời gian (vd: "tuần sau", "tới")
+                has_time_modifier = any(mod in query_lower for mod in ['tuần này', 'tuần sau', 'tuần tới', 'tới', 'nay', 'sau'])
+                
+                # Ngữ cảnh 2: Có từ khóa về lịch trình (vd: "xem lịch", "tkb")
+                has_schedule_keyword = any(kw in query_lower for kw in ['lịch', 'tkb', 'thời khóa biểu', 'xem lịch', 'có lịch'])
+
+                # Ngữ cảnh 3 (QUAN TRỌNG): Loại trừ các trường hợp là số thứ tự
+                is_ordinal_context = any(kw in query_lower for kw in ['lần', 'vi phạm', 'hạng', 'điều'])
+
+                # Chỉ khi có ngữ cảnh (1 hoặc 2) VÀ không phải là ngữ cảnh số thứ tự (3) thì mới xử lý
+                if (has_time_modifier or has_schedule_keyword) and not is_ordinal_context:
+                    target_date = self._get_next_weekday(today, target_weekday)
+                    target_date_str = target_date.strftime('%d-%m-%Y')
+                    logger.info(f"✅ CONTEXTUAL WEEKDAY PATTERN: '{weekday_name}' with context -> {target_date_str}")
+                    return {k: v for k, v in schedule.items() if k == target_date_str}
+                else:
+                    # Ghi log lý do bỏ qua để dễ gỡ lỗi sau này
+                    logger.info(f"ℹ️ SKIPPING WEEKDAY PATTERN for '{weekday_name}': "
+                                f"has_time_modifier={has_time_modifier}, "
+                                f"has_schedule_keyword={has_schedule_keyword}, "
+                                f"is_ordinal_context={is_ordinal_context}")
         
         # PRIORITY 5: Specific date patterns (lowest priority)
         # Chỉ xử lý khi không có từ khóa thời gian chung trong câu ngắn

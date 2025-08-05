@@ -26,7 +26,7 @@ ALLOWED_HOSTS = [
     'localhost',           # Cho development trên máy local
     '127.0.0.1',          # IP local
     '0.0.0.0',            # Cho phép tất cả IP (chỉ dùng khi test)
-    '192.168.69.108', # IP máy của Khang
+    '192.168.69.142', # IP máy
     '192.168.69.0/24', # Dải IP trong mạng nội bộ
     # '192.168.1.100',    # 🔥 DEPLOY: Bỏ # và thay bằng IP server thật
     # 'your-domain.com',  # 🔥 DEPLOY: Nếu có tên miền thì bỏ # và sửa
@@ -232,7 +232,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",     # Development - Local
     "http://localhost:8080",      # Port khác
     "http://127.0.0.1:8080",     # Port khác
-    "http://192.168.69.108:3000",  # IP thật của frontend của Khang
+    "http://192.168.69.142:3000",  # IP thật
     "http://192.168.69.104:3000"
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80

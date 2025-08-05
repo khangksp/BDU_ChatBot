@@ -1846,7 +1846,7 @@ class ChatbotAI:
                 logger.debug(f"✅ FOUND reference link: STT '{stt}' -> '{link_url}'")
         
         return reference_links
-
+    
     def load_knowledge_base(self):
         """🚀 ENHANCED: Auto-generate keywords from CSV data với fine-tuned model support"""
         try:
@@ -1968,7 +1968,7 @@ class ChatbotAI:
         except Exception as e:
             logger.error(f"Error loading knowledge with auto-keywords: {str(e)}")
             self.knowledge_data = self.get_fallback_knowledge_lecturer()
-
+    
     def _generate_keywords_from_entry(self, question='', intent='', category='', chu_de_thong_bao=''):
         """
         🚀 CORE METHOD: Auto-generate keywords from a single knowledge entry
@@ -2262,65 +2262,79 @@ class BDUChatbotService:
         logger.info("🚀 Enhanced BDUChatbotService initialized with Two-Stage Re-ranking, Fine-tuned Model Support và Adjusted Confidence Management")
 
     def _needs_external_api(self, query: str, intent_result: dict, session_memory: list = None) -> bool:
-        """🚀 ENHANCED: API need detection với session memory context và adjusted thresholds"""
+        """🚀 ENHANCED: API need detection với CONTEXT-AWARE LOGIC và session memory"""
         if not query:
             return False
         
         query_lower = query.lower()
         
-        # ✅ CHECK 1: Direct personal keyword matches (unchanged)
+        # ✅ CHECK 1: Direct personal keyword matches (Không đổi)
         has_personal_keywords = any(
             keyword in query_lower 
             for keyword in self.api_priority_config['personal_info_keywords']
         )
         
-        # ✅ CHECK 2: Time context (usually indicates schedule query)
-        has_time_context = any(
-            keyword in query_lower 
-            for keyword in self.api_priority_config['time_context_keywords']
-        )
-        
-        # ✅ CHECK 3: Intent-based detection (unchanged)
+        # ✅ CHECK 2: Time context (LOGIC NÂNG CẤP)
+        # =======================================================================
+        # Bắt đầu logic mới để thay thế cho logic cũ "has_time_context"
+        def is_time_context_query(q_lower: str) -> bool:
+            """Hàm nội bộ để kiểm tra ngữ cảnh thời gian một cách thông minh."""
+            
+            # Các từ khóa thời gian không gây nhầm lẫn (luôn đúng)
+            unambiguous_keywords = ['hôm nay', 'ngày mai', 'tuần này', 'tuần sau', 'tuần tới', 'lịch', 'tkb', 'cuối tuần', 'đầu tuần']
+            if any(kw in q_lower for kw in unambiguous_keywords):
+                return True
+
+            # Các từ khóa "Thứ" + "số" có thể gây nhầm lẫn -> cần kiểm tra kỹ
+            weekday_keywords = ['thứ 2', 'thứ 3', 'thứ 4', 'thứ 5', 'thứ 6', 'thứ 7', 'chủ nhật', 'thu 2', 'thu 3', 'thu 4', 'thu 5', 'thu 6', 'thu 7', 'chu nhat']
+            if any(day in q_lower for day in weekday_keywords):
+                # Nếu có từ khóa "Thứ", kiểm tra xem có phải là ngữ cảnh số thứ tự không
+                ordinal_context_keywords = ['lần', 'vi phạm', 'hạng', 'điều', 'năm thứ', 'buổi học']
+                if any(kw in q_lower for kw in ordinal_context_keywords):
+                    # Nếu có các từ này, đây là số thứ tự -> KHÔNG phải câu hỏi về thời gian
+                    return False
+                
+                # Nếu không có các từ khóa loại trừ, đây là câu hỏi về thời gian
+                return True
+            
+            return False
+
+        has_time_context = is_time_context_query(query_lower)
+        # Kết thúc logic mới
+        # =======================================================================
+
+        # Các logic kiểm tra còn lại giữ nguyên
         intent_name = intent_result.get('intent', '')
         is_schedule_intent = intent_name in self.api_priority_config['schedule_intent_names']
         
-        # ✅ CHECK 4: High confidence personal intent - adjusted threshold
         intent_confidence = intent_result.get('confidence', 0)
         high_confidence_personal = (
             is_schedule_intent and intent_confidence > self.api_priority_config['schedule_intent_confidence_threshold']
         )
         
-        # 🚀 SESSION MEMORY CONTEXT ANALYSIS (unchanged logic)
         context_suggests_api = False
         has_continuation_words = False
         
         if session_memory and len(session_memory) > 0:
-            # Analyze recent interactions for schedule-related context
             recent_interactions = session_memory[-self.api_priority_config['memory_lookback_limit']:]
-            
             schedule_intent_count = 0
             for interaction in recent_interactions:
                 past_intent = interaction.get('intent_info', {})
                 if isinstance(past_intent, dict):
                     past_intent_name = past_intent.get('intent', '')
                     past_intent_confidence = past_intent.get('confidence', 0)
-                    
                     if (past_intent_name in self.api_priority_config['schedule_intent_names'] and 
                         past_intent_confidence > self.api_priority_config['schedule_intent_confidence_threshold']):
                         schedule_intent_count += 1
-            
-            # If we found schedule context in recent history
             if schedule_intent_count > 0:
                 context_suggests_api = True
                 logger.info(f"🧠 CONTEXT API: Found {schedule_intent_count} schedule-related intents in history")
             
-            # Check for continuation keywords in current query
             has_continuation_words = any(
                 keyword in query_lower 
                 for keyword in self.api_priority_config['context_continuation_keywords']
             )
         
-        # 🚀 Context-driven API decisions
         context_driven_api = context_suggests_api and has_continuation_words
         smart_short_query_api = (
             len(query.split()) <= 5 and 
@@ -2328,7 +2342,6 @@ class BDUChatbotService:
             context_suggests_api
         )
         
-        # ✅ FINAL DECISION with memory integration
         needs_api = (
             has_personal_keywords or 
             has_time_context or 
@@ -2337,7 +2350,6 @@ class BDUChatbotService:
             smart_short_query_api
         )
         
-        # 🚀 ENHANCED LOGGING với adjusted thresholds
         logger.info(f"🔍 ENHANCED API Priority Check (adjusted for capped scores):")
         logger.info(f"   📝 Query: '{query[:50]}...' ({len(query.split())} words)")
         logger.info(f"   🔑 Direct: personal_kw={has_personal_keywords}, time_ctx={has_time_context}")

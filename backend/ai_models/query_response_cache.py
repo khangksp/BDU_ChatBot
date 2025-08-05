@@ -15,7 +15,7 @@ class QueryResponseCache:
     Triển khai cache với TTL, kiểm soát chất lượng và chuẩn hóa key
     """
     
-    def __init__(self, default_ttl: int = 1800):  # 30 phút
+    def __init__(self, default_ttl: int = 3600):  # 1h
         """
         Khởi tạo cache với TTL mặc định
         

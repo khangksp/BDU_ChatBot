@@ -34,7 +34,7 @@ class PhoBERTRetrieverTrainer:
             'warmup_steps': 100,
             'evaluation_steps': 500,
             'save_steps': 1000,
-            'max_seq_length': 128,
+            'max_seq_length': 256,
             'learning_rate': 2e-5,
             'temperature': 0.05  # For Multiple Negatives Ranking Loss
         }
@@ -209,7 +209,8 @@ class PhoBERTRetrieverTrainer:
         )
         
         # Create loss function - Multiple Negatives Ranking Loss
-        train_loss = losses.CosineSimilarityLoss(model=self.model)
+        train_loss = losses.MultipleNegativesRankingLoss(model=self.model)
+        # train_loss = losses.CosineSimilarityLoss(model=self.model)
         
         # Create evaluator
         evaluator = self.create_evaluation_data()
