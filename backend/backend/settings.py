@@ -233,10 +233,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",      # Port khác
     "http://127.0.0.1:8080",     # Port khác
     "http://192.168.69.142:3000",  # IP thật
-    "http://192.168.69.104:3000"
+    "http://192.168.69.104:3000",
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
+    "https://eeb59d0339b3.ngrok-free.app"
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
