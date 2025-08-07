@@ -20,8 +20,8 @@ services:
   # Backend Django Service
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: bdu_chatbot_backend
     volumes:
       - ./backend:/app
@@ -32,8 +32,13 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      # Cần thiết để Django kết nối DB trong Docker
       - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/bdu_chatbot
+      # Cần thiết để Django biết file settings nào cần dùng
       - DJANGO_SETTINGS_MODULE=backend.settings
+      # Ghi đè đường dẫn trong .env để trỏ đúng vào vị trí trong container cho OCR
+      - TESSERACT_PATH_RELATIVE=/usr/bin/tesseract
+      - POPPLER_PATH_RELATIVE=/usr/bin
     depends_on:
       - postgres
     restart: unless-stopped

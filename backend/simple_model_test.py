@@ -49,7 +49,7 @@ print("=" * 60)
 GOLDEN_TEST_FILE = "golden_test_set.csv"  # 📁 Đặt file này cùng thư mục
 QA_DATABASE_FILE = "data/QA.csv"          # 📁 File QA gốc để lấy đáp án
 SIMILARITY_THRESHOLD = 0.4                # 🎯 Ngưỡng để coi là trả lời đúng
-MAX_TEST_QUESTIONS = 10                   # 🔢 Số câu test (để test nhanh, đặt = 50 để test full)
+MAX_TEST_QUESTIONS = 25                   # 🔢 Số câu test (để test nhanh, đặt = 50 để test full)
 
 # =================== IMPORT SERVICE THẬT ===================
 chatbot_ai = None
