@@ -36,11 +36,11 @@ class PhoBERTRetrieverTrainer:
         if self.training_method == 'triplet':
             # TripletLoss configuration
             self.config = {
-                'batch_size': 16,
+                'batch_size': 12,
                 'epochs': 3,
                 'warmup_steps': 100,
                 'evaluation_steps': 500,
-                'save_steps': 1000,
+                'save_steps': 50,
                 'max_seq_length': 256,
                 'learning_rate': 2e-5,
                 'triplet_margin': 0.5,

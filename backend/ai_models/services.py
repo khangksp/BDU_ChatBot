@@ -29,8 +29,8 @@ class AdvancedHybridReRanker:
     
     def __init__(self, intent_classifier):
         # Trọng số cho công thức final_score = α × semantic_score + β × keyword_score
-        self.alpha = 0.6  # Trọng số cho semantic score
-        self.beta = 0.4   # Trọng số cho keyword score
+        self.alpha = 0.7  # Trọng số cho semantic score
+        self.beta = 0.3   # Trọng số cho keyword score
         
         # 🚀 NEW: Cross-Encoder configuration
         self.cross_encoder = None
@@ -391,8 +391,8 @@ class LecturerDecisionEngine:
     def __init__(self):
         # ✅ FIXED: Lower confidence thresholds to account for capped scores
         self.confidence_thresholds = {
-            'high_trust': 0.6,
-            'medium_trust': 0.35,
+            'high_trust': 0.5,
+            'medium_trust': 0.25,
             'low_trust': 0.15,
             'no_trust': 0.1         
         }

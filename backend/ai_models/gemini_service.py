@@ -483,7 +483,7 @@ class SimpleVietnameseRestorer:
             headers = {'Content-Type': 'application/json'}
             data = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 100, "topP": 0.8},
+                "generationConfig": {"ture": 0.1, "maxOutputTokens": 100, "topP": 0.8},
                 "safetySettings": [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
