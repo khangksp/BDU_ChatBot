@@ -9,7 +9,7 @@
     --dark-gray: #1f2937;
     --success-green: #10a37f;
     --sidebar-width: 280px;
-    --sidebar-closed-width: 50px;
+    --sidebar-closed-width: 70px;
     --border-radius: 8px;
 }
 
@@ -1217,3 +1217,93 @@ body {
     color: #5f6368;
     padding: 0 5px;
 }
+
+
+/* ✨ SIMPLE ICON TOOLBAR - CLEAN & MINIMAL */
+
+.simple-icon-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.icon-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #495057;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.icon-btn:hover {
+    background: #e9ecef;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.icon-btn:active {
+    transform: translateY(0);
+}
+
+.icon-btn.active {
+    background: #007bff;
+    color: white;
+}
+
+.icon-btn.has-file {
+    background: #28a745;
+    color: white;
+}
+
+.icon-btn.stop-btn {
+    background: #dc3545;
+    color: white;
+}
+
+.icon-btn.clear-btn {
+    background: #6c757d;
+    color: white;
+}
+
+.icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Integration with input section */
+.simple-icon-toolbar + .modern-input-section {
+    border-top: none;
+    margin-top: 0;
+}
+
+.modern-input-section {
+    border-top: 1px solid #dee2e6;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .simple-icon-toolbar {
+        padding: 6px 12px;
+        gap: 6px;
+    }
+    
+    .icon-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+    }
+}
+

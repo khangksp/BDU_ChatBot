@@ -28,20 +28,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class PhoBERTIntentClassifier:
-    """
-    🚀 Enhanced PhoBERT-based Intent Classification with Fine-tuned Model Support
-    
-    Features:
-    - Fine-tuned model integration with fallback to base model
-    - Simplified to 6-7 mega-intents instead of 25+ specific intents
-    - Keywords now loaded automatically from CSV data
-    - Ensemble methods (PhoBERT + Keyword + Pattern + Context)
-    - Multi-intent detection
-    - Context-aware classification
-    - Confidence calibration
-    - Vietnamese normalization support
-    """
-    
     def __init__(self):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if TRANSFORMERS_AVAILABLE else None
         self.tokenizer = None
@@ -165,7 +151,7 @@ class PhoBERTIntentClassifier:
             if not TRANSFORMERS_AVAILABLE:
                 return False
                 
-            model_name = "vinai/phobert-base"
+            model_name = "vinai/phobert-large"
             logger.info(f"📥 Loading base PhoBERT model: {model_name}")
             
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)

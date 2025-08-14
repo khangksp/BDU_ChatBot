@@ -24,7 +24,7 @@ class PhoBERTRetrieverTrainer:
     2. TripletLoss with Hard Negative Mining (new advanced method)
     """
     
-    def __init__(self, base_model_name='vinai/phobert-base', output_dir='./fine_tuned_phobert', training_method='triplet'):
+    def __init__(self, base_model_name='vinai/phobert-large', output_dir='./fine_tuned_phobert', training_method='triplet'):
         self.base_model_name = base_model_name
         self.output_dir = output_dir
         self.training_method = training_method.lower()  # 'triplet' or 'ranking'

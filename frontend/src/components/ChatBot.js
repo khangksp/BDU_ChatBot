@@ -1016,7 +1016,7 @@ ${voiceStatus}
                 timeout: 60000
             });
             
-            console.log('🔍 FULL SPEECH RESPONSE:', JSON.stringify(response.data, null, 2));
+            console.log('📝 FULL SPEECH RESPONSE:', JSON.stringify(response.data, null, 2));
             
             if (response.data.success && response.data.text) {
                 const transcribedText = response.data.text.trim();
@@ -1092,6 +1092,78 @@ ${voiceStatus}
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    // ✅ UPDATED FORMAT MESSAGE FUNCTION - FIXED ISSUES
+    const formatMessage = (content) => {
+        if (!content) return null;
+        
+        // Clean up content and normalize line breaks
+        let formattedContent = content
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n')
+            .trim();
+        
+        // Format numbered sections (1. 2. 3. etc.) but ONLY at start of line
+        formattedContent = formattedContent.replace(/^\s*(\d+)\.\s*([^\n]+)/gm, (match, num, text) => {
+            return `<div class="format-section">
+                <div class="section-header">
+                    <span class="section-number">${num}.</span>
+                    <strong class="section-title">${text.trim()}</strong>
+                </div>
+            </div>`;
+        });
+        
+        // Format emoji sections (🎓 Title:) but ONLY at start of line
+        formattedContent = formattedContent.replace(/^\s*([\u{1F300}-\u{1F9FF}])\s*([^:\n]+):\s*/gmu, (match, emoji, title) => {
+            return `<div class="format-emoji-section">
+                <div class="emoji-section-header">
+                    <span class="emoji-icon">${emoji}</span>
+                    <strong class="emoji-section-title">${title.trim()}:</strong>
+                </div>
+                <div class="emoji-section-content">`;
+        });
+        
+        // Close emoji sections properly
+        formattedContent = formattedContent.replace(/(<div class="emoji-section-content">[\s\S]*?)(?=\n\s*<div class="format-|$)/g, '$1</div></div>');
+        
+        // Format bold text
+        formattedContent = formattedContent.replace(/\*\*([^*\n]+)\*\*/g, '<strong class="format-bold">$1</strong>');
+        
+        // Format bullet points (• - *)
+        formattedContent = formattedContent.replace(/^\s*[•\-\*]\s+(.+)$/gm, '<div class="format-bullet"><span class="bullet-icon">•</span><span class="bullet-text">$1</span></div>');
+        
+        // Format sub-bullets (indented)
+        formattedContent = formattedContent.replace(/^\s{2,}[•\-\*]\s+(.+)$/gm, '<div class="format-sub-bullet"><span class="sub-bullet-icon">▸</span><span class="sub-bullet-text">$1</span></div>');
+        
+        // Format inline code
+        formattedContent = formattedContent.replace(/`([^`\n]+)`/g, '<code class="format-code">$1</code>');
+        
+        // Format links
+        formattedContent = formattedContent.replace(/(https?:\/\/[^\s<>]+)/g, '<a href="$1" target="_blank" class="format-link">$1</a>');
+        
+        // Format phone numbers
+        formattedContent = formattedContent.replace(/(\b0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b)/g, '<a href="tel:$1" class="format-phone">📞 $1</a>');
+        
+        // Format email addresses
+        formattedContent = formattedContent.replace(/(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)/g, '<a href="mailto:$1" class="format-email">✉️ $1</a>');
+        
+        // Highlight university name
+        formattedContent = formattedContent.replace(/\b(BDU|Đại học Bình Dương)\b/g, '<span class="format-university">$1</span>');
+        
+        // Clean up excessive line breaks
+        formattedContent = formattedContent.replace(/\n{3,}/g, '\n\n');
+        
+        // Convert remaining line breaks to <br/> but avoid breaking existing HTML
+        formattedContent = formattedContent.replace(/\n(?![^<]*>)/g, '<br/>');
+        
+        // Clean up spacing around div elements
+        formattedContent = formattedContent.replace(/(<\/div>)(<div class="format-)/g, '$1<br/>$2');
+        
+        return <div 
+            className="formatted-content clean-layout" 
+            dangerouslySetInnerHTML={{ __html: formattedContent }}
+        />;
     };
 
     // ✅ CHAT FUNCTIONS (Enhanced with document context)
@@ -1233,52 +1305,6 @@ ${voiceStatus}
             setLastUserInputMethod('text');
         }
     };
-    
-    const formatMessage = (content) => {
-        if (!content) return null;
-        
-        let formattedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        
-        // Enhanced formatting patterns
-        formattedContent = formattedContent.replace(/(\d+)\.\s*([^0-9\n][^\n]*)/g, (match, num, text) => {
-            return `\n\n<div class="format-section-number">
-                <div class="section-number-header">
-                    <span class="section-number">${num}.</span>
-                    <strong class="section-number-title">${text.trim()}</strong>
-                </div>
-            </div>\n`;
-        });
-        
-        formattedContent = formattedContent.replace(/([\u{1F300}-\u{1F9FF}])\s*([^:\n]+):/gu, (match, emoji, title) => {
-            return `\n\n<div class="format-emoji-section">
-                <div class="emoji-section-header">
-                    <span class="emoji-icon">${emoji}</span>
-                    <strong class="emoji-section-title">${title.trim()}:</strong>
-                </div>
-                <div class="emoji-section-content">`;
-        });
-        
-        formattedContent = formattedContent.replace(/(<div class="emoji-section-content">[\s\S]*?)(?=\n\n<div class="format-|$)/g, '$1</div></div>');
-        
-        formattedContent = formattedContent.replace(/\*\*([^*\n]+)\*\*/g, '<strong class="format-bold">$1</strong>');
-        formattedContent = formattedContent.replace(/^[\s]*[•\-\*]\s+(.+)$/gm, '<div class="format-bullet"><span class="bullet-icon">•</span><span class="bullet-text">$1</span></div>');
-        formattedContent = formattedContent.replace(/^[\s]{2,}[•\-\*]\s+(.+)$/gm, '<div class="format-sub-bullet"><span class="sub-bullet-icon">▸</span><span class="sub-bullet-text">$1</span></div>');
-        formattedContent = formattedContent.replace(/([?？])\s*([A-ZÁÊÔƠƯĐ][^?]*)/g, '$1</div><div class="format-answer"><strong>Trả lời:</strong> $2');
-        formattedContent = formattedContent.replace(/`([^`\n]+)`/g, '<code class="format-code">$1</code>');
-        
-        formattedContent = formattedContent.replace(/(https?:\/\/[^\s<>]+)/g, '<a href="$1" target="_blank" class="format-link">$1</a>');
-        formattedContent = formattedContent.replace(/(\b0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b)/g, '<a href="tel:$1" class="format-phone">📞 $1</a>');
-        formattedContent = formattedContent.replace(/(\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b)/g, '<a href="mailto:$1" class="format-email">✉️ $1</a>');
-        formattedContent = formattedContent.replace(/\b(BDU|Đại học Bình Dương)\b/g, '<span class="format-university">$1</span>');
-        formattedContent = formattedContent.replace(/\n{3,}/g, '\n\n');
-        formattedContent = formattedContent.replace(/\n(?![^<]*>)/g, '<br/>');
-        formattedContent = formattedContent.replace(/(<\/div>)(<div class="format-)/g, '$1<br/>$2');
-        
-        return <div 
-            className="formatted-content" 
-            dangerouslySetInnerHTML={{ __html: formattedContent }}
-        />;
-    };
 
     const getConfidenceColor = (confidence) => {
         if (confidence >= 0.8) return '#4CAF50';
@@ -1328,11 +1354,7 @@ ${voiceStatus}
                             className="search-input"
                         />
                     </div>
-                    
-                    <button className="create-project-btn">
-                        <span className="btn-icon">📂</span>
-                        <span className="btn-text">Tạo dự án mới</span>
-                    </button>
+                
                 </div>
 
                 <div className="sidebar-content">
@@ -1391,162 +1413,6 @@ ${voiceStatus}
 
             {/* Main Chat Area */}
             <div className="modern-main-area">
-
-                {/* 🚀 NEW: Document Context Panel */}
-                {currentDocument && (
-                    <div className="document-context-panel">
-                        <div className="document-info">
-                            <div className="document-header">
-                                <span className="document-icon">📄</span>
-                                <div className="document-details">
-                                    <span className="document-name">{currentDocument.filename}</span>
-                                    <span className="document-meta">
-                                        {currentDocument.page_count} trang • {(currentDocument.file_size / 1024).toFixed(1)}KB
-                                    </span>
-                                </div>
-                                <div className="document-actions">
-                                    <button 
-                                        className="doc-action-btn"
-                                        onClick={toggleDocumentModal}
-                                        title="Xem chi tiết"
-                                    >
-                                        👁️
-                                    </button>
-                                    <button 
-                                        className="doc-action-btn danger"
-                                        onClick={clearDocumentContext}
-                                        title="Xóa khỏi ngữ cảnh"
-                                    >
-                                        🗑️
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="document-status">
-                                <span className="status-indicator active">
-                                    ✅ Đang sử dụng trong ngữ cảnh
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 🚀 NEW: File Upload and Document Controls */}
-                <div className="document-control-panel">
-                    <div className="upload-section">
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileSelect}
-                            accept=".pdf,.docx,.doc"
-                            style={{ display: 'none' }}
-                        />
-                        
-                        <button 
-                            className="upload-btn"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploadingFile || isProcessingDocument}
-                            title="Tải lên tài liệu PDF/DOCX"
-                        >
-                            {isUploadingFile ? (
-                                <>
-                                    <span className="btn-icon">⏳</span>
-                                    <span className="btn-text">Đang tải... {uploadProgress}%</span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="btn-icon">📁</span>
-                                    <span className="btn-text">Tải lên tài liệu</span>
-                                </>
-                            )}
-                        </button>
-
-                        {(speechSupported || ttsSupported) && (
-                            <div className="document-voice-controls">
-                                <button 
-                                    className={`doc-control-btn ${autoDownloadEnabled ? 'active' : ''}`}
-                                    onClick={toggleAutoDownload}
-                                    title={autoDownloadEnabled ? 'Tắt tự động tải' : 'Bật tự động tải'}
-                                >
-                                    {autoDownloadEnabled ? '⚡' : '⏸️'} 
-                                    {autoDownloadEnabled ? 'Tự động tải' : 'Thủ công'}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Processing Status */}
-                    {(isUploadingFile || isProcessingDocument) && (
-                        <div className="processing-status">
-                            <div className="processing-animation">
-                                <div className="processing-spinner"></div>
-                                <span className="processing-text">
-                                    {documentProcessingStatus}
-                                </span>
-                            </div>
-                            {uploadProgress > 0 && (
-                                <div className="progress-bar">
-                                    <div 
-                                        className="progress-fill" 
-                                        style={{ width: `${uploadProgress}%` }}
-                                    ></div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Voice Control Panel */}
-                {(speechSupported || ttsSupported) && (
-                    <div className="voice-control-panel">
-                        {ttsSupported && (
-                            <>
-                                <button 
-                                    className={`voice-control-btn ${voiceModeEnabled ? 'active' : ''}`}
-                                    onClick={toggleVoiceMode}
-                                    title={voiceModeEnabled ? 'Tắt chế độ giọng nói' : 'Bật chế độ giọng nói'}
-                                >
-                                    {voiceModeEnabled ? '🎤🔊' : '📝'} 
-                                    {voiceModeEnabled ? 'Giọng nói' : 'Văn bản'}
-                                </button>
-                                
-                                <button 
-                                    className={`voice-control-btn ${autoPlayEnabled ? 'active' : ''}`}
-                                    onClick={toggleAutoPlay}
-                                    title={autoPlayEnabled ? 'Tắt tự động phát' : 'Bật tự động phát'}
-                                >
-                                    {autoPlayEnabled ? '🔊' : '🔇'} 
-                                    {autoPlayEnabled ? 'Tự động' : 'Thủ công'}
-                                </button>
-                                
-                                {isPlayingAudio && (
-                                    <button 
-                                        className="voice-control-btn stop-audio"
-                                        onClick={stopCurrentAudio}
-                                        title="Dừng phát âm thanh"
-                                    >
-                                        ⏹️ Dừng
-                                    </button>
-                                )}
-                            </>
-                        )}
-                        
-                        <div className="voice-status-indicator">
-                            {voiceModeEnabled && ttsSupported && (
-                                <span className="status-badge voice-mode">🎤🔊 Chế độ giọng nói</span>
-                            )}
-                            {forceVoiceMode && (
-                                <span className="status-badge force-voice">🎤 Sẵn sàng nói</span>
-                            )}
-                            {isPlayingAudio && (
-                                <span className="status-badge playing">🔊 Đang phát...</span>
-                            )}
-                            {currentDocument && (
-                                <span className="status-badge document-active">📄 Có tài liệu</span>
-                            )}
-                        </div>
-                    </div>
-                )}
-
                 {/* Messages Area */}
                 <div className={`modern-messages-area ${loadingMessages ? 'loading' : ''}`}>
                     {messages.length === 0 || (messages.length === 1 && messages[0].type === 'bot') ? (
@@ -1563,56 +1429,7 @@ ${voiceStatus}
                             </div>
                             
                             <div className="quick-actions">
-                                <h3>Gợi ý câu hỏi:</h3>
-                                <div className="quick-buttons">
-                                    <button 
-                                        className="quick-btn"
-                                        onClick={() => {
-                                            setInputMessage('Thông tin tuyển sinh năm 2024');
-                                            setLastUserInputMethod('text');
-                                            setForceVoiceMode(false);
-                                        }}
-                                    >
-                                        📚 Tuyển sinh 2024
-                                    </button>
-                                    <button 
-                                        className="quick-btn"
-                                        onClick={() => {
-                                            setInputMessage('Học phí các ngành năm 2024');
-                                            setLastUserInputMethod('text');
-                                            setForceVoiceMode(false);
-                                        }}
-                                    >
-                                        💰 Học phí
-                                    </button>
-                                    <button 
-                                        className="quick-btn"
-                                        onClick={() => {
-                                            setInputMessage('Các ngành đào tạo tại BDU');
-                                            setLastUserInputMethod('text');
-                                            setForceVoiceMode(false);
-                                        }}
-                                    >
-                                        🎓 Ngành học
-                                    </button>
-                                    <button 
-                                        className="quick-btn"
-                                        onClick={() => {
-                                            setInputMessage('Cơ sở vật chất và ký túc xá');
-                                            setLastUserInputMethod('text');
-                                            setForceVoiceMode(false);
-                                        }}
-                                    >
-                                        🏢 Cơ sở vật chất
-                                    </button>
-                                    {/* 🚀 NEW: Document-related quick actions */}
-                                    <button 
-                                        className="quick-btn document-btn"
-                                        onClick={() => fileInputRef.current?.click()}
-                                    >
-                                        📄 Tải lên tài liệu
-                                    </button>
-                                </div>
+                                <h3>Chatbot Đại học Bình Dương</h3>
                             </div>
                         </div>
                     ) : (
@@ -1693,7 +1510,7 @@ ${voiceStatus}
 
                                                 {message.document_enhanced && (
                                                     <div className="document-enhanced-badge">
-                                                        🔍 Phân tích từ tài liệu
+                                                        📝 Phân tích từ tài liệu
                                                     </div>
                                                 )}
                                             </div>
@@ -1702,20 +1519,6 @@ ${voiceStatus}
                                         {/* Sources and Reference Links */}
                                         {(message.sources && message.sources.length > 0) || (message.reference_links && message.reference_links.length > 0) ? (
                                             <div className="message-attachments">
-                                                {message.sources && message.sources.length > 0 && (
-                                                    <div className="sources-section">
-                                                        <h4>📚 Nguồn tham khảo:</h4>
-                                                        {message.sources.map((source, idx) => (
-                                                            <div key={idx} className="source-item">
-                                                                <div className="source-question">Q: {source.question}</div>
-                                                                <div className="source-similarity">
-                                                                    Độ tương đồng: {(source.similarity * 100).toFixed(1)}%
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-
                                                 {message.reference_links && message.reference_links.length > 0 && (
                                                     <div className="reference-links-section">
                                                         <h4>🔗 Tài liệu liên quan:</h4>
@@ -1796,6 +1599,8 @@ ${voiceStatus}
                     )}
                 </div>
 
+                
+
                 {/* Input Section */}
                 <div className="modern-input-section">
                     {/* Recording Status */}
@@ -1814,25 +1619,13 @@ ${voiceStatus}
                             {isProcessingSpeech && (
                                 <div className="processing-indicator">
                                     <div className="processing-spinner"></div>
-                                    <span className="processing-text">🔄 Đang xử lý giọng nói...</span>
+                                    <span className="processing-text">📄 Đang xử lý giọng nói...</span>
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {/* ✅ NEW: Hiển thị file đã chọn */}
-                    {selectedFile && (
-                        <div className="selected-file-indicator">
-                            <span>📄 Đã chọn: <strong>{selectedFile.name}</strong></span>
-                            <button 
-                                onClick={() => setSelectedFile(null)} 
-                                className="remove-file-btn"
-                                title="Bỏ chọn file này"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    )}
+
 
                     <div className="modern-input-container">
                         <div className="input-wrapper">
@@ -1863,19 +1656,83 @@ ${voiceStatus}
                                         {isRecording ? '⏹️' : (isProcessingSpeech ? '⏳' : '🎤')}
                                     </button>
                                 )}
-                                
-                                {/* 🚀 NEW: File upload button in input */}
-                                <button 
-                                    className="file-btn"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={isLoading || connectionStatus !== 'connected' || isUploadingFile}
-                                    title="Tải lên tài liệu"
-                                >
-                                    {isUploadingFile ? '⏳' : '📎'}
-                                </button>
                             </div>
                         </div>
                         
+                        {/* ✨ SIMPLE ICON TOOLBAR */}
+                        <div className="simple-icon-toolbar">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileSelect}
+                                accept=".pdf,.docx,.doc"
+                                style={{ display: 'none' }}
+                            />
+                            
+                            {/* File Upload */}
+                            <button 
+                                className={`icon-btn ${selectedFile ? 'has-file' : ''}`}
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isUploadingFile || isProcessingDocument}
+                                title="Tải lên tài liệu"
+                            >
+                                {isUploadingFile ? '⏳' : '📎'}
+                            </button>
+
+                            {/* Auto Download */}
+                            <button 
+                                className={`icon-btn ${autoDownloadEnabled ? 'active' : ''}`}
+                                onClick={toggleAutoDownload}
+                                title={autoDownloadEnabled ? 'Tắt tự động tải' : 'Bật tự động tải'}
+                            >
+                                {autoDownloadEnabled ? '⚡' : '⏸️'}
+                            </button>
+
+                            {/* Voice Mode */}
+                            {ttsSupported && (
+                                <button 
+                                    className={`icon-btn ${voiceModeEnabled ? 'active' : ''}`}
+                                    onClick={toggleVoiceMode}
+                                    title={voiceModeEnabled ? 'Tắt giọng nói' : 'Bật giọng nói'}
+                                >
+                                    {voiceModeEnabled ? '🎤' : '📝'}
+                                </button>
+                            )}
+
+                            {/* Auto Play */}
+                            {ttsSupported && (
+                                <button 
+                                    className={`icon-btn ${autoPlayEnabled ? 'active' : ''}`}
+                                    onClick={toggleAutoPlay}
+                                    title={autoPlayEnabled ? 'Tắt tự động phát' : 'Bật tự động phát'}
+                                >
+                                    {autoPlayEnabled ? '🔊' : '🔇'}
+                                </button>
+                            )}
+
+                            {/* Stop Audio */}
+                            {isPlayingAudio && (
+                                <button 
+                                    className="icon-btn stop-btn"
+                                    onClick={stopCurrentAudio}
+                                    title="Dừng phát"
+                                >
+                                    ⏹️
+                                </button>
+                            )}
+
+                            {/* Document Clear */}
+                            {currentDocument && (
+                                <button 
+                                    className="icon-btn clear-btn"
+                                    onClick={clearDocumentContext}
+                                    title="Xóa tài liệu"
+                                >
+                                    🗑️
+                                </button>
+                            )}
+                        </div>        
+
                         <div className="input-footer">
                             <div className="input-mode-indicator">
                                 {currentDocument && (
