@@ -1519,6 +1519,20 @@ ${voiceStatus}
                                         {/* Sources and Reference Links */}
                                         {(message.sources && message.sources.length > 0) || (message.reference_links && message.reference_links.length > 0) ? (
                                             <div className="message-attachments">
+                                                {message.sources && message.sources.length > 0 && (
+                                                    <div className="sources-section">
+                                                        <h4>📚 Nguồn tham khảo:</h4>
+                                                        {message.sources.map((source, idx) => (
+                                                            <div key={idx} className="source-item">
+                                                                <div className="source-question">Q: {source.question}</div>
+                                                                <div className="source-similarity">
+                                                                    Độ tương đồng: {(source.similarity * 100).toFixed(1)}%
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
                                                 {message.reference_links && message.reference_links.length > 0 && (
                                                     <div className="reference-links-section">
                                                         <h4>🔗 Tài liệu liên quan:</h4>
@@ -1624,8 +1638,6 @@ ${voiceStatus}
                             )}
                         </div>
                     )}
-
-
 
                     <div className="modern-input-container">
                         <div className="input-wrapper">

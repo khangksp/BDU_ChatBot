@@ -469,5 +469,5 @@ class TextToSpeechService:
         ]
 
 # Global service instances
-speech_service = SpeechToTextService()
-tts_service = TextToSpeechService()
+# speech_service = SpeechToTextService()
+# tts_service = TextToSpeechService()

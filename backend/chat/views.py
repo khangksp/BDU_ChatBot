@@ -12,7 +12,10 @@ except ImportError:
     chatbot_ai = None
 
 try:
-    from ai_models.speech_service import speech_service, tts_service
+    # Import Class thay vì instance
+    from ai_models.speech_service import SpeechToTextService, TextToSpeechService
+    speech_service = SpeechToTextService() # Khởi tạo tại đây
+    tts_service = TextToSpeechService()
 except ImportError:
     speech_service = None
     tts_service = None
