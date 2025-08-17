@@ -548,7 +548,7 @@ GOOGLE_DRIVE = {
     'DRIVE_ID': '0AKVCiX4nzAoJUk9PVA',
     'FOLDER_ID': '1OYvRRLDK40YUMPS6-K4eKSn78JKAzuxL',
     'CSV_FILENAME': 'QA.csv',
-    'SERVICE_ACCOUNT_FILE': BASE_DIR / 'thinking-armor-463404-n1-c2cccecaed1a.json',
+    'SERVICE_ACCOUNT_FILE': BASE_DIR / 'thinking-armor-463404-n1-1e1d38351ac6.json',
     'CACHE_TIMEOUT': 60,
     'SCOPES': ['https://www.googleapis.com/auth/drive'],
     'WRITE_ENABLED': True,
