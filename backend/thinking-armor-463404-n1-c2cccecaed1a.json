@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "thinking-armor-463404-n1",
+  "private_key_id": "c2cccecaed1a7016a9516cd50ce6cebbd8df6cfd",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDCiPPm2nupQsUv\nMZP8N4Y/f18JMx0KL9L5tZLZcIKKKh9FuYKPr7csUarehxToCW06sUbl6P/D+7rK\nUmWO5xyxZrUNBxuJzi50litwA90S35Rzbpnt/AJV99Ur+YB8H3yiEnOSpzWiOIEH\nfJlz0sCvi4TZE0Jpioc5Pz7R8X2W0U/G2p3cguSuUYMHzZ1zTXjg6gf7DdStiPQp\naEHhrFsJsz28gR3kJqS+kFrRKl4GNn2FRCRNaCvme76EErj4LejR3gnFHN0Os/f7\nI0SgxbO6gZod0w2PLGgjjSlLDWZzUzO5c2CYSgFEMR3vl3FlUlVASc9rLvDQb/Jn\njev3ndLzAgMBAAECggEACzJOt27Dx04sgzbbSZz4gRcXpTPn6/osrmqg9RrgqIsc\nGas/tH1skYRxzTUBIwnH26Twa7MpZWJLsfFkHwF2SU+cBA/wqdHQIq2x+lR+mON9\na9dlzKjAiaol/s3xczNsvPdK55nwIFIYOxIU0vHCXVguYUAWhnSOq+DUAMlhbRit\nOTncmMNOGanwSBWu+hjj1mUOsXhaQrlmM4/zmEK2xawqKnLYbWjM413g/an6yDdb\nG1Rq2jsMUiGRC6sqfZiBxbGn29u0ld0OsmxnvTPyWo7BNgPwV2uZFCpKS6cGJVoo\nuqt0Lw8IuvJvA0KJN4JYHDgnZdi5krv0isljV8MsQQKBgQDv7uRgmIfDglBT8qLu\nv+2nvXYtyuh7msjYIfGlG+lSR+SF6Ymt0rGwxHNS6X81zXBp03n0nxJHhOuQWvrA\nUfdr5d8Uo5piZpcQRu9V1fpaRAi1Rca94tZrgGrrmE6yoBesdGNEWeJXoiEhRScn\n/CVp4g878vGMrY9kF4Lw2PHm6wKBgQDPj8/WeGHS6+8idSKaFWKr/r4pjvSAOmih\nzPNGs2qZbS4EM9Br+pHYRns1RasgeLJOJo5QWYGynw9JOV4i8pCpBdMlFDyuIVmt\nX0rcfogN0rK7zJFx7CLqdu0i9kCdz2lEKNE0xwJqycEgYqoUEClqg/IeVCAcgPmU\npFce4FVSGQKBgDaclITcEwLQNYJ2Ftnq+6gTesO/jJ0dxRtU1pCzQq9Ex+InHvxe\nma1Xebxkg1z2ruCXjwm770gyHAAWhT6jKYL4pocnGevN2BKPYsiR1NMY6zZ/dFYi\nPJXpe+y2FSuZPuo076dOIjO6JnpRKDF0tftcxgTqLkrL8nhg1aAGcUETAoGAWCzO\n7VyMqi7iku/R+EU3eruoiz0Yr1Sg2IOZoaJcmbsg/lYIp6Z1yLwAYVwsW4oKrVqB\nwK6Vg41A0CmXzR7gx30a+riDIrI2R4mg4tS59a1ZkqBP9WaMWrCVAvI79w6CuJri\nbRpR842sBpcDi6xl+8L721h/n7xGypeaDxrcBBkCgYA+CqU+doSlFKUqDkuo11PN\nrU5Tg0eHSWJI7JEDwGAUVSywBI5QwLZKZ2kQG3hlEunPT9S9W9FZab1auinmIZHs\nWClC/JcyQ5HdrNAOVFTIucuCOkAa0udmFM+qtaKiuOtP+LJMM7d42P43yTso1kHH\necH8kSOMLIQ2tY5a5shVdw==\n-----END PRIVATE KEY-----\n",
+  "client_email": "bdu-chatbot-service2@thinking-armor-463404-n1.iam.gserviceaccount.com",
+  "client_id": "101535201595368696881",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/bdu-chatbot-service2%40thinking-armor-463404-n1.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

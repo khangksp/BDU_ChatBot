@@ -1,7 +1,6 @@
 import numpy as np
 import faiss
 import time
-import pickle
 import os
 import re
 from django.conf import settings
@@ -9,7 +8,6 @@ from knowledge.models import KnowledgeBase
 import logging
 from .gemini_service import GeminiResponseGenerator, SimpleVietnameseRestorer
 import pandas as pd
-import random
 
 from .external_api_service import external_api_service
 from qa_management.services import drive_service
@@ -18,16 +16,6 @@ from .query_response_cache import query_response_cache
 logger = logging.getLogger(__name__)
 
 class SemanticReRanker:
-    """
-    🎯 FIXED SEMANTIC RE-RANKER với Smart Penalty System
-    
-    FIXED FEATURES:
-    - Adaptive concept penalties based on confidence
-    - Smart mismatch validation 
-    - Preservation of high-quality answers
-    - Gradual penalty application
-    """
-    
     def __init__(self, retriever_service):
         # Pure semantic configuration with FIXED smart penalties
         self.retriever_service = retriever_service
@@ -432,16 +420,6 @@ class SemanticReRanker:
 
 
 class PureSemanticDecisionEngine:
-    """
-    🎯 FIXED PURE SEMANTIC DECISION ENGINE với Smart Decision Logic
-    
-    FIXED FEATURES:
-    - Confidence-aware decision making
-    - Smart mismatch handling without over-penalizing
-    - Tiered decision logic
-    - Preservation of high-quality answers
-    """
-    
     def __init__(self):
         # 🎯 FIXED: Balanced semantic confidence thresholds
         self.semantic_confidence_thresholds = {
@@ -858,16 +836,6 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
 
 
 class PureSemanticChatbotAI:
-    """
-    🎯 PURE SEMANTIC CHATBOT AI with FIXED Decision Logic
-    
-    FIXED ARCHITECTURE:
-    - Smart penalty system in re-ranking
-    - Confidence-aware decision making
-    - Preservation of high-quality answers
-    - Targeted clarification responses
-    """
-    
     def __init__(self, shared_response_generator):
         # Import the simplified retriever service
         from .phobert_service import retriever_service
@@ -1489,8 +1457,6 @@ class PureSemanticChatbotAI:
         
         logger.info("✅ FIXED semantic knowledge base reloaded successfully")
 
-
-# 🎯 PRESERVED: ChatbotAI class (unchanged for backward compatibility)
 class ChatbotAI:
     def __init__(self, shared_response_generator):
         self.model = None
@@ -1688,16 +1654,6 @@ class ChatbotAI:
 
 
 class BDUChatbotService:
-    """
-    🎯 FIXED BDU CHATBOT SERVICE với Smart Decision Logic
-    
-    FIXED ARCHITECTURE:
-    - Smart penalty system
-    - Confidence preservation
-    - Adaptive decision making
-    - Targeted clarification responses
-    """
-    
     def __init__(self):
         # Create shared response_generator
         self.response_generator = GeminiResponseGenerator()

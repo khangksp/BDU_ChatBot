@@ -31,6 +31,4 @@ urlpatterns = [
     path('personalized-context/', views.PersonalizedChatContextView.as_view(), name='personalized-chat-context'),
     path('system-status-personalized/', views.PersonalizedSystemStatusView.as_view(), name='system-status-personalized'),
     
-    # ✅ RETRIEVER TRAINING ENDPOINTS
-    path('train-retriever/', views.TrainRetrieverView.as_view(), name='train-retriever'),
 ]
