@@ -8,13 +8,20 @@ from pdf2image import convert_from_path
 import docx
 import re
 
+# 🆕 NEW: Import PIL for image processing
+try:
+    from PIL import Image, ImageEnhance, ImageFilter
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("Warning: PIL (Pillow) not installed. Image processing will not be available.")
+
 logger = logging.getLogger(__name__)
 
 class OCRService:
     """
-    🔍 OCR Service for Document Text Extraction
-    
-    Hỗ trợ trích xuất văn bản từ file PDF và DOCX sử dụng Tesseract OCR
+    Hỗ trợ trích xuất văn bản từ file PDF, DOCX và các định dạng ảnh
+    (JPG, PNG, JPEG, BMP, TIFF, WEBP) sử dụng Tesseract OCR
     và các thư viện xử lý văn bản khác.
     """
     
@@ -24,10 +31,13 @@ class OCRService:
         self.poppler_path = None
         self.is_configured = False
         
+        # 🆕 NEW: Supported image formats
+        self.supported_image_formats = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp']
+        
         self._configure_paths()
         self._validate_configuration()
         
-        logger.info("✅ OCRService initialized successfully" if self.is_configured else "⚠️ OCRService initialized with configuration issues")
+        logger.info("✅ Enhanced OCRService initialized successfully" if self.is_configured else "⚠️ OCRService initialized with configuration issues")
     
     def _configure_paths(self):
         """Cấu hình đường dẫn Tesseract và Poppler từ Django settings"""
@@ -74,6 +84,12 @@ class OCRService:
                 logger.warning(f"⚠️ Poppler not found at: {self.poppler_path}")
                 return
             
+            # 🆕 NEW: Check PIL availability
+            if not PIL_AVAILABLE:
+                logger.warning("⚠️ PIL (Pillow) not available - image processing will be limited")
+            else:
+                logger.info("✅ PIL (Pillow) available for image processing")
+            
             # Test cơ bản với Tesseract
             try:
                 pytesseract.get_tesseract_version()
@@ -86,16 +102,6 @@ class OCRService:
             logger.error(f"❌ OCR configuration validation error: {str(e)}")
     
     def extract_text_from_pdf(self, pdf_path: str) -> Optional[List[Dict]]:
-        """
-        Trích xuất văn bản từ file PDF sử dụng OCR
-        
-        Args:
-            pdf_path (str): Đường dẫn đến file PDF
-            
-        Returns:
-            Optional[List[Dict]]: Danh sách các trang với văn bản đã trích xuất
-                                 Format: [{"page": int, "text": str}, ...]
-        """
         if not self.is_configured:
             logger.error("❌ OCR Service not properly configured")
             return None
@@ -105,7 +111,7 @@ class OCRService:
             return None
         
         try:
-            logger.info(f"🔍 Starting PDF OCR extraction: {os.path.basename(pdf_path)}")
+            logger.info(f"📄 Starting PDF OCR extraction: {os.path.basename(pdf_path)}")
             
             # Chuyển đổi PDF thành hình ảnh
             pages_as_images = convert_from_path(pdf_path, poppler_path=self.poppler_path)
@@ -134,16 +140,6 @@ class OCRService:
             return None
     
     def extract_text_from_docx(self, docx_path: str) -> Optional[List[Dict]]:
-        """
-        Trích xuất văn bản từ file DOCX
-        
-        Args:
-            docx_path (str): Đường dẫn đến file DOCX
-            
-        Returns:
-            Optional[List[Dict]]: Danh sách chứa văn bản đã trích xuất
-                                 Format: [{"page": 1, "text": str}]
-        """
         if not os.path.exists(docx_path):
             logger.error(f"❌ DOCX file not found: {docx_path}")
             return None
@@ -172,16 +168,76 @@ class OCRService:
             logger.error(f"❌ Error extracting text from DOCX: {str(e)}")
             return None
     
-    def read_document(self, file_path: str) -> Optional[List[Dict]]:
-        """
-        Hàm điều phối: Tự động nhận diện định dạng file và trích xuất văn bản
+    def extract_text_from_image(self, image_path: str) -> Optional[List[Dict]]:
+        if not self.is_configured:
+            logger.error("❌ OCR Service not properly configured")
+            return None
         
-        Args:
-            file_path (str): Đường dẫn đến file cần xử lý
+        if not PIL_AVAILABLE:
+            logger.error("❌ PIL (Pillow) not available for image processing")
+            return None
+        
+        if not os.path.exists(image_path):
+            logger.error(f"❌ Image file not found: {image_path}")
+            return None
+        
+        try:
+            logger.info(f"🖼️ Starting Image OCR extraction: {os.path.basename(image_path)}")
             
-        Returns:
-            Optional[List[Dict]]: Danh sách các trang với văn bản đã trích xuất
-        """
+            # Đọc và xử lý ảnh
+            image = Image.open(image_path)
+            
+            # 🆕 NEW: Image preprocessing for better OCR
+            processed_image = self._preprocess_image_for_ocr(image)
+            
+            # Thực hiện OCR với tiếng Việt
+            text = pytesseract.image_to_string(processed_image, lang='vie')
+            
+            # Làm sạch văn bản
+            cleaned_text = self._clean_extracted_text(text)
+            
+            logger.info(f"✅ Image OCR completed: {len(cleaned_text)} characters extracted")
+            
+            return [{"page": 1, "text": cleaned_text}]
+            
+        except Exception as e:
+            logger.error(f"❌ Error extracting text from image: {str(e)}")
+            return None
+    
+    def _preprocess_image_for_ocr(self, image: Image.Image) -> Image.Image:
+        try:
+            # Chuyển về RGB nếu cần
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Tăng độ tương phản
+            enhancer = ImageEnhance.Contrast(image)
+            image = enhancer.enhance(1.5)
+            
+            # Tăng độ sắc nét
+            enhancer = ImageEnhance.Sharpness(image)
+            image = enhancer.enhance(1.2)
+            
+            # Chuyển về grayscale để OCR tốt hơn
+            image = image.convert('L')
+            
+            # Resize nếu ảnh quá nhỏ (OCR hoạt động tốt hơn với ảnh lớn)
+            width, height = image.size
+            min_size = 1000
+            if width < min_size or height < min_size:
+                scale_factor = max(min_size / width, min_size / height)
+                new_width = int(width * scale_factor)
+                new_height = int(height * scale_factor)
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                logger.debug(f"🔍 Image resized from {width}x{height} to {new_width}x{new_height}")
+            
+            return image
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Image preprocessing failed: {str(e)}, using original image")
+            return image
+    
+    def read_document(self, file_path: str) -> Optional[List[Dict]]:
         if not file_path or not os.path.exists(file_path):
             logger.error(f"❌ File not found: {file_path}")
             return None
@@ -197,22 +253,15 @@ class OCRService:
             return self.extract_text_from_pdf(file_path)
         elif file_extension == '.docx':
             return self.extract_text_from_docx(file_path)
+        elif file_extension in self.supported_image_formats:
+            # 🆕 NEW: Handle image files
+            return self.extract_text_from_image(file_path)
         else:
             logger.error(f"❌ Unsupported file format: {file_extension}")
+            logger.info(f"📋 Supported formats: PDF, DOCX, {', '.join(self.supported_image_formats)}")
             return None
     
     def find_precise_quote(self, pages_data: List[Dict], search_phrase: str) -> Optional[Dict]:
-        """
-        Tìm trích dẫn chính xác từ văn bản đã trích xuất
-        
-        Args:
-            pages_data (List[Dict]): Dữ liệu văn bản từ các trang
-            search_phrase (str): Cụm từ cần tìm
-            
-        Returns:
-            Optional[Dict]: Trích dẫn tìm thấy với vị trí
-                           Format: {"quote": str, "location_text": str}
-        """
         if not pages_data or not search_phrase:
             return None
         
@@ -234,15 +283,6 @@ class OCRService:
         return None
     
     def _clean_extracted_text(self, text: str) -> str:
-        """
-        🚀 NHIỆM VỤ 2: Làm sạch văn bản đã trích xuất với logic xử lý bảng biểu đặc biệt
-        
-        Args:
-            text (str): Văn bản thô từ OCR
-            
-        Returns:
-            str: Văn bản đã được làm sạch và tái cấu trúc
-        """
         if not text:
             return ""
         
@@ -285,20 +325,10 @@ class OCRService:
         return '\n'.join(processed_lines)
     
     def _format_table_row(self, row_number: str, content: str) -> str:
-        """
-        🚀 NHIỆM VỤ 2: Tái cấu trúc một hàng trong bảng để AI dễ hiểu hơn
-        
-        Args:
-            row_number (str): Số thứ tự của hàng
-            content (str): Nội dung còn lại của hàng
-            
-        Returns:
-            str: Hàng đã được định dạng lại
-        """
         try:
             # Các pattern phổ biến để nhận diện cấu trúc bảng
             # Pattern 1: Họ tên + Chức vụ + Nhiệm vụ (thường gặp trong danh sách thành viên)
-            name_position_task_pattern = r'^([A-ZĐ][a-zắằẳẵặăâầấẩẫậàáảãạêềếểễệèéẻẽẹôồốổỗộơờớởỡợòóỏõọưừứửữựùúủũụìíỉĩịỳýỷỹỵđ\s]+?)(\s+[A-ZĐ][a-zắằẳẵặăâầấẩẫậàáảãạêềếểễệèéẻẽẹôồốổỗộơờớởỡợòóỏõọưừứửữựùúủũụìíỉĩịỳýỷỹỵđ\s,;]+?)(\s+[A-ZĐ][a-zắằẳẵặăâầấẩẫậàáảãạêềếểễệèéẻẽẹôồốổỗộơờớởỡợòóỏõọưừứửữựùúủũụìíỉĩịỳýỷỹỵđ\s]+)$'
+            name_position_task_pattern = r'^([A-ZÄ][a-záắằẳẵặăâầấẩẫậàáảãạêềếểễệèéẻẽẹôốồổỗộơớờởỡợòóỏõọưứừửữựùúủũụìíỉĩịỳýỷỹỵđ\s]+?)(\s+[A-ZÄ][a-záắằẳẵặăâầấẩẫậàáảãạêềếểễệèéẻẽẹôốồổỗộơớờởỡợòóỏõọưứừửữựùúủũụìíỉĩịỳýỷỹỵđ\s,;]+?)(\s+[A-ZÄ][a-záắằẳẵặăâầấẩẫậàáảãạêềếểễệèéẻẽẹôốồổỗộơớờởỡợòóỏõọưứừửữựùúủũụìíỉĩịỳýỷỹỵđ\s]+)$'
             
             # Thử pattern Họ tên + Chức vụ + Nhiệm vụ
             match = re.match(name_position_task_pattern, content)
@@ -374,15 +404,6 @@ class OCRService:
             return f"Mục {row_number}: {content}"
     
     def get_document_summary(self, pages_data: List[Dict]) -> str:
-        """
-        Tạo tóm tắt ngắn gọn về tài liệu
-        
-        Args:
-            pages_data (List[Dict]): Dữ liệu văn bản từ các trang
-            
-        Returns:
-            str: Tóm tắt tài liệu
-        """
         if not pages_data:
             return "Không có dữ liệu tài liệu"
         
@@ -425,10 +446,15 @@ class OCRService:
             'poppler_path': self.poppler_path,
             'tesseract_available': bool(self.tesseract_cmd_path and os.path.exists(self.tesseract_cmd_path)),
             'poppler_available': bool(self.poppler_path and os.path.exists(self.poppler_path)),
-            'supported_formats': ['.pdf', '.docx'],
+            'pil_available': PIL_AVAILABLE,  # 🆕 NEW: PIL availability status
+            'supported_formats': ['.pdf', '.docx'] + self.supported_image_formats,  # 🆕 UPDATED: Include image formats
+            'image_formats_supported': self.supported_image_formats,  # 🆕 NEW: Separate image format list
             'features': [
                 'PDF OCR extraction',
                 'DOCX text extraction', 
+                'Image OCR extraction',  # 🆕 NEW: Image OCR feature
+                'Image preprocessing for better OCR',  # 🆕 NEW: Image enhancement feature
+                'Multiple image format support',  # 🆕 NEW: Multiple formats
                 'Precise quote finding',
                 'Vietnamese language support',
                 'Document summarization',

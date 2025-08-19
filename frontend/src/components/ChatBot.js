@@ -160,8 +160,9 @@ const ChatBot = () => {
     // 🚀 NEW: Document context useEffect
     useEffect(() => {
         if (currentDocument && !isProcessingDocument) {
+            const fileType = getFileTypeDisplay(currentDocument.filename);
             showTemporaryMessage(
-                `📄 Đang sử dụng tài liệu: ${currentDocument.filename}`,
+                `📄 Đang sử dụng ${fileType}: ${currentDocument.filename}`,
                 'document-context'
             );
         }
@@ -265,6 +266,13 @@ const ChatBot = () => {
         }
     };
 
+    const getFileTypeDisplay = (filename) => {
+        if (!filename) return 'tài liệu';
+        const ext = filename.toLowerCase().split('.').pop();
+        const imageExts = ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'tif', 'webp'];
+        return imageExts.includes(ext) ? 'ảnh' : 'tài liệu';
+    };
+
     // 🚀 NEW: Check document support status
     const checkDocumentSupportStatus = async () => {
         try {
@@ -289,24 +297,42 @@ const ChatBot = () => {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Giữ lại logic kiểm tra file type và size
+        // 🆕 UPDATED: Expanded allowed types to include images
         const allowedTypes = [
+            // PDF files
             'application/pdf',
+            // DOCX files  
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/msword'
+            'application/msword',
+            // 🆕 NEW: Image files
+            'image/jpeg',
+            'image/jpg', 
+            'image/png',
+            'image/bmp',
+            'image/tiff',
+            'image/tif',
+            'image/webp'
         ];
+        
         if (!allowedTypes.includes(file.type)) {
-            alert('❌ Chỉ hỗ trợ file PDF và DOCX. Vui lòng chọn file khác.');
+            alert('❌ Chỉ hỗ trợ file PDF, DOCX và ảnh (JPG, PNG, BMP, TIFF, WEBP). Vui lòng chọn file khác.');
             return;
         }
-        if (file.size > 10 * 1024 * 1024) {
-            alert('❌ File quá lớn (tối đa 10MB). Vui lòng chọn file nhỏ hơn.');
+        
+        // 🆕 UPDATED: Increased file size limit for images
+        const maxSize = file.type.startsWith('image/') ? 5 * 1024 * 1024 : 10 * 1024 * 1024; // 5MB for images, 10MB for documents
+        if (file.size > maxSize) {
+            const sizeLimit = file.type.startsWith('image/') ? '5MB' : '10MB';
+            alert(`❌ File quá lớn (tối đa ${sizeLimit}). Vui lòng chọn file nhỏ hơn.`);
             return;
         }
 
-        // ✅ THAY ĐỔI CHÍNH: Chỉ cập nhật state, không upload ngay
+        // ✅ EXISTING: Set selected file
         setSelectedFile(file);
-        showTemporaryMessage(`📄 Đã chọn file: ${file.name}. Gửi tin nhắn để bắt đầu phân tích.`, 'document-selected');
+        
+        // 🆕 UPDATED: Different message for images vs documents
+        const fileTypeMsg = file.type.startsWith('image/') ? 'ảnh' : 'tài liệu';
+        showTemporaryMessage(`📄 Đã chọn ${fileTypeMsg}: ${file.name}. Gửi tin nhắn để bắt đầu phân tích.`, 'document-selected');
     };
 
     // 🚀 NEW: Auto-download document from URL
@@ -396,7 +422,7 @@ const ChatBot = () => {
         setDocumentContext(null);
         setDocumentPreview(null);
         setDocumentProcessingStatus('');
-        showTemporaryMessage('🗑️ Đã xóa tài liệu khỏi ngữ cảnh', 'document-cleared');
+        showTemporaryMessage('🗑️ Đã xóa tài liệu/ảnh khỏi ngữ cảnh', 'document-cleared');
     };
 
     // 🚀 NEW: Toggle document modal
@@ -747,20 +773,21 @@ const ChatBot = () => {
             
             return `Xin chào ${user.position_name || 'giảng viên'} ${name}! 
 
-Tôi là ChatBDU, trợ lý AI của Đại học Bình Dương. ${memoryStatus}
+    Tôi là ChatBDU, trợ lý AI của Đại học Bình Dương. ${memoryStatus}
 
-Tôi có thể hỗ trợ ${user.position_name?.toLowerCase() || 'bạn'} về:
+    Tôi có thể hỗ trợ ${user.position_name?.toLowerCase() || 'bạn'} về:
 
-• 📚 Thông tin đào tạo và ngành học
-• 🎓 Quy định và thủ tục  
-• 💰 Học phí và chính sách
-• 🏢 Cơ sở vật chất
-• 📞 Thông tin liên hệ
-• 📄 Phân tích tài liệu PDF/DOCX
+    • 📚 Thông tin đào tạo và ngành học
+    • 🎓 Quy định và thủ tục  
+    • 💰 Học phí và chính sách
+    • 🏢 Cơ sở vật chất
+    • 📞 Thông tin liên hệ
+    • 📄 Phân tích tài liệu PDF/DOCX
+    • 🖼️ Trích xuất văn bản từ ảnh
 
-${voiceStatus}
+    ${voiceStatus}
 
-💡 **Mới**: Bạn có thể tải lên tài liệu PDF/DOCX để tôi phân tích và trả lời câu hỏi về nội dung!`;
+    💡 **Mới**: Bạn có thể tải lên tài liệu PDF/DOCX hoặc ảnh chứa văn bản để tôi phân tích và trả lời câu hỏi về nội dung!`;
         }
         
         const voiceStatus = ttsSupported ? 
@@ -773,16 +800,17 @@ ${voiceStatus}
         
         return `Xin chào! Tôi là trợ lý AI của Đại học Bình Dương. Tôi có thể giúp bạn:
 
-• 📚 Thông tin tuyển sinh và ngành học
-• 💰 Học phí và chính sách hỗ trợ  
-• 🎓 Đời sống sinh viên
-• 🏢 Cơ sở vật chất và tiện ích
-• 📞 Thông tin liên hệ
-• 📄 Phân tích tài liệu PDF/DOCX
+    • 📚 Thông tin tuyển sinh và ngành học
+    • 💰 Học phí và chính sách hỗ trợ  
+    • 🎓 Đời sống sinh viên
+    • 🏢 Cơ sở vật chất và tiện ích
+    • 📞 Thông tin liên hệ
+    • 📄 Phân tích tài liệu PDF/DOCX
+    • 🖼️ Trích xuất văn bản từ ảnh
 
-${voiceStatus}
+    ${voiceStatus}
 
-💡 **Mới**: Bạn có thể tải lên tài liệu PDF/DOCX để tôi phân tích và trả lời câu hỏi về nội dung!`;
+    💡 **Mới**: Bạn có thể tải lên tài liệu PDF/DOCX hoặc ảnh chứa văn bản để tôi phân tích và trả lời câu hỏi về nội dung!`;
     };
 
     const switchChatSession = async (sessionId) => {
@@ -1519,6 +1547,7 @@ ${voiceStatus}
                                         {/* Sources and Reference Links */}
                                         {(message.sources && message.sources.length > 0) || (message.reference_links && message.reference_links.length > 0) ? (
                                             <div className="message-attachments">
+                                                
                                                 {message.sources && message.sources.length > 0 && (
                                                     <div className="sources-section">
                                                         <h4>📚 Nguồn tham khảo:</h4>
@@ -1532,6 +1561,7 @@ ${voiceStatus}
                                                         ))}
                                                     </div>
                                                 )}
+                                                
 
                                                 {message.reference_links && message.reference_links.length > 0 && (
                                                     <div className="reference-links-section">
@@ -1648,8 +1678,8 @@ ${voiceStatus}
                                 onKeyPress={handleKeyPress}
                                 placeholder={connectionStatus === 'connected' 
                                     ? (currentDocument 
-                                        ? `Hỏi về tài liệu "${currentDocument.filename}" hoặc bất cứ điều gì khác...`
-                                        : "Hỏi bất cứ điều gì về Đại học Bình Dương...")
+                                        ? `Hỏi về ${currentDocument.filename.includes('.') && ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'webp'].some(ext => currentDocument.filename.toLowerCase().endsWith(ext)) ? 'ảnh' : 'tài liệu'} "${currentDocument.filename}" hoặc bất cứ điều gì khác...`
+                                        : "Hỏi bất cứ điều gì về Đại học Bình Dương hoặc tải lên ảnh/tài liệu...")
                                     : "Đang kết nối đến server..."}
                                 rows="1"
                                 disabled={isLoading || connectionStatus !== 'connected' || isRecording}
@@ -1677,7 +1707,7 @@ ${voiceStatus}
                                 type="file"
                                 ref={fileInputRef}
                                 onChange={handleFileSelect}
-                                accept=".pdf,.docx,.doc"
+                                accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.bmp,.tiff,.tif,.webp"
                                 style={{ display: 'none' }}
                             />
                             
@@ -1686,7 +1716,7 @@ ${voiceStatus}
                                 className={`icon-btn ${selectedFile ? 'has-file' : ''}`}
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={isUploadingFile || isProcessingDocument}
-                                title="Tải lên tài liệu"
+                                title="Tải lên tài liệu hoặc ảnh" // 🆕 UPDATED
                             >
                                 {isUploadingFile ? '⏳' : '📎'}
                             </button>

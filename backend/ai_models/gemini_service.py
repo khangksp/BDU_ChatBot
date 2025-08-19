@@ -440,7 +440,7 @@ class SimpleVietnameseRestorer:
     
     def __init__(self, key_manager: GeminiApiKeyManager):
         self.key_manager = key_manager
-        self.model_name = "gemini-2.0-flash" # Dùng model flash cho nhanh và rẻ
+        self.model_name = "gemini-2.0-flash" 
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         self.cache = {}
         self.max_cache_size = 500

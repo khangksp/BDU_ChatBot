@@ -196,9 +196,6 @@ class SemanticReRanker:
         return mismatch_analysis
 
     def _calculate_smart_penalty(self, candidate, query, base_semantic_score):
-        """
-        🧠 FIXED: Calculate smart penalty based on confidence and mismatch severity
-        """
         if not self.config['smart_penalty_enabled']:
             return 0.0, []
             
@@ -248,9 +245,6 @@ class SemanticReRanker:
         return total_penalty, mismatch_analysis['issues']
 
     def stage1_semantic_scoring(self, candidates, query):
-        """
-        🎯 FIXED STAGE 1: Pure semantic scoring with smart concept penalties
-        """
         if not candidates:
             return []
         
@@ -299,9 +293,6 @@ class SemanticReRanker:
         return stage1_candidates
 
     def stage2_cross_encoder_simulation(self, candidates, query):
-        """
-        🎯 STAGE 2: Cross-encoder re-ranking for final selection
-        """
         if not candidates:
             logger.info("🔄 Stage 2 skipped: No candidates available")
             return []
@@ -351,9 +342,6 @@ class SemanticReRanker:
             return candidates[:self.config['stage2_top_n']]
 
     def _simulate_cross_encoder_semantic(self, query, candidates):
-        """
-        🎯 ENHANCED: Semantic-focused cross-encoder simulation
-        """
         scores = []
         query_words = set(query.lower().split())
 
@@ -508,9 +496,6 @@ class PureSemanticDecisionEngine:
         return education_found
 
     def needs_external_api(self, query, final_score=0.0):
-        """
-        🎯 SIMPLIFIED: Detect if query needs external API (personal info)
-        """
         if not query:
             return False
         
@@ -604,17 +589,6 @@ Em sẽ tìm thông tin chính xác hơn! 🔍"""
 Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
 
     def make_decision(self, query, candidates_list, session_memory=None, jwt_token=None, document_text=None):
-        """
-        🎯 ENHANCED SEMANTIC DECISION MAKING với Smart Candidate Selection
-        
-        ENHANCED LOGIC:
-        1. Check document context priority
-        2. Check external API needs  
-        3. 🧠 SMART SELECTION from top 5 candidates
-        4. Make decision preserving high-confidence answers
-        5. 🤔 Provide targeted clarification when needed
-        """
-        
         # 🎯 DOCUMENT CONTEXT PRIORITY (unchanged)
         if document_text and document_text.strip():
             logger.info("📄 DOCUMENT CONTEXT PRIORITY: Document text provided")
@@ -870,9 +844,6 @@ class PureSemanticChatbotAI:
         return self.sbert_retriever.knowledge_data
     
     def get_system_status(self):
-        """
-        🎯 FIXED: System status for fixed semantic RAG
-        """
         gemini_status = self.response_generator.get_system_status()
         drive_status = drive_service.get_system_status()
         external_api_status = external_api_service.get_system_status()
@@ -916,17 +887,6 @@ class PureSemanticChatbotAI:
         }
 
     def process_query(self, query, session_id=None, jwt_token=None, document_text=None):
-        """
-        🎯 FIXED SEMANTIC RAG PIPELINE
-        
-        FIXED FLOW:
-        1. Clean query
-        2. Get session memory for context
-        3. SEMANTIC RETRIEVAL (no intent classification)
-        4. FIXED SEMANTIC RE-RANKING (smart penalty system)
-        5. FIXED SEMANTIC DECISION MAKING (confidence-aware)
-        6. RESPONSE GENERATION (with smart fallback)
-        """
         start_time = time.time()
         
         logger.info(f"🎯 ENHANCED Semantic RAG Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
@@ -1664,13 +1624,18 @@ class BDUChatbotService:
         # 🎯 FIXED: Use PureSemanticChatbotAI with FIXED logic
         self.semantic_chatbot = PureSemanticChatbotAI(shared_response_generator=self.response_generator)
         
-        # Simplified API detection keywords (kept minimal)
+        # Keywords phát hiện thông tin cá nhân
         self.personal_info_keywords = [
+            # Từ khóa cốt lõi
+            'tôi là ai', 'toi la ai', 'thông tin của tôi', 'thong tin cua toi',
             'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
             'lịch giảng của tôi', 'lich giang cua toi', 'lịch dạy của tôi', 'lich day cua toi',
             'tôi giảng', 'toi giang', 'tôi dạy', 'toi day', 'môn của tôi', 'mon cua toi',
-            'tôi là ai', 'toi la ai', 'thông tin của tôi', 'thong tin cua toi',
-            'hôm nay', 'hom nay', 'ngày mai', 'ngay mai', 'tuần này', 'tuan nay'
+            
+            # Từ khóa thời gian
+            'hôm nay', 'hom nay', 'ngày mai', 'ngay mai', 
+            'tuần này', 'tuan nay', 'tuần sau', 'tuan sau', 'tuần tới', 'tuan toi',
+            'tháng này', 'thang nay', 'tháng sau', 'thang sau'
         ]
         
         logger.info("🎯 ENHANCED BDUChatbotService initialized with Top-5 Smart Selection")
@@ -1689,15 +1654,6 @@ class BDUChatbotService:
         return needs_api
 
     def process_query(self, query: str, session_id: str = None, jwt_token: str = None, document_text: str = None) -> dict:
-        """
-        🎯 FIXED SEMANTIC PROCESSING PIPELINE
-        
-        FIXED FLOW:
-        1. Cache check
-        2. Basic API detection (personal info)
-        3. FIXED semantic RAG processing
-        4. Cache storage
-        """
         start_time = time.time()
         
         logger.info(f"🎯 ENHANCED BDU Service Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
@@ -1909,9 +1865,6 @@ class BDUChatbotService:
             return f"Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin. {personal_address.title()} có thể thử lại sau ạ. 🎯"
 
     def get_system_status(self):
-        """
-        🎯 FIXED: System status for fixed semantic RAG service
-        """
         semantic_status = self.semantic_chatbot.get_system_status()
         api_status = external_api_service.get_system_status()
         cache_stats = self.query_cache.get_cache_stats()
