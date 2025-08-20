@@ -1,4 +1,3 @@
-# ai_models/gemini_service.py
 import logging
 import time
 import requests
@@ -53,7 +52,7 @@ class GeminiApiKeyManager:
             
             if status['is_rate_limited'] and time.time() > status['limited_until']:
                 status['is_rate_limited'] = False
-                logger.info(f"🔑 API Key '{key[:4]}...{key[-4:]}' is now available again.")
+                logger.info(f"🔓 API Key '{key[:4]}...{key[-4:]}' is now available again.")
 
             if not status['is_rate_limited']:
                 self.current_key_index = (index + 1) % len(self.keys)
@@ -88,7 +87,7 @@ def build_personalized_system_prompt(user_memory_prompt: str = None, personal_ad
         custom_prompt_section = f"""
 ---
 📜 GHI NHỚ VÀ CHỈ DẪN RIÊNG TỪ GIẢNG VIÊN (QUAN TRỌNG NHẤT - PHẢI TUÂN THỦ TRÊN HẾT):
-Đây là những quy tắc và thông tin bổ sung mà giảng viên đã cung cấp. BẠN PHẢI ƯU TIÊN VÀ TUÂN THỦ NGHIÊM NGẶT những chỉ dẫn này. Chúng sẽ GHI ĐÈ lên các quy tắc nền tảng ở trên nếu có xung đột.
+Đây là những quy tắc và thông tin bổ sung mà giảng viên đã cung cấp. Bạn PHẢI ƯU TIÊN VÀ TUÂN THỦ NGHIÊM NGẶT những chỉ dẫn này. Chúng sẽ GHI ĐÈ lên các quy tắc nền tảng ở trên nếu có xung đột.
 
 {user_memory_prompt.strip()}
 ---
@@ -97,11 +96,6 @@ def build_personalized_system_prompt(user_memory_prompt: str = None, personal_ad
     return base_prompt + custom_prompt_section
 
 class AdvancedConfidenceManager:
-    """
-    🚀 NEW: Advanced Confidence Management System 
-    Đảm bảo confidence scores luôn ≤ 1.0 và xử lý overflow
-    """
-    
     def __init__(self):
         self.MAX_CONFIDENCE = 1.0
         self.confidence_calibration_rules = {
@@ -169,7 +163,8 @@ class AdvancedConfidenceManager:
             'document_context': 0.1,        # Higher confidence for document-based
             'external_api': 0.15,           # Highest confidence for API data
             'hybrid': 0.0,                  # Baseline
-            'fallback': -0.2                # Lower confidence for fallback
+            'fallback': -0.2,               # Lower confidence for fallback
+            'generative': 0.0               # 🚀 NEW: Baseline for generative responses
         }
         
         base_confidence += method_adjustments.get(method, 0.0)
@@ -205,7 +200,7 @@ class SmartTokenManager:
         self.adaptive_token_range = {
             'min': 80, 
             'optimal': 250, 
-            'max': 500,
+            'max': 1000,
             'expected_sentences': 3, 
             'avg_chars_per_sentence': 80
         }
@@ -216,7 +211,7 @@ class SmartTokenManager:
             r'\b(và|hoặc|với|để|khi|nếu|tại|về|cho|trong|của|từ)\s*$',  # Kết thúc bằng từ nối
             r'\b(em|sẽ|có|được|phải|cần|nên)\s*$',  # Kết thúc bằng từ chưa hoàn chỉnh
             r'[,;:]\s*$',  # Kết thúc bằng dấu phẩy/chấm phẩy
-            r'\b(Dạ|Ạ|thầy|cô|giảng viên)\s*$',  # Câu chào chưa hoàn chỉnh
+            r'\b(Dạ|ạ|thầy|cô|giảng viên)\s*$',  # Câu chào chưa hoàn chỉnh
         ]
         
         # ✅ SENTENCE ENDING patterns để kiểm tra câu hoàn chỉnh
@@ -244,8 +239,8 @@ class SmartTokenManager:
             
         # ✅ ADJUSTMENT dựa trên complexity hint
         if complexity_hint:
-            if complexity_hint in ['enhanced_generation', 'detailed_explanation', 'document_context', 'two_stage_reranking']:
-                base_tokens += 100  # 🚀 NEW: Advanced methods need more tokens
+            if complexity_hint in ['enhanced_generation', 'detailed_explanation', 'document_context', 'two_stage_reranking', 'generative_knowledge']:  # 🚀 NEW
+                base_tokens += 100  # 🚀 Advanced methods need more tokens
             elif complexity_hint in ['quick_clarify', 'simple_answer']:
                 base_tokens -= 40
                 
@@ -400,7 +395,6 @@ class ConversationMemory:
         return " | ".join(summary_parts)
     
     def _update_context_summary(self, session_id: str):
-        """Cập nhật tóm tắt context cho giảng viên"""
         conv = self.conversations[session_id]
         recent_queries = [h['user_query'] for h in conv['history'][-3:]]
         
@@ -432,12 +426,6 @@ class ConversationMemory:
             conv['context_summary'] = 'Hỏi đáp chung về BDU'
 
 class SimpleVietnameseRestorer:
-    """
-    Simple Vietnamese accent restorer using Gemini API
-    - Based on your original code sample
-    - Minimal complexity, maximum effectiveness
-    """
-    
     def __init__(self, key_manager: GeminiApiKeyManager):
         self.key_manager = key_manager
         self.model_name = "gemini-2.0-flash" 
@@ -483,7 +471,7 @@ class SimpleVietnameseRestorer:
             headers = {'Content-Type': 'application/json'}
             data = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"ture": 0.1, "maxOutputTokens": 100, "topP": 0.8},
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 100, "topP": 0.8},
                 "safetySettings": [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -557,7 +545,7 @@ class SimpleVietnameseRestorer:
                 del self.cache[k]
 
 class GeminiResponseGenerator:
-    """🚀 NÂNG CẤP: Advanced Gemini Response Generator với Smart Token Management, Advanced Confidence Management, và Two-Stage Re-ranking Integration"""
+    """🚀 NÂNG CẤP: Advanced Gemini Response Generator với Smart Token Management, Advanced Confidence Management, Two-Stage Re-ranking Integration và Generative Support"""
     
     def __init__(self):
         self.key_manager = GeminiApiKeyManager()
@@ -593,7 +581,7 @@ class GeminiResponseGenerator:
             ]
         }
         
-        logger.info("✅ Enhanced Gemini Response Generator initialized with Advanced Confidence Management, Smart Token Management, và Two-Stage Re-ranking Integration")
+        logger.info("✅ Enhanced Gemini Response Generator initialized with Advanced Confidence Management, Smart Token Management, Two-Stage Re-ranking Integration và Generative Support")
 
     # 🚀 NEW: Document Context Processing Methods
     def _build_document_context_prompt(self, query: str, document_text: str, session_id: str = None) -> str:
@@ -635,7 +623,7 @@ class GeminiResponseGenerator:
         ocr_guidance = """---
 ⭐ HƯỚNG DẪN XỬ LÝ DỮ LIỆU OCR ĐẶC BIỆT (Rất quan trọng)
 Dữ liệu dưới đây được trích xuất tự động từ file PDF/DOCX, do đó có thể chứa các lỗi định dạng, đặc biệt là các bảng (table) bị chuyển thành văn bản thuần túy.
-1.  **Xử lý bảng (Table):** Một dòng văn bản có thể chứa nhiều thông tin liên quan (ví dụ: số thứ tự, họ tên, chức vụ, nhiệm vụ). BẠN PHẢI TỰ SUY LUẬN để liên kết các thông tin có vẻ nằm trên cùng một hàng với nhau. Ví dụ: dòng "1 Bà A Chức vụ B Nhiệm vụ C" có nghĩa là Bà A có chức vụ B và nhiệm vụ C.
+1.  **Xử lý bảng (Table):** Một dòng văn bản có thể chứa nhiều thông tin liên quan (ví dụ: số thứ tự, họ tên, chức vụ, nhiệm vụ). Bạn PHẢI TỰ SUY LUẬN để liên kết các thông tin có vẻ nằm trên cùng một hàng với nhau. Ví dụ: dòng "1 Bà A Chức vụ B Nhiệm vụ C" có nghĩa là Bà A có chức vụ B và nhiệm vụ C.
 2.  **Đếm số lượng:** Nếu được hỏi "có mấy điều", "có bao nhiêu thành viên", hãy tìm và đếm số lần xuất hiện của các từ khóa như "Điều 1.", "Điều 2.", hoặc các số thứ tự trong danh sách (1, 2, 3...).
 3.  **Tìm kiếm chính xác:** Hãy đọc thật kỹ và tìm kiếm chính xác các từ khóa trong câu hỏi của người dùng trong toàn bộ văn bản, ngay cả khi nó không có cấu trúc.
 ---"""
@@ -653,7 +641,7 @@ Dữ liệu dưới đây được trích xuất tự động từ file PDF/DOCX
 
 ❓ CÂU HỎI CỦA GIẢNG VIÊN: {query}
 
-📝 YÊU CẦU TRẢ LỜI QUAN TRỌNG:
+📋 YÊU CẦU TRẢ LỜI QUAN TRỌNG:
 - Xưng hô: "Dạ {personal_address},"
 - CHỈ TRẢ LỜI DỰA VÀO nội dung tài liệu được cung cấp ở trên
 - KHÔNG SỬ DỤNG kiến thức bên ngoài tài liệu
@@ -773,7 +761,7 @@ Trả lời:"""
 ❓ CÂU HỎI CỦA GIẢNG VIÊN: {query}
 🔍 NGỮ CẢNH TÌM KIẾM: {query_context}
 
-📝 YÊU CẦU TRẢ LỜI:
+📋 YÊU CẦU TRẢ LỜI:
 - Xưng hô: "Dạ {personal_address},"
 - Trả lời CHÍNH XÁC dựa trên dữ liệu thực tế từ hệ thống
 - Tạo câu trả lời mạch lạc, tránh lặp lại thông tin đã thảo luận
@@ -1005,6 +993,121 @@ Trả lời:"""
             logger.error(f"Error getting personalized prompt: {e}")
             return build_personalized_system_prompt()  # Fallback
 
+    # 🚀 NEW: Generative response methods
+    def _generate_general_knowledge_response_smart(self, query, context, session_id=None):
+        """
+        🚀 NEW: Generate generative response for general knowledge queries
+        """
+        personal_address = self._get_personal_address(session_id)
+        system_prompt = self._get_personalized_system_prompt(session_id)
+        
+        # 🚀 NEW: Get conversation context for better continuity
+        conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
+        recent_summary = conversation_context.get('recent_conversation_summary', '')
+        
+        context_section = ""
+        if recent_summary:
+            context_section = f"""
+🗣️ NGỮ CẢNH HỘI THOẠI GẦN ĐÂY:
+{recent_summary}
+
+💡 LƯU Ý: Tham khảo ngữ cảnh trên để tạo câu trả lời mạch lạc, tránh lặp lại thông tin đã thảo luận.
+"""
+        
+        # 🚀 NEW: Build comprehensive generative prompt
+        generative_prompt = f"""{system_prompt}
+
+🎯 NHIỆM VỤ ĐẶC BIỆT: Trả lời câu hỏi kiến thức tổng quát bằng AI generative
+
+📚 PHẠM VI: Câu hỏi này không thuộc phạm vi giáo dục BDU, nhưng em có thể hỗ trợ bằng kiến thức tổng quát.
+
+{context_section}
+
+❓ CÂU HỎI CỦA {personal_address.upper()}: {query}
+
+📋 YÊU CẦU TRẢ LỜI:
+- Xưng hô: "Dạ {personal_address},"
+- Giải thích rằng đây không phải chuyên môn BDU nhưng em có thể chia sẻ kiến thức tổng quát
+- Trả lời câu hỏi một cách chính xác, hữu ích
+- Tạo câu trả lời mạch lạc, tự nhiên, tránh lặp lại thông tin đã thảo luận
+- Kết thúc: "Tuy nhiên, để được hỗ trợ chuyên môn về BDU, {personal_address} có thể hỏi em về các vấn đề liên quan đến trường ạ! 🎓"
+- TUYỆT ĐỐI KHÔNG bịa đặt thông tin không chắc chắn
+
+Trả lời:"""
+
+        optimal_tokens = self.token_manager.calculate_optimal_tokens(
+            len(generative_prompt), 
+            'generative_knowledge'
+        )
+        
+        # 🚀 CRITICAL FIX: Pass session_id for consistent personalization
+        response = self._call_gemini_api_with_smart_tokens(
+            generative_prompt, 'generative_knowledge', optimal_tokens, session_id
+        )
+        
+        # 🚀 ENHANCED: Fallback with personalized response
+        if not response:
+            fallback = f"""Dạ {personal_address}, em hiểu {personal_address} quan tâm đến câu hỏi này, tuy nhiên đây không phải lĩnh vực chuyên môn của em về BDU.
+
+Em khuyến khích {personal_address} tìm hiểu từ các nguồn uy tín hoặc chuyên gia trong lĩnh vực đó.
+
+Để được hỗ trợ tốt nhất, {personal_address} có thể hỏi em về các vấn đề liên quan đến công việc và hoạt động tại Đại học Bình Dương ạ! 🎓"""
+            
+            logger.info(f"🚀 GENERATIVE FALLBACK: Using personalized fallback for {personal_address}")
+            response = fallback
+        
+        token_info = {
+            'smart_tokens_used': True,
+            'method': 'generative_knowledge_response_v1',
+            'optimal_tokens': optimal_tokens,
+            'personal_addressing': personal_address,
+            'context_aware': bool(recent_summary),
+            'generative_mode': True,
+            'confidence_managed': True
+        }
+        
+        return response, token_info
+
+    def _validate_generative_response(self, response, query, session_id):
+        """
+        🚀 NEW: Validate generative response for appropriateness and accuracy
+        """
+        if not response or len(response.strip()) < 20:
+            return False, "Response too short"
+        
+        personal_address = self._get_personal_address(session_id)
+        
+        # Check if response has proper greeting
+        if not response.lower().startswith(f'dạ {personal_address.lower()}'):
+            return False, "Missing proper greeting"
+        
+        # Check if response has proper BDU context mention
+        bdu_context_patterns = [
+            'không phải chuyên môn.*bdu',
+            'không thuộc phạm vi.*bdu', 
+            'về các vấn đề liên quan.*bdu',
+            'hỗ trợ.*bdu',
+            'đại học bình dương'
+        ]
+        
+        has_bdu_context = any(re.search(pattern, response.lower()) for pattern in bdu_context_patterns)
+        
+        if not has_bdu_context:
+            return False, "Missing BDU context explanation"
+        
+        # Check for inappropriate content (basic filter)
+        inappropriate_patterns = [
+            r'không biết', r'không thể trả lời', r'xin lỗi.*không',
+            r'tôi là.*ai', r'tôi không phải', r'em không phải'
+        ]
+        
+        has_inappropriate = any(re.search(pattern, response.lower()) for pattern in inappropriate_patterns)
+        
+        if has_inappropriate:
+            return False, "Contains inappropriate disclaimers"
+        
+        return True, "Response valid"
+
     # 🚀 ENHANCED: Generate response với Smart Token Management, Advanced Confidence Management và Two-Stage Re-ranking Integration
     def generate_response(self, query: str, context: Optional[Dict] = None, 
                       intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
@@ -1137,12 +1240,51 @@ Trả lời:"""
                     'token_info': token_info
                 }
 
+            # 🚀 NEW: Handle generative response
+            elif instruction == 'generative_answer':
+                response, token_info = self._generate_general_knowledge_response_smart(query, context, session_id)
+                
+                # 🚀 NEW: Validate generative response
+                is_valid, validation_msg = self._validate_generative_response(response, query, session_id)
+                
+                if not is_valid:
+                    logger.warning(f"⚠️ Generative response validation failed: {validation_msg}")
+                    # Use fallback
+                    personal_address = self._get_personal_address(session_id)
+                    response = f"""Dạ {personal_address}, em hiểu {personal_address} quan tâm đến câu hỏi này, tuy nhiên đây không phải lĩnh vực chuyên môn của em về BDU.
+
+Để được hỗ trợ tốt nhất, {personal_address} có thể hỏi em về các vấn đề liên quan đến công việc và hoạt động tại Đại học Bình Dương ạ! 🎓"""
+                    
+                    token_info['validation_failed'] = True
+                    token_info['validation_reason'] = validation_msg
+                
+                # 🛡️ CONFIDENCE CAP: Generative response confidence
+                final_confidence = self.confidence_manager.normalize_confidence(0.3, "generative_response")
+                
+                # Save to memory
+                if session_id:
+                    self.memory.add_interaction(session_id, original_query, response, intent_info, entities)
+
+                return {
+                    'response': response,
+                    'method': 'generative_knowledge_response',
+                    'strategy': 'generative_general_knowledge',
+                    'confidence': final_confidence,  # 🛡️ CAPPED
+                    'generation_time': time.time() - start_time,
+                    'original_query': original_query,
+                    'restored_query': query,
+                    'vietnamese_restoration_used': query != original_query,
+                    'personalized': bool(session_id in self._user_context_cache),
+                    'generative_response_used': True,
+                    'token_info': token_info
+                }
+
             # ✅ ENHANCED: Get conversation context với recent summary
             conversation_context = {}
             if session_id:
                 conversation_context = self.memory.get_conversation_context(session_id)
                 print(f"🧠 MEMORY DEBUG: History length = {len(conversation_context.get('history', []))}")
-                print(f"📝 CONTEXT SUMMARY: {conversation_context.get('recent_conversation_summary', 'None')}")
+                print(f"🔍 CONTEXT SUMMARY: {conversation_context.get('recent_conversation_summary', 'None')}")
 
             # Get user context for personalization
             user_context = None
@@ -1495,7 +1637,8 @@ Trả lời:"""
             strategy_temp_adjustments = {
                 'quick_clarify': -0.2, 'direct_enhance': 0.0, 'enhanced_generation': +0.2,
                 'completion': -0.3, 'balanced': 0.0, 'document_context': +0.1,  # 🚀 NEW: Document context adjustment
-                'two_stage_reranking': +0.05  # 🚀 NEW: Slight adjustment for advanced method
+                'two_stage_reranking': +0.05,  # 🚀 NEW: Slight adjustment for advanced method
+                'generative_knowledge': +0.1   # 🚀 NEW: Adjustment for generative responses
             }
             temp_adjustment = strategy_temp_adjustments.get(strategy, 0.0)
             final_temperature = max(0.1, min(1.0, self.default_generation_config["temperature"] + temp_adjustment))
@@ -1561,10 +1704,6 @@ Trả lời:"""
 
     # 🚀 SMART VERSIONS of generation methods với Advanced Confidence Management
     def _generate_direct_lecturer_answer_smart(self, query, context, session_id=None):
-        """
-        🚀 NÂNG CẤP: Use refined prompt với gender-based addressing, conversation context và confidence management
-        """
-        
         # ✅ NEW: Lấy cách xưng hô cá nhân hóa
         personal_address = self._get_personal_address(session_id)
         
@@ -1588,7 +1727,7 @@ Trả lời:"""
         prompt = f"""{system_prompt}
 
 ---
-BỐI CẢNH VÀ NHIỆM VỤ
+Bối cảnh và nhiệm vụ
 
 1.  **Kiến thức nền (từ CSDL):**
     "{db_answer}"
@@ -1650,7 +1789,7 @@ Trả lời:
         prompt = f"""{system_prompt}
 
 ---
-BỐI CẢNH VÀ NHIỆM VỤ
+Bối cảnh và nhiệm vụ
 
 1.  **Kiến thức nền (từ CSDL):**
     "{db_answer}"
@@ -1903,6 +2042,8 @@ Trả lời:
             else:
                 return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} còn muốn hỏi gì về {conversation_context['context_summary'].lower()} không ạ?"
         
+        # 🚀 NEW: Add generative fallback note
+        generative_note = ""
         if department_name:
             return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về ngành {department_name} không ạ?"
         else:
@@ -1930,7 +2071,9 @@ Trả lời:
         
         smart_fallbacks = {
             'greeting': f"Dạ chào {personal_address}! 👋 Em có thể hỗ trợ gì cho {personal_address} về BDU ạ?",
-            'general': f"Dạ {personal_address}, em sẵn sàng hỗ trợ các vấn đề liên quan đến BDU! 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+            'general': f"Dạ {personal_address}, em sẵn sàng hỗ trợ các vấn đề liên quan đến BDU! 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?",
+            # 🚀 NEW: Generative fallback for general knowledge
+            'general_knowledge': f"Dạ {personal_address}, em nhận thấy câu hỏi này có vẻ nằm ngoài phạm vi chuyên môn BDU của em. Để được hỗ trợ tốt nhất, {personal_address} có thể hỏi em về các vấn đề liên quan đến công việc và hoạt động tại Đại học Bình Dương ạ! 🎓"
         }
         
         if department_name and intent_name == 'general':
@@ -2074,7 +2217,7 @@ Trả lời:"""
             self.memory.conversations.clear()
 
     def get_system_status(self) -> Dict[str, Any]:
-        """🚀 NÂNG CẤP: Get system status với Advanced Confidence Management, Smart Token Management, Two-Stage Re-ranking Integration và Document Context Support"""
+        """🚀 NÂNG CẤP: Get system status với Advanced Confidence Management, Smart Token Management, Two-Stage Re-ranking Integration, Document Context Support và Generative Support"""
         try:
             test_prompt = "Test ngắn cho giảng viên"
             # 🚀 CRITICAL FIX: Pass session_id=None for test (có thể pass test session)
@@ -2084,7 +2227,7 @@ Trả lời:"""
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.key_manager.keys),
                 'service_status': 'active' if response else 'error',
-                'mode': 'advanced_rag_gemini_with_two_stage_reranking_integration_and_advanced_confidence_management',  # 🚀 Updated
+                'mode': 'advanced_rag_gemini_with_generative_support',  # 🚀 Updated
                 'memory_sessions': len(self.memory.conversations),
                 'personalization_sessions': len(self._user_context_cache),
                 'adaptive_token_range': self.token_manager.adaptive_token_range,
@@ -2132,7 +2275,16 @@ Trả lời:"""
                     'ocr_integration_support',  # 🚀 NEW feature
                     'fine_tuned_model_compatibility',  # 🚀 NEW feature
                     'cross_encoder_simulation_support',  # 🚀 NEW feature
-                    'hybrid_retrieval_enhancement'  # 🚀 NEW feature
+                    'hybrid_retrieval_enhancement',  # 🚀 NEW feature
+                    'generative_general_knowledge_support',  # 🚀 NEW feature
+                    'generative_response_validation',        # 🚀 NEW feature
+                    'non_education_query_handling',          # 🚀 NEW feature
+                    'general_knowledge_detection',           # 🚀 NEW feature
+                    'context_aware_generative_responses',    # 🚀 NEW feature
+                    'adaptive_generative_fallback',          # 🚀 NEW feature
+                    'generative_appropriateness_check',      # 🚀 NEW feature
+                    'seamless_education_generative_transition', # 🚀 NEW feature
+                    'confidence_based_generative_activation'    # 🚀 NEW feature
                 ]
             }
         except Exception as e:
@@ -2144,7 +2296,9 @@ Trả lời:"""
                 'graceful_degradation': True,  # 🚀 NEW: System supports graceful degradation
                 'document_context_support': True,  # 🚀 NEW: Document context is supported even in error
                 'advanced_confidence_management': True,  # 🚀 NEW: Advanced confidence is always active
-                'confidence_overflow_protection': True  # 🚀 NEW: Overflow protection is always active
+                'confidence_overflow_protection': True,  # 🚀 NEW: Overflow protection is always active
+                'generative_support': True,  # 🚀 NEW: Generative support is available
+                'generative_fallback': True   # 🚀 NEW: Generative fallback is supported
             }
 
 gemini_response_generator = GeminiResponseGenerator()
