@@ -1548,7 +1548,7 @@ const ChatBot = () => {
                                         {(message.sources && message.sources.length > 0) || (message.reference_links && message.reference_links.length > 0) ? (
                                             <div className="message-attachments">
                                                 
-                                                {message.sources && message.sources.length > 0 && (
+                                                {/* {message.sources && message.sources.length > 0 && (
                                                     <div className="sources-section">
                                                         <h4>📚 Nguồn tham khảo:</h4>
                                                         {message.sources.map((source, idx) => (
@@ -1560,7 +1560,7 @@ const ChatBot = () => {
                                                             </div>
                                                         ))}
                                                     </div>
-                                                )}
+                                                )} */}
                                                 
 
                                                 {message.reference_links && message.reference_links.length > 0 && (

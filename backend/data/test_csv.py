@@ -1,7 +1,7 @@
 import pandas as pd
 
 try:
-    df = pd.read_csv('link.csv')
+    df = pd.read_csv('QA.csv')
 
     print(df.columns.tolist())
 

@@ -427,11 +427,7 @@ class PureSemanticDecisionEngine:
                 'medium': 0.4,     # Low tolerance for medium confidence
                 'low': 0.2         # Very low tolerance for poor confidence
             },
-            'smart_clarification_threshold': 0.3,  # When to use smart vs generic clarification
-            # 🚀 NEW: Generative response thresholds
-            'generative_enabled': True,           # Enable generative responses
-            'generative_confidence_threshold': 0.4,  # Below this + non-education = generative
-            'generative_education_override': False   # Don't use generative for education queries
+            'smart_clarification_threshold': 0.3  # When to use smart vs generic clarification
         }
         
         # External API detection keywords (kept minimal)
@@ -449,26 +445,10 @@ class PureSemanticDecisionEngine:
             'ngân hàng đề thi', 'báo cáo', 'kê khai', 'tạp chí', 'nghiên cứu'
         ]
         
-        # 🚀 NEW: General knowledge indicators
-        self.general_knowledge_patterns = [
-            # Science & Technology
-            'khoa học', 'kỹ thuật', 'công nghệ', 'toán học', 'vật lý', 'hóa học',
-            'sinh học', 'lập trình', 'máy tính', 'internet', 'ai', 'robot',
-            
-            # General knowledge
-            'lịch sử', 'địa lý', 'văn học', 'thời tiết', 'ẩm thực', 'du lịch',
-            'thể thao', 'âm nhạc', 'điện ảnh', 'sức khỏe', 'y tế',
-            
-            # Daily life
-            'nấu ăn', 'công thức', 'cách làm', 'hướng dẫn', 'mẹo', 'kinh nghiệm',
-            'tư vấn', 'gợi ý', 'giải thích', 'định nghĩa', 'ý nghĩa'
-        ]
-        
-        logger.info("✅ ENHANCED PureSemanticDecisionEngine initialized with Generative Support")
+        logger.info("✅ FIXED PureSemanticDecisionEngine initialized")
         logger.info("   🎯 FIXED decision making với smart confidence preservation")
         logger.info("   🛡️ High confidence answer protection")
         logger.info("   🧠 Adaptive mismatch tolerance")
-        logger.info("   🚀 NEW: Generative response for general knowledge")
 
     def categorize_semantic_confidence(self, final_score):
         """
@@ -487,7 +467,7 @@ class PureSemanticDecisionEngine:
 
     def is_education_related(self, query):
         """
-        🎯 SIMPLIFIED: Basic education scope check (UNCHANGED)
+        🎯 SIMPLIFIED: Basic education scope check
         """
         if not query:
             return False
@@ -516,9 +496,6 @@ class PureSemanticDecisionEngine:
         return education_found
 
     def needs_external_api(self, query, final_score=0.0):
-        """
-        🎯 UNCHANGED: External API detection
-        """
         if not query:
             return False
         
@@ -532,7 +509,7 @@ class PureSemanticDecisionEngine:
 
     def _assess_mismatch_impact(self, best_candidate, original_score):
         """
-        🧠 FIXED: Assess if mismatch issues should affect decision (UNCHANGED)
+        🧠 FIXED: Assess if mismatch issues should affect decision
         """
         if not best_candidate:
             return False, []
@@ -567,7 +544,7 @@ class PureSemanticDecisionEngine:
 
     def _create_smart_clarification_response(self, query, mismatch_issues, session_id):
         """
-        🤔 FIXED: Create smart clarification based on detected mismatches (UNCHANGED)
+        🤔 FIXED: Create smart clarification based on detected mismatches
         """
         try:
             personal_address = "giảng viên"  # Default fallback
@@ -603,7 +580,7 @@ Em sẽ tìm đúng thông tin {personal_address} cần! 💳"""
 - Phòng ban hoặc thủ tục liên quan?
 - Đối tượng áp dụng?
 
-Em sẽ tìm thông tin chính xác hơn! 🎓"""
+Em sẽ tìm thông tin chính xác hơn! 🔍"""
         
         else:
             # Generic clarification
@@ -611,51 +588,7 @@ Em sẽ tìm thông tin chính xác hơn! 🎓"""
 
 Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
 
-    # 🚀 NEW: Generative response support methods
-    def _is_general_knowledge_query(self, query):
-        """
-        🚀 NEW: Check if query is general knowledge that could be answered generatively
-        """
-        if not query:
-            return False
-        
-        query_lower = query.lower()
-        
-        # Check for general knowledge patterns
-        is_general = any(pattern in query_lower for pattern in self.general_knowledge_patterns)
-        
-        # Check for question patterns
-        question_patterns = [
-            r'\b(gì|ai|nào|sao|thế nào|tại sao|vì sao|làm thế nào)\b',
-            r'\b(có phải|có đúng|có nên|có thể)\b',
-            r'\b(cách|phương pháp|bí quyết|mẹo)\b',
-            r'\?$'  # Ends with question mark
-        ]
-        
-        has_question_pattern = any(re.search(pattern, query_lower) for pattern in question_patterns)
-        
-        logger.debug(f"🧠 General knowledge check: '{query}' -> patterns={is_general}, questions={has_question_pattern}")
-        
-        return is_general or has_question_pattern
-
-    def _create_generative_context(self, query, session_id):
-        """
-        🚀 NEW: Create context for generative response
-        """
-        return {
-            'instruction': 'generative_answer',
-            'query': query,
-            'confidence': 0.3,  # Medium-low confidence for generative
-            'message': 'Using generative AI for general knowledge',
-            'semantic_decision': True,
-            'generative_mode': True,
-            'session_id': session_id
-        }
-
     def make_decision(self, query, candidates_list, session_memory=None, jwt_token=None, document_text=None):
-        """
-        🎯 ENHANCED: Decision making with generative support for non-education queries
-        """
         # 🎯 DOCUMENT CONTEXT PRIORITY (unchanged)
         if document_text and document_text.strip():
             logger.info("📄 DOCUMENT CONTEXT PRIORITY: Document text provided")
@@ -670,8 +603,11 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
         
         # 🎯 BASIC EDUCATION SCOPE CHECK
         is_education = self.is_education_related(query)
+        if not is_education and session_memory and len(session_memory) == 0:  # First message
+            logger.info("📚 SCOPE: Rejecting non-education query")
+            return 'reject_non_education', None, False
         
-        # 🎯 EXTERNAL API CHECK (unchanged)
+        # 🎯 EXTERNAL API CHECK
         if self.needs_external_api(query, 0.0):  # Use dummy score for API check
             if jwt_token and jwt_token.strip():
                 return 'use_external_api', {
@@ -692,31 +628,9 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
                     'semantic_decision': True
                 }, True
         
-        # 🚀 NEW: NON-EDUCATION + FIRST MESSAGE LOGIC
-        if not is_education and session_memory and len(session_memory) == 0:  # First message
-            # Check if it's a general knowledge query that could be answered generatively
-            if (self.decision_factors['generative_enabled'] and 
-                self._is_general_knowledge_query(query)):
-                
-                logger.info("🚀 GENERATIVE MODE: Non-education general knowledge query")
-                return 'use_generative', self._create_generative_context(query, None), True
-            else:
-                # Original behavior: reject non-education
-                logger.info("📚 SCOPE: Rejecting non-education query")
-                return 'reject_non_education', None, False
-        
-        # 📬 ENHANCED: Smart candidate selection from top 5 (unchanged logic)
+        # 🔬 ENHANCED: Smart candidate selection from top 5
         if not candidates_list:
             logger.warning("⚠️ No candidates provided for decision making")
-            
-            # 🚀 NEW: If no candidates and it's general knowledge, try generative
-            if (self.decision_factors['generative_enabled'] and 
-                not is_education and 
-                self._is_general_knowledge_query(query)):
-                
-                logger.info("🚀 GENERATIVE FALLBACK: No candidates + general knowledge")
-                return 'use_generative', self._create_generative_context(query, None), True
-            
             return 'say_dont_know', {
                 'instruction': 'dont_know_lecturer',
                 'confidence': 0.0,
@@ -729,8 +643,8 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
         selection_info = []
         
         if len(candidates_list) > 1:
-            # 📬 SMART SELECTION: Pick best from top 5 based on suitability
-            logger.info(f"📬 SMART SELECTION: Analyzing {len(candidates_list)} candidates")
+            # 🔬 SMART SELECTION: Pick best from top 5 based on suitability
+            logger.info(f"🔬 SMART SELECTION: Analyzing {len(candidates_list)} candidates")
             
             for i, candidate in enumerate(candidates_list[:5]):
                 score = candidate.get('final_score', 0)
@@ -753,7 +667,7 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
                     best_suitability = suitability
                     best_candidate = candidate
                     
-                logger.debug(f"📬 Candidate #{i+1}: score={score:.3f}, semantic={semantic_score:.3f}, mismatches={mismatch_count}, suitability={suitability:.3f}")
+                logger.debug(f"🔬 Candidate #{i+1}: score={score:.3f}, semantic={semantic_score:.3f}, mismatches={mismatch_count}, suitability={suitability:.3f}")
             
             if best_candidate:
                 original_pos = None
@@ -761,16 +675,16 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
                     if info['suitability'] == best_suitability:
                         original_pos = info['position']
                         break
-                logger.info(f"📬 SMART SELECTION: Chose candidate #{original_pos} (suitability: {best_suitability:.3f})")
+                logger.info(f"🔬 SMART SELECTION: Chose candidate #{original_pos} (suitability: {best_suitability:.3f})")
         else:
             best_candidate = candidates_list[0]
-            logger.info("📬 SINGLE CANDIDATE: Using the only available candidate")
+            logger.info("🔬 SINGLE CANDIDATE: Using the only available candidate")
         
         # Get final score from selected candidate
         final_score = best_candidate.get('final_score', 0.0)
         original_score = best_candidate.get('semantic_score', final_score)
         
-        # 🧠 FIXED: Smart mismatch assessment (unchanged)
+        # 🧠 FIXED: Smart mismatch assessment
         should_impact, mismatch_issues = self._assess_mismatch_impact(best_candidate, original_score)
         
         # 🎯 FIXED: Determine confidence level and decision
@@ -784,17 +698,7 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
         logger.info(f"   🧠 Mismatch should impact: {should_impact}")
         logger.info(f"   🔍 Mismatch issues: {len(mismatch_issues)}")
         
-        # 🚀 NEW: Generative fallback for low confidence + non-education
-        if (confidence_level in ['very_low', 'low'] and 
-            final_score < self.decision_factors['generative_confidence_threshold'] and
-            not is_education and 
-            self.decision_factors['generative_enabled'] and
-            self._is_general_knowledge_query(query)):
-            
-            logger.info("🚀 GENERATIVE FALLBACK: Low confidence + non-education + general knowledge")
-            return 'use_generative', self._create_generative_context(query, None), True
-        
-        # 🛡️ FIXED DECISION LOGIC: Preserve high confidence + smart mismatch handling (ALL UNCHANGED)
+        # 🛡️ FIXED DECISION LOGIC: Preserve high confidence + smart mismatch handling
         
         if confidence_level == 'very_high':
             # VERY HIGH CONFIDENCE: Almost always answer, even with light mismatch
@@ -926,7 +830,6 @@ class PureSemanticChatbotAI:
         logger.info("   🧠 Confidence-aware decision making")
         logger.info("   🎯 High-quality answer preservation")
         logger.info("   🔬 Top-5 smart candidate selection")
-        logger.info("   🚀 NEW: Generative support for general knowledge")
     
     @property
     def model(self):
@@ -953,8 +856,8 @@ class PureSemanticChatbotAI:
             'fine_tuned_model_available': retriever_status.get('fine_tuned_model_loaded', False),
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'enhanced_semantic_rag_with_generative',  # 🚀 UPDATED
-            'architecture': 'enhanced_semantic_rag_with_generative',
+            'mode': 'fixed_semantic_rag',  # 🎯 UPDATED
+            'architecture': 'fixed_semantic_rag',
             'semantic_reranking': {
                 'enabled': True,
                 'smart_penalty_system': True,
@@ -964,25 +867,19 @@ class PureSemanticChatbotAI:
                 'stage2_final': self.semantic_reranker.config['stage2_top_n']
             },
             'decision_engine': {
-                'type': 'enhanced_semantic_with_generative',  # 🚀 UPDATED
+                'type': 'fixed_semantic',
                 'confidence_thresholds': self.decision_engine.semantic_confidence_thresholds,
                 'smart_mismatch_handling': True,
                 'high_confidence_preservation': True,
-                'adaptive_tolerance': True,
-                'generative_support': self.decision_engine.decision_factors['generative_enabled']  # 🚀 NEW
+                'adaptive_tolerance': True
             },
-            'enhanced_semantic_features': [
+            'fixed_semantic_features': [
                 'smart_penalty_system',
                 'confidence_preservation', 
                 'adaptive_mismatch_tolerance',
                 'tiered_decision_logic',
                 'targeted_clarification',
-                'high_quality_answer_protection',
-                # 🚀 NEW: Generative features
-                'generative_general_knowledge_support',
-                'general_knowledge_detection',
-                'context_aware_generative_responses',
-                'adaptive_generative_fallback'
+                'high_quality_answer_protection'
             ],
             'retriever_service_status': retriever_status,
             'external_api_status': external_api_status,
@@ -1043,7 +940,7 @@ class PureSemanticChatbotAI:
             smart_penalty = best_candidate.get('smart_penalty', 0)
             mismatch_issues = best_candidate.get('mismatch_issues', [])
             
-            logger.info(f"🎯 ENHANCED Best candidate analysis:")
+            logger.info(f"🎯 FIXED Best candidate analysis:")
             logger.info(f"   📊 Original semantic: {original_semantic:.3f}")
             logger.info(f"   📉 Smart penalty: {smart_penalty:.3f}")
             logger.info(f"   📊 Final score: {final_score:.3f}")
@@ -1051,7 +948,7 @@ class PureSemanticChatbotAI:
             for issue in mismatch_issues:
                 logger.info(f"     ⚠️ {issue}")
             
-            # STEP 7: ENHANCED SEMANTIC DECISION MAKING with top 5 candidates + generative support
+            # STEP 7: ENHANCED SEMANTIC DECISION MAKING with top 5 candidates
             decision_type, context, should_respond = self.decision_engine.make_decision(
                 query, reranked_candidates, session_memory, jwt_token, document_text
             )
@@ -1061,14 +958,14 @@ class PureSemanticChatbotAI:
                 response_text = self._get_out_of_scope_response(session_id)
                 method = 'rejected_non_education'
             else:
-                response_text = self._execute_enhanced_semantic_decision(
+                response_text = self._execute_fixed_semantic_decision(
                     decision_type, query, context, session_id
                 )
                 method = decision_type
             
             # STEP 9: UPDATE MEMORY
             if session_id and should_respond:
-                self._update_enhanced_semantic_memory(
+                self._update_semantic_memory(
                     session_id, query, final_score, decision_type, 
                     should_respond, context, document_text
                 )
@@ -1088,23 +985,20 @@ class PureSemanticChatbotAI:
                     'confidence_level': context.get('confidence_level', 'unknown') if context else 'unknown',
                     'confidence_preserved': context.get('confidence_preserved', False) if context else False,
                     'selected_position': context.get('selected_position', 1) if context else 1,
-                    'semantic_decision': True,
-                    'generative_mode': context.get('generative_mode', False) if context else False  # 🚀 NEW
+                    'semantic_decision': True
                 },
                 'sources': self._format_sources(reranked_candidates[:2]),
                 'processing_time': processing_time,
                 'is_education': context is not None,
-                'enhanced_semantic_rag': True,
-                'generative_support': True,  # 🚀 NEW
-                'generative_response_used': decision_type == 'use_generative',  # 🚀 NEW
+                'enhanced_semantic_rag': True,  # Updated from fixed_semantic_rag
                 'reference_links': best_candidate.get('reference_links', []),
                 'external_api_used': decision_type == 'use_external_api',
                 'semantic_reranking_used': best_candidate.get('fixed_semantic_reranking', False),
                 'session_memory_used': bool(session_memory),
                 'document_context_used': bool(document_text),
                 'document_context_priority': decision_type == 'use_document_context',
-                'architecture': 'enhanced_semantic_rag_with_generative',  # 🚀 UPDATED
-                'enhanced_features': ['smart_penalty', 'confidence_preservation', 'adaptive_tolerance', 'top5_selection', 'smart_candidate_selection', 'generative_support'],  # 🚀 UPDATED
+                'architecture': 'enhanced_semantic_rag_top5',  # Updated architecture name
+                'enhanced_features': ['smart_penalty', 'confidence_preservation', 'adaptive_tolerance', 'top5_selection', 'smart_candidate_selection'],
                 'reranking_stats': {
                     'original_semantic_score': original_semantic,
                     'semantic_boost': best_candidate.get('semantic_boost', 0),
@@ -1113,8 +1007,7 @@ class PureSemanticChatbotAI:
                     'stage2_score': best_candidate.get('stage2_score', 0),
                     'final_score': final_score,
                     'selected_position': context.get('selected_position', 1) if context else 1,
-                    'top5_enhanced': True,
-                    'generative_capable': True  # 🚀 NEW
+                    'top5_enhanced': True
                 }
             }
             
@@ -1127,22 +1020,21 @@ class PureSemanticChatbotAI:
                 'processing_time': time.time() - start_time,
                 'error': str(e),
                 'enhanced_semantic_rag': True,
-                'generative_support': True,  # 🚀 NEW
                 'graceful_degradation_used': True
             }
 
-    def _execute_enhanced_semantic_decision(self, decision_type, query, context, session_id):
+    def _execute_fixed_semantic_decision(self, decision_type, query, context, session_id):
         """
-        🎯 ENHANCED: Execute semantic decision with generative support
+        🎯 FIXED: Execute semantic decision with smart clarification
         """
-        logger.info(f"🎯 Executing ENHANCED semantic decision: {decision_type}")
+        logger.info(f"🎯 Executing FIXED semantic decision: {decision_type}")
         
         # 🛡️ CHECK GEMINI AVAILABILITY FIRST
         gemini_available = self._check_gemini_availability()
         
         if not gemini_available:
-            logger.warning("⚠️ Gemini API not available - using ENHANCED graceful degradation")
-            return self._create_enhanced_semantic_fallback_response(decision_type, query, context, session_id)
+            logger.warning("⚠️ Gemini API not available - using FIXED graceful degradation")
+            return self._create_fixed_semantic_fallback_response(decision_type, query, context, session_id)
         
         try:
             if decision_type == 'use_document_context':
@@ -1163,27 +1055,6 @@ class PureSemanticChatbotAI:
             elif decision_type == 'require_authentication':
                 return self._handle_authentication_required(session_id)
             
-            # 🚀 NEW: Handle generative response
-            elif decision_type == 'use_generative':
-                logger.info("🚀 GENERATIVE EXECUTION: Processing general knowledge query")
-                
-                response = self.response_generator.generate_response(
-                    query=query, context=context, intent_info=None, entities={}, session_id=session_id
-                )
-                response_text = response.get('response', '') if response else ''
-                
-                # 🛡️ CRITICAL: Validate generative response and fallback if needed
-                if not response_text or len(response_text.strip()) < 10:
-                    logger.warning("⚠️ Empty/invalid generative response from Gemini - using enhanced fallback")
-                    return self._create_generative_fallback_response(query, context, session_id)
-                
-                # 🚀 ENHANCED: Additional validation for generative responses
-                if self._is_generative_response_appropriate(response_text, query, session_id):
-                    return response_text
-                else:
-                    logger.warning("⚠️ Generative response failed appropriateness check - using fallback")
-                    return self._create_generative_fallback_response(query, context, session_id)
-            
             elif decision_type in ['use_db_direct', 'enhance_db_answer']:
                 response = self.response_generator.generate_response(
                     query=query, context=context, intent_info=None, entities={}, session_id=session_id
@@ -1192,15 +1063,15 @@ class PureSemanticChatbotAI:
                 
                 # 🛡️ CRITICAL: Validate response and fallback if needed
                 if not response_text or len(response_text.strip()) < 10:
-                    logger.warning("⚠️ Empty/invalid response from Gemini - using ENHANCED semantic fallback")
-                    return self._create_enhanced_semantic_fallback_response(decision_type, query, context, session_id)
+                    logger.warning("⚠️ Empty/invalid response from Gemini - using FIXED semantic fallback")
+                    return self._create_fixed_semantic_fallback_response(decision_type, query, context, session_id)
                 
                 return response_text
             
             elif decision_type == 'ask_clarification':
-                # 🤔 ENHANCED: Check if smart clarification is needed
+                # 🤔 FIXED: Check if smart clarification is needed
                 if context and context.get('smart_clarification', False):
-                    logger.info("🤔 Creating ENHANCED smart clarification response")
+                    logger.info("🤔 Creating FIXED smart clarification response")
                     mismatch_issues = context.get('mismatch_issues', [])
                     return self.decision_engine._create_smart_clarification_response(
                         query, mismatch_issues, session_id
@@ -1230,96 +1101,15 @@ class PureSemanticChatbotAI:
             
             else:
                 logger.warning(f"⚠️ Unknown decision type: {decision_type}")
-                return self._create_enhanced_semantic_fallback_response(decision_type, query, context, session_id)
+                return self._create_fixed_semantic_fallback_response(decision_type, query, context, session_id)
                 
         except Exception as e:
-            logger.error(f"❌ Error executing ENHANCED semantic decision: {str(e)}")
-            return self._create_enhanced_semantic_fallback_response(decision_type, query, context, session_id)
+            logger.error(f"❌ Error executing FIXED semantic decision: {str(e)}")
+            return self._create_fixed_semantic_fallback_response(decision_type, query, context, session_id)
 
-    # 🚀 NEW: Generative response validation and fallback methods
-
-    def _is_generative_response_appropriate(self, response_text, query, session_id):
+    def _create_fixed_semantic_fallback_response(self, decision_type, query, context, session_id):
         """
-        🚀 NEW: Check if generative response is appropriate and well-formed
-        """
-        if not response_text or len(response_text.strip()) < 20:
-            return False
-        
-        personal_address = self._get_personal_address(session_id)
-        
-        # Check proper greeting
-        if not response_text.lower().startswith(f'dạ {personal_address.lower()}'):
-            logger.debug("🚀 Generative validation: Missing proper greeting")
-            return False
-        
-        # Check for BDU context mention
-        bdu_indicators = [
-            'bdu', 'đại học bình dương', 'không phải chuyên môn', 
-            'ngoài phạm vi', 'kiến thức tổng quát', 'hỗ trợ.*bdu'
-        ]
-        
-        has_bdu_context = any(indicator in response_text.lower() for indicator in bdu_indicators)
-        
-        if not has_bdu_context:
-            logger.debug("🚀 Generative validation: Missing BDU context")
-            return False
-        
-        # Check response isn't just an apology/disclaimer
-        negative_patterns = [
-            r'không thể trả lời', r'không biết', r'xin lỗi.*không',
-            r'không có thông tin', r'không thể hỗ trợ'
-        ]
-        
-        is_just_negative = any(re.search(pattern, response_text.lower()) for pattern in negative_patterns)
-        
-        if is_just_negative and len(response_text) < 200:  # Short negative response
-            logger.debug("🚀 Generative validation: Too negative/short")
-            return False
-        
-        return True
-
-    def _create_generative_fallback_response(self, query, context, session_id):
-        """
-        🚀 NEW: Create fallback response for failed generative attempts
-        """
-        personal_address = self._get_personal_address(session_id)
-        
-        # Analyze query type for better fallback
-        query_lower = query.lower()
-        
-        if any(word in query_lower for word in ['là gì', 'định nghĩa', 'giải thích']):
-            # Definition/explanation query
-            return f"""Dạ {personal_address}, em hiểu {personal_address} muốn tìm hiểu về vấn đề này. Tuy nhiên, đây không phải chuyên môn về BDU của em.
-
-Em khuyến khích {personal_address} tham khảo các nguồn tài liệu chuyên môn hoặc hỏi các chuyên gia trong lĩnh vực đó để có thông tin chính xác nhất.
-
-Để được hỗ trợ tốt nhất, {personal_address} có thể hỏi em về các vấn đề liên quan đến công việc và hoạt động tại Đại học Bình Dương ạ! 🎓"""
-
-        elif any(word in query_lower for word in ['cách', 'làm thế nào', 'hướng dẫn']):
-            # How-to query
-            return f"""Dạ {personal_address}, em nhận thấy {personal_address} cần hướng dẫn về vấn đề này. Tuy nhiên, đây không phải lĩnh vực chuyên môn BDU của em.
-
-Em gợi ý {personal_address} tìm hiểu từ các nguồn hướng dẫn chuyên môn hoặc tham khảo ý kiến của các chuyên gia có kinh nghiệm trong lĩnh vực đó.
-
-Để được hỗ trợ tốt nhất, {personal_address} có thể hỏi em về các quy trình, thủ tục và hoạt động tại Đại học Bình Dương ạ! 🎓"""
-
-        elif '?' in query or any(word in query_lower for word in ['ai', 'gì', 'nào', 'sao']):
-            # General question
-            return f"""Dạ {personal_address}, em hiểu {personal_address} quan tâm đến câu hỏi này. Tuy nhiên, đây không phải phạm vi chuyên môn về BDU của em.
-
-Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin uy tín hoặc chuyên gia trong lĩnh vực liên quan để có câu trả lời chính xác nhất.
-
-Để được hỗ trợ tốt nhất, {personal_address} có thể hỏi em về các vấn đề liên quan đến công việc giảng viên và hoạt động tại Đại học Bình Dương ạ! 🎓"""
-
-        else:
-            # Generic fallback
-            return f"""Dạ {personal_address}, em nhận thấy câu hỏi này nằm ngoài phạm vi chuyên môn BDU của em.
-
-Để được hỗ trợ tốt nhất, {personal_address} có thể hỏi em về các vấn đề liên quan đến công việc và hoạt động tại Đại học Bình Dương ạ! 🎓"""
-
-    def _create_enhanced_semantic_fallback_response(self, decision_type, query, context, session_id):
-        """
-        🛡️ ENHANCED: Create semantic fallback response with generative support
+        🛡️ FIXED: Create semantic fallback response with smart handling
         """
         personal_address = self._get_personal_address(session_id)
         
@@ -1327,15 +1117,10 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
         raw_answer = context.get('db_answer', '') if context else ''
         mismatch_issues = context.get('mismatch_issues', []) if context else []
         confidence_preserved = context.get('confidence_preserved', False) if context else False
-        generative_mode = context.get('generative_mode', False) if context else False
         
-        # 🚀 NEW: Handle generative fallback
-        if decision_type == 'use_generative' or generative_mode:
-            return self._create_generative_fallback_response(query, context, session_id)
-        
-        # 🤔 ENHANCED: If there are mismatch issues, provide smart clarification
+        # 🤔 FIXED: If there are mismatch issues, provide smart clarification
         if mismatch_issues and decision_type in ['use_db_direct', 'enhance_db_answer', 'ask_clarification']:
-            logger.info("🤔 ENHANCED fallback: Using smart clarification due to detected mismatches")
+            logger.info("🤔 FIXED fallback: Using smart clarification due to detected mismatches")
             return self.decision_engine._create_smart_clarification_response(
                 query, mismatch_issues, session_id
             )
@@ -1363,13 +1148,13 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
                 if not personalized_response.strip().endswith(('?', '!', '.')):
                     personalized_response += '.'
                 
-                # Add ENHANCED closing
+                # Add FIXED closing
                 if confidence_preserved:
                     personalized_response += f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎯'
                 else:
                     personalized_response += f' {personal_address.title()} cần em làm rõ thêm gì không ạ? 🎯'
                 
-                logger.info(f"🛡️ ENHANCED SEMANTIC FALLBACK: Formatted raw answer for {personal_address}")
+                logger.info(f"🛡️ FIXED SEMANTIC FALLBACK: Formatted raw answer for {personal_address}")
                 return personalized_response
             else:
                 return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ phòng ban liên quan để được hỗ trợ chi tiết ạ. 🎯"
@@ -1396,6 +1181,57 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
             logger.error(f"❌ Error checking Gemini availability: {str(e)}")
             return False
 
+    def _validate_answer_relevance(self, query, answer):
+        """🔍 VALIDATION: Check if answer is relevant to query"""
+        try:
+            query_lower = query.lower()
+            answer_lower = answer.lower()
+            
+            # Extract key concepts from query
+            concept_patterns = {
+                'báo cáo khối lượng': ['báo cáo', 'khối lượng', 'công việc'],
+                'kê khai nhiệm vụ': ['kê khai', 'nhiệm vụ'],
+                'tốt nghiệp': ['tốt nghiệp', 'graduation'],
+                'tạp chí': ['tạp chí', 'journal', 'bài viết'],
+                'lịch giảng': ['lịch', 'giảng dạy', 'schedule'],
+                'hạn nộp': ['hạn', 'deadline', 'chậm nhất']
+            }
+            
+            # Find main concept in query
+            main_concept = None
+            for concept, keywords in concept_patterns.items():
+                if any(kw in query_lower for kw in keywords):
+                    main_concept = concept
+                    break
+            
+            if not main_concept:
+                return True  # Can't determine, assume relevant
+            
+            # Check if answer contains related concepts
+            concept_keywords = concept_patterns[main_concept]
+            answer_has_concept = any(kw in answer_lower for kw in concept_keywords)
+            
+            # Additional specific checks
+            relevance_issues = []
+            
+            if 'báo cáo khối lượng' in query_lower and 'khối lượng học tập' in answer_lower:
+                relevance_issues.append("Query về 'báo cáo khối lượng công việc' nhưng answer về 'khối lượng học tập sinh viên'")
+            
+            if 'kê khai nhiệm vụ' in query_lower and 'kê khai' not in answer_lower:
+                relevance_issues.append("Query về 'kê khai nhiệm vụ' nhưng answer không chứa 'kê khai'")
+            
+            if relevance_issues:
+                logger.warning(f"🔍 ANSWER RELEVANCE WARNING:")
+                for issue in relevance_issues:
+                    logger.warning(f"   ⚠️ {issue}")
+                return False
+            
+            return answer_has_concept
+            
+        except Exception as e:
+            logger.error(f"❌ Error in answer relevance validation: {str(e)}")
+            return True  # Default to relevant to avoid breaking flow
+
     def _clean_query(self, query):
         """Clean and prepare query"""
         if not query:
@@ -1407,10 +1243,8 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
         
         return query
 
-    def _update_enhanced_semantic_memory(self, session_id, query, final_score, decision_type, was_education, context, document_text):
-        """
-        🧠 ENHANCED: Update conversation memory with semantic + generative info
-        """
+    def _update_semantic_memory(self, session_id, query, final_score, decision_type, was_education, context, document_text):
+        """Update conversation memory with FIXED semantic info"""
         if session_id not in self.conversation_memory:
             self.conversation_memory[session_id] = []
         
@@ -1422,20 +1256,18 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
                 'confidence_preserved': context.get('confidence_preserved', False) if context else False,
                 'smart_penalty': context.get('smart_penalty', 0) if context else 0,
                 'mismatch_issues': context.get('mismatch_issues', []) if context else [],
-                'semantic_decision': True,
-                'generative_mode': context.get('generative_mode', False) if context else False  # 🚀 NEW
+                'semantic_decision': True
             },
             'timestamp': time.time(),
             'user_type': 'lecturer',
             'decision_type': decision_type,
             'was_education_related': was_education,
-            'enhanced_semantic_processed': True,  # 🚀 UPDATED
+            'fixed_semantic_processed': True,
             'document_context_used': bool(document_text),
             'document_context_priority': decision_type == 'use_document_context',
             'external_api_used': decision_type == 'use_external_api',
-            'generative_response_used': decision_type == 'use_generative',  # 🚀 NEW
             'query_length': len(query.split()),
-            'architecture': 'enhanced_semantic_rag_with_generative'  # 🚀 UPDATED
+            'architecture': 'fixed_semantic_rag'
         }
         
         self.conversation_memory[session_id].append(interaction)
@@ -1443,9 +1275,9 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
         # Keep only recent history
         self.conversation_memory[session_id] = self.conversation_memory[session_id][-15:]
         
-        logger.info(f"🧠 ENHANCED semantic memory updated for session {session_id}: {len(self.conversation_memory[session_id])} interactions")
+        logger.info(f"🧠 FIXED semantic memory updated for session {session_id}: {len(self.conversation_memory[session_id])} interactions")
 
-    # Helper methods with ENHANCED personal addressing
+    # Helper methods with FIXED personal addressing
     def _get_personal_address(self, session_id):
         try:
             if hasattr(self.response_generator, '_get_personal_address'):
@@ -1461,8 +1293,7 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
             'confidence': 0.9,
             'method': 'empty_query',
             'processing_time': 0.01,
-            'enhanced_semantic_rag': True,
-            'generative_support': True  # 🚀 NEW
+            'fixed_semantic_rag': True
         }
 
     def _get_no_match_response(self):
@@ -1472,8 +1303,7 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
             'method': 'no_match_semantic',
             'decision_type': 'say_dont_know',
             'processing_time': 0.01,
-            'enhanced_semantic_rag': True,
-            'generative_support': True  # 🚀 NEW
+            'fixed_semantic_rag': True
         }
 
     def _get_out_of_scope_response(self, session_id):
@@ -1540,7 +1370,7 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
         return f"Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin cá nhân. {personal_address.title()} có thể thử lại sau ạ. 🎯"
 
     def _format_sources(self, results):
-        """Format sources for display with ENHANCED semantic scores"""
+        """Format sources for display with FIXED semantic scores"""
         sources = []
         for result in results:
             if result and result.get('final_score', 0) > 0.2:
@@ -1553,8 +1383,7 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
                     'stage1_score': result.get('stage1_score', 0),
                     'stage2_score': result.get('stage2_score', 0),
                     'mismatch_issues': result.get('mismatch_issues', []),
-                    'enhanced_semantic_reranking': result.get('fixed_semantic_reranking', False),  # 🚀 UPDATED
-                    'generative_capable': True  # 🚀 NEW
+                    'fixed_semantic_reranking': result.get('fixed_semantic_reranking', False)
                 })
         return sources
 
@@ -1575,7 +1404,7 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
             self.conversation_memory.clear()
 
     def reload_after_qa_update(self):
-        logger.info("🔄 Reloading ENHANCED semantic knowledge base...")
+        logger.info("🔄 Reloading FIXED semantic knowledge base...")
         
         if hasattr(self.sbert_retriever, 'cached_data'):
             self.sbert_retriever.cached_data = None
@@ -1586,8 +1415,7 @@ Em khuyến khích {personal_address} tìm hiểu từ các nguồn thông tin u
         if self.sbert_retriever.model and self.sbert_retriever.knowledge_data:
             self.sbert_retriever.build_faiss_index()
         
-        logger.info("✅ ENHANCED semantic knowledge base reloaded successfully")
-
+        logger.info("✅ FIXED semantic knowledge base reloaded successfully")
 
 class ChatbotAI:
     def __init__(self, shared_response_generator):
@@ -1725,7 +1553,7 @@ class ChatbotAI:
             if self.model and self.knowledge_data:
                 self.build_faiss_index()
             
-            logger.info(f"✅ ENHANCED semantic knowledge base loaded: {len(self.knowledge_data)} entries")
+            logger.info(f"✅ FIXED semantic knowledge base loaded: {len(self.knowledge_data)} entries")
             
         except Exception as e:
             logger.error(f"Error loading knowledge base: {str(e)}")
@@ -1793,7 +1621,7 @@ class BDUChatbotService:
         # Initialize conversation memory
         self.query_cache = query_response_cache
         
-        # 🎯 ENHANCED: Use PureSemanticChatbotAI with GENERATIVE logic
+        # 🎯 FIXED: Use PureSemanticChatbotAI with FIXED logic
         self.semantic_chatbot = PureSemanticChatbotAI(shared_response_generator=self.response_generator)
         
         # Keywords phát hiện thông tin cá nhân
@@ -1810,10 +1638,7 @@ class BDUChatbotService:
             'tháng này', 'thang nay', 'tháng sau', 'thang sau'
         ]
         
-        logger.info("🎯 ENHANCED BDUChatbotService initialized with Generative General Knowledge Support")
-        logger.info("   🚀 NEW: Generative responses for non-education queries")
-        logger.info("   🧠 ENHANCED: Context-aware general knowledge handling")
-        logger.info("   🛡️ PRESERVED: All existing education-focused functionality")
+        logger.info("🎯 ENHANCED BDUChatbotService initialized with Top-5 Smart Selection")
 
     def _needs_external_api(self, query: str) -> bool:
         """
@@ -1851,7 +1676,6 @@ class BDUChatbotService:
                     'method': 'empty_query',
                     'processing_time': time.time() - start_time,
                     'enhanced_semantic_rag': True,
-                    'generative_support': True,  # 🚀 NEW
                     'cache_hit': False
                 }
             
@@ -1859,8 +1683,6 @@ class BDUChatbotService:
             cached_response = self.query_cache.get(query)
             if cached_response:
                 cached_response['processing_time'] = time.time() - start_time
-                # 🚀 NEW: Add generative support flag to cached responses
-                cached_response['generative_support'] = True
                 logger.info(f"⚡ CACHE HIT: Response served in {cached_response['processing_time']:.3f}s")
                 return cached_response
             
@@ -1875,42 +1697,29 @@ class BDUChatbotService:
                     api_result = self._handle_external_api_call(query, session_id, jwt_token)
                     api_result['cache_hit'] = False
                     api_result['cache_skipped'] = 'personal_query'
-                    api_result['generative_support'] = True  # 🚀 NEW
                     return api_result
                 else:
                     # No token -> Require authentication
                     auth_result = self._handle_authentication_required(session_id)
                     auth_result['cache_hit'] = False
                     auth_result['cache_skipped'] = 'authentication_required'
-                    auth_result['generative_support'] = True  # 🚀 NEW
                     return auth_result
             
-            # 🚀 ENHANCED: Generative-capable semantic RAG processing
-            logger.info("📚 Using ENHANCED Semantic RAG System with Generative General Knowledge Support")
+            # 🎯 ENHANCED SEMANTIC RAG PROCESSING with Top-5 Selection
+            logger.info("📚 Using ENHANCED Semantic RAG System with Top-5 Smart Selection")
             result = self.semantic_chatbot.process_query(query, session_id, jwt_token, document_text)
             
-            # 🚀 NEW: Add generative support flags
+            # Add service-level flags
             result['api_priority_activated'] = False
             result['fallback_to_enhanced_semantic'] = True
             result['cache_hit'] = False
-            result['generative_support'] = True  # 🚀 NEW
-            result['generative_capability'] = True  # 🚀 NEW
             
-            # 🚀 NEW: Track if generative was actually used
-            if result.get('decision_type') == 'use_generative':
-                result['generative_response_used'] = True
-                result['generative_mode_activated'] = True
-                logger.info("🚀 GENERATIVE MODE: Successfully used generative response for non-education query")
-            else:
-                result['generative_response_used'] = False
-                result['generative_mode_activated'] = False
-            
-            # 🎯 CACHE STORE (with generative info)
+            # 🎯 CACHE STORE
             cache_stored = self.query_cache.set(query, result)
             result['cache_stored'] = cache_stored
             
             if cache_stored:
-                logger.info(f"💾 Response cached for future requests (generative support included)")
+                logger.info(f"💾 Response cached for future requests")
             
             return result
             
@@ -1933,14 +1742,13 @@ class BDUChatbotService:
                 'processing_time': time.time() - start_time,
                 'error': str(e),
                 'enhanced_semantic_rag': True,
-                'generative_support': True,  # 🚀 NEW
                 'graceful_degradation_used': True,
                 'cache_hit': False,
                 'cache_stored': False
             }
 
     def _handle_external_api_call(self, query: str, session_id: str, jwt_token: str) -> dict:
-        """Handle external API call for personal info with generative support"""
+        """Handle external API call for personal info"""
         try:
             logger.info("🌐 Calling external API for personal information")
             
@@ -1970,8 +1778,7 @@ class BDUChatbotService:
                     'processing_time': 0.5,
                     'external_api_used': True,
                     'api_priority_activated': True,
-                    'enhanced_semantic_rag': True,
-                    'generative_support': True  # 🚀 NEW
+                    'fixed_semantic_rag': True
                 }
             else:
                 error_type = api_result.get('error_type', 'unknown')
@@ -1984,8 +1791,7 @@ class BDUChatbotService:
                     'external_api_used': True,
                     'api_error': api_result.get('error', ''),
                     'api_priority_activated': True,
-                    'graceful_degradation_used': True,
-                    'generative_support': True  # 🚀 NEW
+                    'graceful_degradation_used': True
                 }
                 
         except Exception as e:
@@ -2007,12 +1813,11 @@ class BDUChatbotService:
                 'processing_time': 0.2,
                 'error': str(e),
                 'api_priority_activated': True,
-                'graceful_degradation_used': True,
-                'generative_support': True  # 🚀 NEW
+                'graceful_degradation_used': True
             }
 
     def _handle_authentication_required(self, session_id: str) -> dict:
-        """Handle authentication required with generative support"""
+        """Handle authentication required"""
         try:
             if hasattr(self.response_generator, '_get_personal_address'):
                 personal_address = self.response_generator._get_personal_address(session_id)
@@ -2029,8 +1834,7 @@ class BDUChatbotService:
             'processing_time': 0.01,
             'external_api_used': False,
             'api_priority_activated': True,
-            'authentication_required': True,
-            'generative_support': True  # 🚀 NEW
+            'authentication_required': True
         }
 
     def _get_api_fallback(self, session_id):
@@ -2061,17 +1865,13 @@ class BDUChatbotService:
             return f"Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin. {personal_address.title()} có thể thử lại sau ạ. 🎯"
 
     def get_system_status(self):
-        """
-        🚀 ENHANCED: Get system status with full generative support information
-        """
         semantic_status = self.semantic_chatbot.get_system_status()
         api_status = external_api_service.get_system_status()
         cache_stats = self.query_cache.get_cache_stats()
         
         return {
             'service_name': 'BDUChatbotService',
-            'architecture': 'enhanced_semantic_rag_with_generative_knowledge',  # 🚀 UPDATED
-            'version': '2.0_generative',  # 🚀 NEW
+            'architecture': 'enhanced_semantic_rag_top5',
             'chatbot_service': semantic_status,
             'external_api_service': api_status,
             'cache_performance': cache_stats,
@@ -2082,24 +1882,14 @@ class BDUChatbotService:
                 'tiered_decision_logic',
                 'targeted_clarification',
                 'high_quality_answer_protection',
-                'top5_smart_candidate_selection',
-                'relevance_analysis_debugging',
-                'suitability_based_selection',
+                'top5_smart_candidate_selection',  # New feature
+                'relevance_analysis_debugging',    # New feature
+                'suitability_based_selection',     # New feature
                 'document_context_processing',
                 'external_api_integration',
                 'conversation_memory',
                 'query_response_cache',
-                'graceful_degradation',
-                # 🚀 NEW: Generative features
-                'generative_general_knowledge_support',
-                'generative_response_validation',
-                'non_education_query_handling',
-                'general_knowledge_detection',
-                'context_aware_generative_responses',
-                'adaptive_generative_fallback',
-                'generative_appropriateness_check',
-                'seamless_education_generative_transition',
-                'confidence_based_generative_activation'
+                'graceful_degradation'
             ],
             'removed_features': [
                 'intent_classification',
@@ -2109,133 +1899,19 @@ class BDUChatbotService:
                 'complex_context_analysis',
                 'hard_coded_rules',
                 'over_aggressive_penalties',
-                'single_candidate_limitation',
-                'strict_education_only_limitation',  # 🚀 Key removal
-                'non_education_query_rejection'      # 🚀 Key removal
+                'single_candidate_limitation'  # New removal
             ],
             'processing_flow': [
                 '1. Cache Check',
                 '2. Personal Info API Detection',
-                '3. General Knowledge vs Education Classification',  # 🚀 ENHANCED
-                '4. ENHANCED Semantic Retrieval (Fine-tuned Model)',
-                '5. Smart Two-Stage Semantic Re-ranking (Top-5)',
-                '6. Smart Candidate Selection from Top-5',
-                '7. Confidence-Aware Decision Making with Generative Support',  # 🚀 ENHANCED
-                '8. Education Answer OR Generative General Knowledge Response',  # 🚀 NEW
-                '9. Response Validation and Smart Fallback',  # 🚀 ENHANCED
-                '10. Cache Storage'
-            ],
-            'generative_capabilities': {  # 🚀 COMPREHENSIVE section
-                'general_knowledge_support': True,
-                'context_aware_responses': True,
-                'personalized_addressing': True,
-                'bdu_context_preservation': True,
-                'response_validation': True,
-                'adaptive_fallback': True,
-                'confidence_threshold': 0.4,
-                'education_override': False,
-                'seamless_integration': True,
-                'quality_assurance': True,
-                'conversation_continuity': True,
-                'fallback_graceful_degradation': True
-            },
-            'query_handling_modes': {  # 🚀 NEW section
-                'education_bdu_queries': 'Enhanced Semantic RAG with confidence management',
-                'personal_info_queries': 'External API with authentication',
-                'general_knowledge_queries': 'Generative AI with BDU context preservation',
-                'mixed_session_queries': 'Adaptive mode switching based on query type',
-                'document_based_queries': 'Document context processing with OCR support'
-            },
-            'confidence_management': {  # 🚀 ENHANCED section
-                'high_confidence_education': 'Direct answer from knowledge base',
-                'medium_confidence_education': 'Enhanced answer with additional context',
-                'low_confidence_education': 'Smart clarification request',
-                'very_low_confidence_education': 'Don\'t know with department suggestions',
-                'low_confidence_non_education': 'Generative general knowledge response',
-                'inappropriate_queries': 'Polite redirection to BDU topics'
-            }
+                '3. ENHANCED Semantic Retrieval (Fine-tuned Model)',
+                '4. Smart Two-Stage Semantic Re-ranking (Top-5)',
+                '5. Smart Candidate Selection from Top-5',
+                '6. Confidence-Aware Decision Making',
+                '7. Response Generation with Smart Fallback',
+                '8. Cache Storage'
+            ]
         }
-
-    # 🚀 NEW: Generative support utility methods
-    def has_generative_support(self):
-        """
-        🚀 NEW: Check if generative support is available and properly configured
-        """
-        try:
-            # Check if decision engine has generative enabled
-            decision_engine = getattr(self.semantic_chatbot, 'decision_engine', None)
-            if not decision_engine:
-                return False
-            
-            generative_enabled = decision_engine.decision_factors.get('generative_enabled', False)
-            
-            # Check if response generator has the generative methods
-            response_generator = getattr(self, 'response_generator', None)
-            if not response_generator:
-                return False
-            
-            has_generative_method = hasattr(response_generator, '_generate_general_knowledge_response_smart')
-            
-            # Check if Gemini API is available
-            gemini_available = self.semantic_chatbot._check_gemini_availability()
-            
-            return generative_enabled and has_generative_method and gemini_available
-            
-        except Exception as e:
-            logger.error(f"❌ Error checking generative support: {str(e)}")
-            return False
-
-    def toggle_generative_support(self, enabled: bool):
-        """
-        🚀 NEW: Enable or disable generative support at runtime
-        """
-        try:
-            decision_engine = getattr(self.semantic_chatbot, 'decision_engine', None)
-            if decision_engine:
-                decision_engine.decision_factors['generative_enabled'] = enabled
-                logger.info(f"🚀 Generative support {'enabled' if enabled else 'disabled'}")
-                return True
-            else:
-                logger.error("❌ Decision engine not found")
-                return False
-        except Exception as e:
-            logger.error(f"❌ Error toggling generative support: {str(e)}")
-            return False
-
-    def get_generative_stats(self):
-        """
-        🚀 NEW: Get statistics about generative usage
-        """
-        try:
-            total_sessions = len(self.semantic_chatbot.conversation_memory)
-            generative_sessions = 0
-            generative_queries = 0
-            
-            for session_id, interactions in self.semantic_chatbot.conversation_memory.items():
-                session_has_generative = False
-                for interaction in interactions:
-                    if interaction.get('generative_response_used', False):
-                        generative_queries += 1
-                        if not session_has_generative:
-                            generative_sessions += 1
-                            session_has_generative = True
-            
-            return {
-                'total_sessions': total_sessions,
-                'generative_sessions': generative_sessions,
-                'generative_queries': generative_queries,
-                'generative_session_percentage': (generative_sessions / max(total_sessions, 1)) * 100,
-                'support_available': self.has_generative_support(),
-                'feature_enabled': getattr(self.semantic_chatbot.decision_engine, 'decision_factors', {}).get('generative_enabled', False)
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error getting generative stats: {str(e)}")
-            return {
-                'error': str(e),
-                'support_available': False,
-                'feature_enabled': False
-            }
 
     # Delegate methods to semantic chatbot
     def get_conversation_memory(self, session_id):
