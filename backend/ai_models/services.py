@@ -11,6 +11,8 @@ import pandas as pd
 
 from .external_api_service import external_api_service
 from qa_management.services import drive_service
+
+from .interaction_logger_service import interaction_logger
 from .query_response_cache import query_response_cache
 
 logger = logging.getLogger(__name__)
@@ -911,14 +913,34 @@ class PureSemanticChatbotAI:
             
             if not candidates:
                 logger.warning("⚠️ No candidates found from semantic search")
-                return self._get_no_match_response()
+                response_data = self._get_no_match_response()
+                
+                # ✅ BƯỚC 2: GHI LOG KHI KHÔNG TÌM THẤY ỨNG VIÊN
+                interaction_logger.log_interaction(
+                    query=query,
+                    response=response_data.get('response', ''),
+                    confidence=0.0,
+                    method='semantic_search',
+                    reason='no_candidates_found'
+                )
+                return response_data
             
             # STEP 5: FIXED SEMANTIC RE-RANKING
             reranked_candidates = self.semantic_reranker.rerank(candidates, query)
             
             if not reranked_candidates:
                 logger.warning("⚠️ No candidates after FIXED semantic re-ranking")
-                return self._get_no_match_response()
+                response_data = self._get_no_match_response()
+
+                # ✅ BƯỚC 3: GHI LOG KHI RE-RANKING KHÔNG CÓ KẾT QUẢ
+                interaction_logger.log_interaction(
+                    query=query,
+                    response=response_data.get('response', ''),
+                    confidence=0.0,
+                    method='reranking',
+                    reason='no_candidates_after_rerank'
+                )
+                return response_data
             
             # 🔍 DEBUG: Log top 3 candidates for quality analysis
             logger.info(f"🔍 DEBUG - Top 3 candidates quality check:")
@@ -952,6 +974,15 @@ class PureSemanticChatbotAI:
             decision_type, context, should_respond = self.decision_engine.make_decision(
                 query, reranked_candidates, session_memory, jwt_token, document_text
             )
+            
+            if decision_type in ['say_dont_know', 'ask_clarification']:
+                 interaction_logger.log_interaction(
+                    query=query,
+                    response=f"Bot decided to '{decision_type}'", # Ghi lại quyết định
+                    confidence=best_candidate.get('final_score', 0.0),
+                    method=decision_type,
+                    reason=f'decision_engine_{decision_type}'
+                )
             
             # STEP 8: EXECUTE DECISION
             if not should_respond:

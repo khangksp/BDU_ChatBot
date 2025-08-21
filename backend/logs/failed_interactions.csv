@@ -1,0 +1,35 @@
+﻿timestamp,user_query,bot_response,confidence_score,method,reason_for_logging
+2025-08-21T15:40:49.376232,thầy Cao Việt Hiếu,Bot decided to 'ask_clarification',0.4343,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:40:49.381588,thầy Cao Việt Hiếu,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4343,ask_clarification,cache_rejected_confidence_too_low_0.434279715236028
+2025-08-21T15:41:29.032621,advantech năm nay có ai,Bot decided to 'ask_clarification',0.4052,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:41:29.035718,advantech năm nay có ai,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4052,ask_clarification,cache_rejected_confidence_too_low_0.4051993498802185
+2025-08-21T15:42:53.028902,thầy Sơn,"Dạ thầy Khang, thầy Sơn hiện đang công tác tại Trường Đại học Bình Dương ạ. Thầy Khang có cần em hỗ trợ thêm gì không ạ?
+",0.5111,enhance_db_answer,cache_rejected_confidence_too_low_0.5110698382695515
+2025-08-21T15:43:14.257862,dắt dùm tôi chiiecs xe,Bot decided to 'ask_clarification',0.2721,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:43:14.258878,dắt dùm tôi chiiecs xe,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2721,ask_clarification,cache_rejected_confidence_too_low_0.27210860466957093
+2025-08-21T15:43:22.758990,mấy giờ kiu,"Dạ thầy Khang, ý của thầy là mấy giờ mình bắt đầu làm việc mỗi ngày ạ? Theo quy định, mình làm 8 tiếng mỗi ngày ạ. Thầy Khang có cần em hỗ trợ thêm gì không ạ?
+",0.4726,enhance_db_answer,cache_rejected_confidence_too_low_0.4725756391300552
+2025-08-21T15:45:42.146686,SSO là gì,"Dạ thầy Khang, em chưa có thông tin về SSO là gì ạ. Thầy Khang có thể hỏi bộ phận IT của trường để được giải đáp ạ. Thầy Khang có cần em hỗ trợ thêm gì không ạ?
+",0.4773,enhance_db_answer,cache_rejected_confidence_too_low_0.4773372601895105
+2025-08-21T15:46:10.246361,how can i become a Khang,Bot decided to 'ask_clarification',0.2861,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:46:10.250656,how can i become a Khang,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2861,ask_clarification,cache_rejected_confidence_too_low_0.28612944841384885
+2025-08-21T15:46:25.127604,my bitch is gay,Bot decided to 'ask_clarification',0.321,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:46:25.133774,my bitch is gay,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.321,ask_clarification,cache_rejected_confidence_too_low_0.3209654383659363
+2025-08-21T15:46:57.237528,how can i hold my for band4band,Bot decided to 'ask_clarification',0.3125,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:46:57.246349,how can i hold my for band4band,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3125,ask_clarification,cache_rejected_confidence_too_low_0.31250287222862244
+2025-08-21T15:47:13.963889,biết central tree không,Bot decided to 'ask_clarification',0.3813,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:47:14.012020,biết central tree không,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3813,ask_clarification,cache_rejected_confidence_too_low_0.3812669792542091
+2025-08-21T15:47:31.473207,biết cancel trê không,Bot decided to 'ask_clarification',0.3226,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:47:31.508022,biết cancel trê không,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3226,ask_clarification,cache_rejected_confidence_too_low_0.3225774508553582
+2025-08-21T15:47:46.170741,dương anh tuấn là ai,Bot decided to 'ask_clarification',0.5015,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:47:46.184904,dương anh tuấn là ai,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.5015,ask_clarification,cache_rejected_confidence_too_low_0.5015255575180054
+2025-08-21T15:47:57.611697,Dương Anh Tuấn là ông nào,"Dạ thầy Khang, em chưa có thông tin về người này. Thầy Khang có thể cung cấp thêm thông tin để em tìm kiếm chính xác hơn không ạ?
+",0.4804,enhance_db_answer,cache_rejected_confidence_too_low_0.48039649903089154
+2025-08-21T15:48:15.062689,nguyễn quốc duy khang là bà nào,Bot decided to 'ask_clarification',0.4891,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:48:15.119894,nguyễn quốc duy khang là bà nào,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4891,ask_clarification,cache_rejected_confidence_too_low_0.4890602351937975
+2025-08-21T15:48:30.443988,nguyễn quốc duy khang là ông nào,Bot decided to 'ask_clarification',0.5096,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:48:30.516876,nguyễn quốc duy khang là ông nào,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.5096,ask_clarification,cache_rejected_confidence_too_low_0.5096004695211138
+2025-08-21T15:49:03.646515,chức vị gì,"Dạ thầy Khang, ông Hoàng Ngọc Cường trước đây làm ở Phòng Quản lý khoa học và Quan hệ đối ngoại, giờ chuyển sang Khoa Công nghệ thực phẩm ạ. Thầy Khang có cần em hỗ trợ thêm gì không ạ?
+",0.5631,enhance_db_answer,cache_rejected_confidence_too_low_0.563076478062254
+2025-08-21T15:49:52.791263,ông Dương Anh tuấn là gì,Bot decided to 'ask_clarification',0.4857,ask_clarification,decision_engine_ask_clarification
+2025-08-21T15:49:52.852519,ông Dương Anh tuấn là gì,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4857,ask_clarification,cache_rejected_confidence_too_low_0.48572837909062705

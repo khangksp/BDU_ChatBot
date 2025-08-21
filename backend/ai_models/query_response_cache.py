@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional, Tuple
 from django.core.cache import cache as django_cache
 from django.conf import settings
 
+from .interaction_logger_service import interaction_logger
 logger = logging.getLogger(__name__)
 
 class QueryResponseCache:
@@ -223,6 +224,16 @@ class QueryResponseCache:
         cacheable, reason = self._is_cacheable_response(response_data)
         if not cacheable:
             logger.debug(f"🚫 Response not cacheable, reason: {reason} for query: '{query[:50]}...'")
+
+            # Ghi lại câu hỏi này vì nó không đủ chất lượng để cache
+            interaction_logger.log_interaction(
+                query=query,
+                response=response_data.get('response', ''),
+                confidence=response_data.get('confidence', 0.0),
+                method=response_data.get('method', 'unknown'),
+                reason=f"cache_rejected_{reason}"
+            )
+            
             if 'confidence_too_low' in reason:
                 self.cache_stats['rejections_low_confidence'] += 1
             else:
