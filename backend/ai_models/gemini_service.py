@@ -12,7 +12,6 @@ import os
 logger = logging.getLogger(__name__)
 
 class GeminiApiKeyManager:
-    """Quản lý và tự động xoay vòng các API key của Gemini để tránh lỗi rate limit."""
     def __init__(self):
         self.keys = []
         self._load_keys_from_env()
@@ -70,9 +69,6 @@ class GeminiApiKeyManager:
 
 
 def build_personalized_system_prompt(user_memory_prompt: str = None, personal_address: str = "giảng viên"):
-    """
-    ✅ UPDATED: Builds a personalized system prompt with dynamic addressing
-    """
     base_prompt = f"""Bạn là ChatBDU, một trợ lý AI chuyên nghiệp và tận tâm của Đại học Bình Dương (BDU). Sứ mệnh của bạn là hỗ trợ các giảng viên của trường một cách hiệu quả nhất.
 
 🎯 QUY TẮC NỀN TẢNG (CÓ THỂ BỊ GHI ĐÈ BỞI CHỈ DẪN RIÊNG):
@@ -96,11 +92,6 @@ def build_personalized_system_prompt(user_memory_prompt: str = None, personal_ad
     return base_prompt + custom_prompt_section
 
 class AdvancedConfidenceManager:
-    """
-    🚀 NEW: Advanced Confidence Management System 
-    Đảm bảo confidence scores luôn ≤ 1.0 và xử lý overflow
-    """
-    
     def __init__(self):
         self.MAX_CONFIDENCE = 1.0
         self.confidence_calibration_rules = {
@@ -123,9 +114,6 @@ class AdvancedConfidenceManager:
         logger.info("✅ AdvancedConfidenceManager initialized with overflow protection")
     
     def normalize_confidence(self, raw_confidence: float, source: str = "unknown") -> float:
-        """
-        🛡️ CRITICAL: Normalize confidence to ensure it never exceeds 1.0
-        """
         if raw_confidence is None or not isinstance(raw_confidence, (int, float)):
             logger.warning(f"⚠️ Invalid confidence value: {raw_confidence} from {source}")
             return 0.1  # Safe default
@@ -142,9 +130,6 @@ class AdvancedConfidenceManager:
                                    keyword_score: float = 0,
                                    context_bonus: float = 0,
                                    method: str = "hybrid") -> float:
-        """
-        🧮 Calculate final response confidence với advanced calibration
-        """
         base_confidence = 0.0
         
         # Base từ semantic score
@@ -182,9 +167,6 @@ class AdvancedConfidenceManager:
         return final_confidence
     
     def get_response_strategy(self, confidence: float) -> str:
-        """
-        🎯 Determine response strategy based on confidence
-        """
         confidence = self.normalize_confidence(confidence, "strategy_decision")
         
         if confidence >= self.decision_thresholds['direct_answer']:
@@ -196,11 +178,8 @@ class AdvancedConfidenceManager:
         else:
             return 'dont_know'
 
-class SmartTokenManager:
-    """🧠 Smart Token Management System - Tự động tăng token và hoàn thiện response"""
-    
+class SmartTokenManager:    
     def __init__(self):
-        # ✅ SIMPLIFIED: Single adaptive token range for all responses
         self.adaptive_token_range = {
             'min': 80, 
             'optimal': 250, 
@@ -209,7 +188,6 @@ class SmartTokenManager:
             'avg_chars_per_sentence': 80
         }
         
-        # ✅ COMPLETION DETECTION patterns
         self.incomplete_patterns = [
             r'[^.!?]\s*$',  # Không kết thúc bằng dấu câu
             r'\b(và|hoặc|với|để|khi|nếu|tại|về|cho|trong|của|từ)\s*$',  # Kết thúc bằng từ nối
@@ -218,7 +196,6 @@ class SmartTokenManager:
             r'\b(Dạ|Ạ|thầy|cô|giảng viên)\s*$',  # Câu chào chưa hoàn chỉnh
         ]
         
-        # ✅ SENTENCE ENDING patterns để kiểm tra câu hoàn chỉnh
         self.complete_endings = [
             r'[.!?]\s*$',  # Kết thúc bằng dấu câu
             r'ạ[.!?]\s*$',  # Kết thúc bằng "ạ" + dấu câu
@@ -229,34 +206,27 @@ class SmartTokenManager:
         
         logger.info("✅ SmartTokenManager initialized with adaptive token range")
     
-    def calculate_optimal_tokens(self, prompt_length: int, complexity_hint: str = None) -> int:
-        """🎯 Tính toán tokens tối ưu dựa trên độ phức tạp"""
-        
+    def calculate_optimal_tokens(self, prompt_length: int, complexity_hint: str = None) -> int:        
         # Base tokens from adaptive range
         base_tokens = self.adaptive_token_range['optimal']
         
-        # ✅ ADJUSTMENT dựa trên prompt length
         if prompt_length > 500:
             base_tokens += 50  # Prompt dài cần response dài hơn
         elif prompt_length < 200:
             base_tokens -= 30  # Prompt ngắn có thể response ngắn hơn
             
-        # ✅ ADJUSTMENT dựa trên complexity hint
         if complexity_hint:
             if complexity_hint in ['enhanced_generation', 'detailed_explanation', 'document_context', 'two_stage_reranking']:
                 base_tokens += 100  # 🚀 NEW: Advanced methods need more tokens
             elif complexity_hint in ['quick_clarify', 'simple_answer']:
                 base_tokens -= 40
                 
-        # ✅ BOUNDS checking
         min_tokens = self.adaptive_token_range['min']
         max_tokens = self.adaptive_token_range['max']
         
         return max(min_tokens, min(max_tokens, base_tokens))
     
-    def is_response_incomplete(self, response: str) -> Dict[str, Any]:
-        """🔍 Kiểm tra response có bị cắt không và mức độ hoàn thiện"""
-        
+    def is_response_incomplete(self, response: str) -> Dict[str, Any]:        
         if not response or not response.strip():
             return {'incomplete': True, 'reason': 'empty_response', 'confidence': 1.0}
         
@@ -304,9 +274,7 @@ class SmartTokenManager:
         
         return {'incomplete': False, 'reason': 'complete', 'confidence': 0.9}
     
-    def estimate_completion_tokens(self, incomplete_response: str) -> int:
-        """📊 Ước tính tokens cần để hoàn thiện response"""
-        
+    def estimate_completion_tokens(self, incomplete_response: str) -> int:        
         # Estimate current length in tokens (rough: 1 token ≈ 3-4 chars in Vietnamese)
         current_tokens = len(incomplete_response) // 3
         
@@ -318,9 +286,7 @@ class SmartTokenManager:
         
         return min(additional_needed, 150)  # Cap at 150 additional tokens
 
-class ConversationMemory:
-    """🚀 NÂNG CẤP: Quản lý bộ nhớ hội thoại với conversation context summary"""
-    
+class ConversationMemory:    
     def __init__(self, max_history=10):
         self.conversations = {}  # {session_id: conversation_data}
         self.max_history = max_history
@@ -360,7 +326,6 @@ class ConversationMemory:
         self._update_context_summary(session_id)
     
     def get_conversation_context(self, session_id: str) -> dict:
-        """🚀 NÂNG CẤP: Lấy context của conversation với recent summary"""
         if session_id not in self.conversations:
             return {'history': [], 'context_summary': '', 'user_interests': [], 'recent_conversation_summary': ''}
         
@@ -378,7 +343,6 @@ class ConversationMemory:
         }
     
     def _create_recent_conversation_summary(self, session_id: str) -> str:
-        """🚀 NEW: Tạo tóm tắt ngắn gọn 2-3 tương tác gần nhất"""
         if session_id not in self.conversations:
             return ""
         
@@ -399,7 +363,6 @@ class ConversationMemory:
         return " | ".join(summary_parts)
     
     def _update_context_summary(self, session_id: str):
-        """Cập nhật tóm tắt context cho giảng viên"""
         conv = self.conversations[session_id]
         recent_queries = [h['user_query'] for h in conv['history'][-3:]]
         
@@ -431,28 +394,20 @@ class ConversationMemory:
             conv['context_summary'] = 'Hỏi đáp chung về BDU'
 
 class SimpleVietnameseRestorer:
-    """
-    Simple Vietnamese accent restorer using Gemini API
-    - Based on your original code sample
-    - Minimal complexity, maximum effectiveness
-    """
-    
     def __init__(self, key_manager: GeminiApiKeyManager):
         self.key_manager = key_manager
-        self.model_name = "gemini-2.0-flash" # Dùng model flash cho nhanh và rẻ
+        self.model_name = "gemini-2.0-flash"
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
         self.cache = {}
         self.max_cache_size = 500
         logger.info("✅ SimpleVietnameseRestorer initialized with Key Manager.")
     
     def has_vietnamese_accents(self, text: str) -> bool:
-        """Check if text has Vietnamese accents"""
         vietnamese_chars = 'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ'
         vietnamese_chars += vietnamese_chars.upper()
         return any(char in vietnamese_chars for char in text)
     
     def restore_vietnamese_tone(self, input_text: str, retry_count=0) -> str:
-        """Restore Vietnamese accents using Gemini API with Key Manager."""
         if not input_text or not input_text.strip():
             return input_text
         
@@ -528,7 +483,6 @@ class SimpleVietnameseRestorer:
         return input_text
     
     def _is_valid_restoration(self, original: str, restored: str) -> bool:
-        """Simple validation"""
         if not restored or len(restored.strip()) == 0:
             return False
         
@@ -544,7 +498,6 @@ class SimpleVietnameseRestorer:
         return similarity >= 0.8
     
     def _cache_result(self, key: str, result: str):
-        """Cache result with size management"""
         self.cache[key] = result
         
         # Simple cache management
@@ -555,9 +508,7 @@ class SimpleVietnameseRestorer:
             for k in keys_to_remove:
                 del self.cache[k]
 
-class GeminiResponseGenerator:
-    """🚀 NÂNG CẤP: Advanced Gemini Response Generator với Smart Token Management, Advanced Confidence Management, và Two-Stage Re-ranking Integration"""
-    
+class GeminiResponseGenerator:    
     def __init__(self):
         self.key_manager = GeminiApiKeyManager()
         # Thống nhất phiên bản model ở đây
@@ -566,22 +517,15 @@ class GeminiResponseGenerator:
         self.memory = ConversationMemory(max_history=10)
         self.vietnamese_restorer = SimpleVietnameseRestorer(self.key_manager)
         
-        # ✅ NEW: Smart Token Manager
         self.token_manager = SmartTokenManager()
-        
-        # 🚀 NEW: Advanced Confidence Manager
         self.confidence_manager = AdvancedConfidenceManager()
-        
-        # User context cache for personalization
         self._user_context_cache = {}
         
-        # ✅ SIMPLIFIED: Single default generation config
         self.default_generation_config = {
             "temperature": 0.4,
             "topP": 0.85
         }
         
-        # Role consistency rules (unchanged)
         self.role_consistency_rules = {
             'identity': 'AI assistant của Đại học Bình Dương (BDU) hỗ trợ giảng viên',
             'personality': 'lịch sự, chuyên nghiệp, tôn trọng',
@@ -596,18 +540,6 @@ class GeminiResponseGenerator:
 
     # 🚀 NEW: Document Context Processing Methods
     def _build_document_context_prompt(self, query: str, document_text: str, session_id: str = None) -> str:
-        """
-        🚀 NEW: Build comprehensive prompt for document-based question answering
-        
-        Args:
-            query (str): User's question about the document
-            document_text (str): Text content extracted from the document
-            session_id (str): Session ID for personalization
-            
-        Returns:
-            str: Formatted prompt for Gemini API
-        """
-        # Get personalized system prompt
         system_prompt = self._get_personalized_system_prompt(session_id)
         personal_address = self._get_personal_address(session_id)
         
@@ -666,28 +598,21 @@ Trả lời:"""
 
         return prompt
 
-    # ✅ NEW: Process external API data
-    def _generate_external_api_response(self, query, context, session_id=None):
-        """Generate response from external API data"""
-        
+    def _generate_external_api_response(self, query, context, session_id=None):        
         api_data = context.get('api_data', {})
         lecturer_info = api_data.get('lecturer_info', {})
         schedule_summary = api_data.get('schedule_summary', {})
         daily_schedule = api_data.get('daily_schedule', {})
         
-        # Get personal addressing
         personal_address = self._get_personal_address_from_api_data(lecturer_info, session_id)
         
-        # ✅ NEW: Get conversation context summary
         conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
         recent_summary = conversation_context.get('recent_conversation_summary', '')
         
-        # Build comprehensive prompt for external API data
         prompt = self._build_external_api_prompt(
             query, api_data, personal_address, recent_summary
         )
         
-        # Calculate optimal tokens for external API response
         optimal_tokens = self.token_manager.calculate_optimal_tokens(
             len(prompt), 
             'external_api_processing'
@@ -711,9 +636,7 @@ Trả lời:"""
         
         return response
     
-    def _build_external_api_prompt(self, query, api_data, personal_address, recent_summary=""):
-        """🚀 NÂNG CẤP: Build comprehensive prompt với conversation context"""
-        
+    def _build_external_api_prompt(self, query, api_data, personal_address, recent_summary=""):        
         lecturer_info = api_data.get('lecturer_info', {})
         schedule_summary = api_data.get('schedule_summary', {})
         daily_schedule = api_data.get('daily_schedule', {})
@@ -738,7 +661,6 @@ Trả lời:"""
             lecturer_info
         )
         
-        # ✅ NEW: Conversation context section
         context_section = ""
         if recent_summary:
             context_section = f"""
@@ -782,11 +704,9 @@ Trả lời:"""
 - KHÔNG CHẾ TẠO thông tin không có trong dữ liệu
 
 Trả lời:"""
-
         return prompt
     
     def _format_schedule_for_prompt(self, daily_schedule):
-        """Format daily schedule data for Gemini prompt"""
         if not daily_schedule:
             return "Hiện tại không có lịch giảng dạy trong khoảng thời gian này."
         
@@ -836,9 +756,7 @@ Trả lời:"""
         
         return '\n'.join(formatted_lines) if formatted_lines else "Không có lịch giảng dạy."
 
-    def _get_personalized_system_prompt_for_external_api(self, lecturer_info):
-        """Get personalized system prompt for external API processing với gender-based addressing"""
-        
+    def _get_personalized_system_prompt_for_external_api(self, lecturer_info):        
         ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
         gender = lecturer_info.get('gender', 'other')  # ✅ NEW: Lấy giới tính từ API
         chuc_danh = lecturer_info.get('chuc_danh', '')
@@ -876,11 +794,9 @@ Trả lời:"""
         return base_prompt
 
     def _get_personal_address_from_api_data(self, lecturer_info, session_id):
-        """Get personal address from API data or session với gender support"""
         ten_giang_vien = lecturer_info.get('ten_giang_vien', '')
         gender = lecturer_info.get('gender', 'other')
         
-        # ✅ NEW: Sử dụng giới tính từ API data
         if gender == 'male':
             salutation = 'thầy'
         elif gender == 'female':
@@ -899,7 +815,6 @@ Trả lời:"""
         return self._get_personal_address(session_id)
 
     def _post_process_external_api_response(self, response, lecturer_info, query, session_id):
-        """Post-process external API response for consistency với gender support"""
         if not response:
             return response
         
@@ -952,7 +867,6 @@ Trả lời:"""
         return response.strip()
 
     def _get_external_api_fallback_response(self, api_data, personal_address):
-        """Fallback response when Gemini fails to process external API data"""
         lecturer_info = api_data.get('lecturer_info', {})
         schedule_summary = api_data.get('schedule_summary', {})
         
@@ -971,10 +885,8 @@ Trả lời:"""
 Để xem chi tiết, {personal_address} có thể truy cập hệ thống quản lý đào tạo của trường ạ. 🎓
 
 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"""
-    
-    # ✅ NEW: Personalization methods
+
     def set_user_context(self, session_id: str, user_context: dict):
-        """Set user context cho session (được gọi từ chat API)"""
         
         print("\n" + "="*20 + " DEBUG: set_user_context " + "="*20)
         print(f"🕵️‍♂️ [set_user_context] Đang cài đặt context cho session: {session_id}")
@@ -989,26 +901,21 @@ Trả lời:"""
         logger.info(f"✅ Set user context for session {session_id}: {user_context.get('faculty_code', 'Unknown')}")
 
     def _get_personalized_system_prompt(self, session_id: str = None):
-        """🚀 NÂNG CẤP: Lấy personalized system prompt với conversation context"""
         try:
-            # ✅ NEW: Lấy cách xưng hô cá nhân hóa
             personal_address = self._get_personal_address(session_id)
             
             user_context = self._user_context_cache.get(session_id, {})
             user_memory_prompt = user_context.get('preferences', {}).get('user_memory_prompt', '')
             
-            # ✅ NEW: Truyền cách xưng hô vào build function
             return build_personalized_system_prompt(user_memory_prompt, personal_address)
         
         except Exception as e:
             logger.error(f"Error getting personalized prompt: {e}")
             return build_personalized_system_prompt()  # Fallback
 
-    # 🚀 ENHANCED: Generate response với Smart Token Management, Advanced Confidence Management và Two-Stage Re-ranking Integration
     def generate_response(self, query: str, context: Optional[Dict] = None, 
                       intent_info: Optional[Dict] = None, entities: Optional[Dict] = None,
                       session_id: str = None) -> Dict[str, Any]:
-        """🚀 NÂNG CẤP: Generate response với Advanced Confidence Management, Smart Token Management, Context Summary và Two-Stage Re-ranking Integration"""
         start_time = time.time()
         
         print(f"\n--- 🚀 ADVANCED RAG GENERATION REQUEST (Session: {session_id}) ---")
@@ -1022,7 +929,6 @@ Trả lời:"""
                     logger.info(f"🎯 Query restored: '{query}' -> '{restored_query}'")
                     query = restored_query
 
-            # ✅ NEW: Check if query is empty after restoration
             instruction = context.get('instruction', '') if context else ''
             
             # 🚀 NEW: Handle document context processing
@@ -1162,7 +1068,6 @@ Trả lời:"""
             if context:
                 context['confidence'] = normalized_confidence
             
-            # ✅ ENHANCED: Handle instruction-based responses với Smart Tokens và Advanced Confidence
             instruction = context.get('instruction', '') if context else ''
             
             if instruction == 'direct_answer_lecturer':
@@ -1203,7 +1108,6 @@ Trả lời:"""
                         'token_info': token_info
                     }
                 
-                # ✅ ENHANCED: Use Smart Token Generation với Advanced Confidence
                 response, token_info = self._generate_smart_response(query, context, session_id, response_strategy)
                 
                 # Calculate confidence based on context and method
@@ -1271,12 +1175,8 @@ Trả lời:"""
                 'personalized': session_id in self._user_context_cache,
                 'token_info': {'smart_tokens_used': False, 'method': 'fallback'}
             }
-
-    # 🧠 SMART TOKEN GENERATION METHODS
-
-    def _generate_smart_response(self, query: str, context=None, session_id=None, strategy='balanced'):
-        """🚀 Generate response with Smart Token Management and Advanced Confidence"""
-        
+            
+    def _generate_smart_response(self, query: str, context=None, session_id=None, strategy='balanced'):        
         prompt = self._build_enhanced_prompt(query, context, None, None, session_id)
         
         # ✅ STEP 1: Calculate optimal tokens
@@ -1324,27 +1224,20 @@ Trả lời:"""
         
         return response, token_info
 
-    def _auto_complete_response(self, incomplete_response: str, original_query: str, context, session_id: str, completion_info: Dict) -> Optional[str]:
-        """🔧 Auto-complete incomplete response"""
-        
+    def _auto_complete_response(self, incomplete_response: str, original_query: str, context, session_id: str, completion_info: Dict) -> Optional[str]:        
         if completion_info['confidence'] < 0.6:  # Don't auto-complete if not confident it's incomplete
             return None
         
-        # ✅ Calculate completion tokens needed
         completion_tokens = self.token_manager.estimate_completion_tokens(incomplete_response)
         
-        # ✅ Build completion prompt
         completion_prompt = self._build_completion_prompt(incomplete_response, original_query, context, session_id, completion_info)
         
         print(f"🔧 AUTO-COMPLETION: Attempting with {completion_tokens} tokens")
         
-        # ✅ Call API to complete - 🚀 CRITICAL FIX: Pass session_id
         completion = self._call_gemini_api_with_smart_tokens(completion_prompt, 'completion', completion_tokens, session_id)
         
         if completion:
-            # ✅ Merge incomplete + completion
             if completion_info['reason'] == 'missing_proper_ending':
-                # Just add proper ending
                 personal_address = self._get_personal_address(session_id)
                 return incomplete_response.rstrip() + f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ?'
             elif completion_info['reason'] == 'missing_proper_greeting':
@@ -1358,9 +1251,7 @@ Trả lời:"""
         
         return None
 
-    def _build_completion_prompt(self, incomplete_response: str, original_query: str, context, session_id: str, completion_info: Dict) -> str:
-        """🔧 Build prompt to complete incomplete response"""
-        
+    def _build_completion_prompt(self, incomplete_response: str, original_query: str, context, session_id: str, completion_info: Dict) -> str:        
         system_prompt = self._get_personalized_system_prompt(session_id)
         personal_address = self._get_personal_address(session_id)
         
@@ -1404,9 +1295,6 @@ Trả lời:"""
         return completion_prompt
 
     def _merge_incomplete_and_completion(self, incomplete: str, completion: str) -> str:
-        """🔧 Merge incomplete response with completion"""
-        
-        # Clean completion
         completion = completion.strip()
         
         # Remove redundant greetings from completion
@@ -1425,9 +1313,7 @@ Trả lời:"""
         
         return merged
 
-    def _get_personal_address(self, session_id: str) -> str:
-        """🚀 NÂNG CẤP: Get personalized address với bảo đảm không fallback về mặc định generic"""
-        
+    def _get_personal_address(self, session_id: str) -> str:        
         print("\n" + "="*20 + " DEBUG: _get_personal_address " + "="*20)
         print(f"🕵️‍♂️ [_get_personal_address] Đang lấy xưng hô cho session: {session_id}")
         user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
@@ -1444,8 +1330,6 @@ Trả lời:"""
         elif gender == 'female':
             salutation = 'cô'
         else:
-            # ✅ CRITICAL: Khi không có giới tính, không fallback về "giảng viên", 
-            # mà trả về tên đầy đủ nếu có hoặc giữ nguyên để được xử lý riêng
             if full_name:
                 print(f"✅ [_get_personal_address] -> Trả về tên đầy đủ: '{full_name}'")
                 print("="*60 + "\n")
@@ -1467,12 +1351,6 @@ Trả lời:"""
         return salutation
 
     def _call_gemini_api_with_smart_tokens(self, prompt: str, strategy: str, max_tokens: int, session_id: str = None, retry_count=0) -> Optional[str]:
-        """
-        🚀 CRITICAL FIX: Call Gemini API với Smart Token Management và Consistent Personalization
-        
-        Đây là hàm quan trọng nhất - đã được sửa để truyền session_id cho personalization
-        """
-        
         # Lấy một key hợp lệ từ bộ quản lý
         api_key_to_use = self.key_manager.get_key()
         
@@ -1506,13 +1384,7 @@ Trả lời:"""
             
             data = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": config,
-                "safetySettings": [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-                ]
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 100, "topP": 0.8}
             }
             
             url = f"{self.base_url}?key={api_key_to_use}"
@@ -1558,19 +1430,12 @@ Trả lời:"""
             logger.error(f"Smart Gemini API call failed: {str(e)}")
             return None
 
-    # 🚀 SMART VERSIONS of generation methods với Advanced Confidence Management
     def _generate_direct_lecturer_answer_smart(self, query, context, session_id=None):
-        """
-        🚀 NÂNG CẤP: Use refined prompt với gender-based addressing, conversation context và confidence management
-        """
-        
-        # ✅ NEW: Lấy cách xưng hô cá nhân hóa
         personal_address = self._get_personal_address(session_id)
         
         system_prompt = self._get_personalized_system_prompt(session_id)
         db_answer = context.get('db_answer', context.get('response', ''))
 
-        # ✅ NEW: Get conversation context
         conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
         recent_summary = conversation_context.get('recent_conversation_summary', '')
         
@@ -1582,8 +1447,6 @@ Trả lời:"""
 
 💡 LƯU Ý: Tham khảo ngữ cảnh trên để tránh lặp lại thông tin, tạo câu trả lời mạch lạc.
 """
-
-        # ✅ REFINED PROMPT: Đã include personal_address trong system_prompt
         prompt = f"""{system_prompt}
 
 ---
@@ -1607,10 +1470,8 @@ Trả lời:
 """
 
         optimal_tokens = self.token_manager.calculate_optimal_tokens(len(prompt), 'direct_enhance')
-        # 🚀 CRITICAL FIX: Pass session_id
         response = self._call_gemini_api_with_smart_tokens(prompt, 'direct_enhance', optimal_tokens, session_id)
         
-        # ✅ FIXED: Fallback cũng sử dụng personal_address
         fallback = f"Dạ {personal_address}, {db_answer} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
         
         token_info = {
@@ -1625,14 +1486,10 @@ Trả lời:
         return response or fallback, token_info
 
     def _generate_enhanced_lecturer_answer_smart(self, query, context, intent_info, entities, session_id):
-        """
-        🚀 NÂNG CẤP: Enhanced answer generation với advanced confidence management
-        """
         personal_address = self._get_personal_address(session_id)
         system_prompt = self._get_personalized_system_prompt(session_id)
         db_answer = context.get('db_answer', context.get('response', ''))
 
-        # ✅ NEW: Get conversation context
         conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
         recent_summary = conversation_context.get('recent_conversation_summary', '')
         
@@ -1645,7 +1502,6 @@ Trả lời:
 💡 LƯU Ý: Tham khảo ngữ cảnh trên để tránh lặp lại thông tin, tạo câu trả lời mạch lạc và tự nhiên.
 """
 
-        # ✅ REFINED PROMPT: Thay đổi cách ra lệnh
         prompt = f"""{system_prompt}
 
 ---
@@ -1671,10 +1527,8 @@ Trả lời:
 
         complexity_hint = 'enhanced_generation' if context.get('generation_boosted', False) else 'two_stage_reranking'
         optimal_tokens = self.token_manager.calculate_optimal_tokens(len(prompt), complexity_hint)
-        # 🚀 CRITICAL FIX: Pass session_id
         response = self._call_gemini_api_with_smart_tokens(prompt, complexity_hint, optimal_tokens, session_id)
         
-        # ✅ FIXED: Fallback cũng sử dụng personal_address
         fallback = f"Dạ {personal_address}, {db_answer} 🎓 {personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
         
         token_info = {
@@ -1689,12 +1543,9 @@ Trả lời:
 
         return response or fallback, token_info
 
-    def _generate_clarification_request_smart(self, query, context, session_id=None):
-        """Generate clarification request with Smart Token Management và advanced confidence"""
-        
+    def _generate_clarification_request_smart(self, query, context, session_id=None):        
         personal_address = self._get_personal_address(session_id)
         
-        # ✅ PREDEFINED smart responses với advanced confidence management
         clarification_templates = {
             'friendly': f"Dạ {personal_address}, để em có thể hỗ trợ {personal_address} tốt nhất, {personal_address} có thể chia sẻ thêm chi tiết về vấn đề này được không ạ? 😊 Em rất sẵn lòng giúp đỡ!",
             'brief': f"Dạ {personal_address}, cần thêm thông tin chi tiết ạ. 🎓",
@@ -1714,10 +1565,7 @@ Trả lời:
         
         return response, token_info
 
-    def _generate_dont_know_response_smart(self, query, context, session_id=None):
-        """Generate don't know response với Smart Token Management, gender-based addressing và advanced confidence"""
-        
-        # ✅ NEW: Lấy cách xưng hô cá nhân hóa dựa trên giới tính
+    def _generate_dont_know_response_smart(self, query, context, session_id=None):        
         personal_address = self._get_personal_address(session_id)
         
         # Suggest relevant departments based on query content
@@ -1739,7 +1587,6 @@ Trả lời:
             dept = "phòng ban liên quan"
             contact = "info@bdu.edu.vn"
         
-        # ✅ FIXED: Sử dụng personal_address thay vì hardcode
         response = f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ {dept} qua email {contact} để được hỗ trợ chi tiết ạ. 🎓"
         
         token_info = {
@@ -1752,9 +1599,7 @@ Trả lời:
         
         return response, token_info
 
-    def _determine_lecturer_response_strategy(self, query, context, intent_info, conversation_context):
-        """✅ ENHANCED: Response strategy với generation bias và advanced confidence"""
-        
+    def _determine_lecturer_response_strategy(self, query, context, intent_info, conversation_context):        
         has_real_history = bool(conversation_context.get('history') and len(conversation_context['history']) > 0)
         
         print(f"🔍 LECTURER STRATEGY DEBUG: has_real_history = {has_real_history}")
@@ -1811,14 +1656,12 @@ Trả lời:
             if current_main_topic is not None and last_main_topic is not None and current_main_topic != last_main_topic:
                 return 'topic_shift'
         
-        # ✅ MODIFIED: Default strategy logic với generation bias và adjusted confidence thresholds
         raw_confidence = context.get('confidence', 0.5) if context else 0.5
         normalized_confidence = self.confidence_manager.normalize_confidence(raw_confidence, "strategy_decision")
         
         if normalized_confidence > 0.75:  # Adjusted threshold for Advanced RAG
             return 'direct_enhance'
         
-        # ✅ NEW: Favor enhancement over brief responses với Two-Stage Re-ranking
         if normalized_confidence > 0.4:  # Lower threshold due to advanced re-ranking
             return 'enhanced_generation'  # Enhanced strategy for better generation
         
@@ -1831,7 +1674,6 @@ Trả lời:
         return 'balanced'
 
     def _post_process_with_lecturer_consistency(self, response, query, context, strategy, conversation_context, session_id=None):
-        """🚀 FIXED: Post-process với better duplication detection và advanced confidence awareness"""
         if not response:
             return response
         
@@ -1889,9 +1731,7 @@ Trả lời:
         
         return response.strip()
     
-    def _get_contextual_out_of_scope_response_lecturer(self, conversation_context, session_id=None):
-        """Out of scope response cho giảng viên với personalization và advanced confidence"""
-        
+    def _get_contextual_out_of_scope_response_lecturer(self, conversation_context, session_id=None):        
         personal_address = self._get_personal_address(session_id)
         user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
         department_name = user_context.get('department_name', '')
@@ -1907,9 +1747,7 @@ Trả lời:
         else:
             return f"Dạ {personal_address}, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ! 🎓 {personal_address.title()} có câu hỏi nào khác về trường không ạ?"
     
-    def _get_smart_fallback_with_context_lecturer(self, query, intent_info, conversation_context, session_id=None):
-        """Smart fallback với conversation context cho giảng viên, personalization và advanced confidence"""
-        
+    def _get_smart_fallback_with_context_lecturer(self, query, intent_info, conversation_context, session_id=None):        
         personal_address = self._get_personal_address(session_id)
         user_context = self._user_context_cache.get(session_id, {}) if session_id else {}
         department_name = user_context.get('department_name', '')
@@ -1938,7 +1776,6 @@ Trả lời:
         return smart_fallbacks.get(intent_name, smart_fallbacks['general'])
     
     def _is_lecturer_education_related(self, query):
-        """Check if education related for lecturers - enhanced keywords"""
         lecturer_education_keywords = [
             # Cơ bản
             'trường', 'học', 'sinh viên', 'tuyển sinh', 'học phí', 'ngành', 
@@ -1994,15 +1831,12 @@ Trả lời:
         query_lower = query.lower()
         return any(kw in query_lower for kw in lecturer_education_keywords)
 
-    # Keep the remaining essential methods...
     def _build_enhanced_prompt(self, query: str, context=None, intent_info=None, entities=None, session_id=None):
-        """🚀 NÂNG CẤP: Build enhanced prompt với conversation context và advanced confidence"""
         system_prompt = self._get_personalized_system_prompt(session_id)
         personal_address = self._get_personal_address(session_id)
         
         context_info = str(context.get('response', '')) if isinstance(context, dict) else str(context or '')
         
-        # ✅ NEW: Get conversation context
         conversation_context = self.memory.get_conversation_context(session_id) if session_id else {}
         recent_summary = conversation_context.get('recent_conversation_summary', '')
         
@@ -2031,7 +1865,6 @@ Trả lời:"""
         return prompt
     
     def validate_user_preferences(self, preferences):
-        """Validate user preferences - simplified for user_memory_prompt only"""
         errors, warnings = [], []
         
         if 'user_memory_prompt' in preferences:
@@ -2051,11 +1884,9 @@ Trả lời:"""
         return {'valid': len(errors) == 0, 'errors': errors, 'warnings': warnings}
     
     def get_user_context(self, session_id: str):
-        """Get user context for session"""
         return self._user_context_cache.get(session_id)
     
     def clear_user_context(self, session_id=None):
-        """Clear user context"""
         if session_id:
             if session_id in self._user_context_cache:
                 del self._user_context_cache[session_id]
@@ -2073,10 +1904,8 @@ Trả lời:"""
             self.memory.conversations.clear()
 
     def get_system_status(self) -> Dict[str, Any]:
-        """🚀 NÂNG CẤP: Get system status với Advanced Confidence Management, Smart Token Management, Two-Stage Re-ranking Integration và Document Context Support"""
         try:
             test_prompt = "Test ngắn cho giảng viên"
-            # 🚀 CRITICAL FIX: Pass session_id=None for test (có thể pass test session)
             response = self._call_gemini_api_with_smart_tokens(test_prompt, 'quick_clarify', 80, session_id="test")
             
             return {

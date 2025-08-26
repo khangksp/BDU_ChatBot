@@ -11,7 +11,6 @@ import pandas as pd
 
 from .external_api_service import external_api_service
 from qa_management.services import drive_service
-
 from .interaction_logger_service import interaction_logger
 from .query_response_cache import query_response_cache
 
@@ -19,10 +18,7 @@ logger = logging.getLogger(__name__)
 
 class SemanticReRanker:
     def __init__(self, retriever_service):
-        # Pure semantic configuration with FIXED smart penalties
         self.retriever_service = retriever_service
-        
-        # FIXED re-ranking configuration with TOP-5 enhancement
         self.config = {
             'stage1_top_k': 20,      # Get more candidates for re-ranking
             'stage2_top_n': 8,       # 🔬 ENHANCED: 3 → 5 to catch more correct answers
@@ -48,47 +44,27 @@ class SemanticReRanker:
         logger.info(f"   🔬 Top-5 candidate selection enabled")
 
     def calculate_semantic_boost(self, candidate, query):
-        """
-        🎯 PURE SEMANTIC: Calculate semantic-only boost factors
-        """
         boost = 0.0
-        
-        # Document length normalization (shorter answers might be more precise)
         answer_length = len(candidate.get('answer', ''))
         if 100 <= answer_length <= 500:  # Optimal length range
             boost += 0.05
         elif answer_length > 1000:  # Penalty for very long answers
             boost -= 0.05
         
-        # Question-answer semantic coherence
         question = candidate.get('question', '')
         answer = candidate.get('answer', '')
         
-        # Simple lexical overlap as semantic coherence proxy
         query_words = set(query.lower().split())
         question_words = set(question.lower().split())
         answer_words = set(answer.lower().split())
         
-        # Semantic coherence between query and question
         question_overlap = len(query_words.intersection(question_words)) / max(len(query_words), 1)
         if question_overlap > 0.3:
             boost += 0.1
         
-        # Ensure boost doesn't exceed reasonable limits
         return min(0.2, boost)
 
     def _detect_mismatch_severity(self, candidate, query):
-        """
-        🔍 FIXED: Detect mismatch severity (not just binary)
-        
-        Returns:
-            dict: {
-                'concept_severity': float,  # 0.0-1.0
-                'topic_severity': float,    # 0.0-1.0
-                'context_severity': float,  # 0.0-1.0
-                'issues': list
-            }
-        """
         query_lower = query.lower()
         question_lower = candidate.get('question', '').lower()
         answer_lower = candidate.get('answer', '').lower()
@@ -100,9 +76,7 @@ class SemanticReRanker:
             'issues': []
         }
         
-        # CONCEPT MISMATCH ANALYSIS (more nuanced)
         concept_conflicts = [
-            # HIGH SEVERITY conflicts
             {
                 'query_concepts': ['báo cáo khối lượng công việc', 'báo cáo nhiệm vụ giảng viên'],
                 'wrong_concepts': ['khối lượng học tập sinh viên', 'tín chỉ sinh viên'],
@@ -115,7 +89,6 @@ class SemanticReRanker:
                 'severity': 0.7,  # High severity
                 'description': 'Bank account vs Login account'
             },
-            # MEDIUM SEVERITY conflicts
             {
                 'query_concepts': ['kê khai nhiệm vụ giảng viên'],
                 'wrong_concepts': ['đăng ký môn học sinh viên'],
@@ -141,7 +114,6 @@ class SemanticReRanker:
                 )
                 mismatch_analysis['issues'].append(f"Concept: {conflict['description']}")
         
-        # TOPIC MISMATCH ANALYSIS
         topic_irrelevance = [
             {
                 'query_topics': ['học phí', 'lệ phí'],
@@ -174,7 +146,6 @@ class SemanticReRanker:
                 )
                 mismatch_analysis['issues'].append(f"Topic: {irrelevance['description']}")
         
-        # CONTEXT MISMATCH ANALYSIS (lighter penalties)
         context_checks = [
             {
                 'query_pattern': ['giảng viên', 'cán bộ'],
@@ -201,13 +172,11 @@ class SemanticReRanker:
         if not self.config['smart_penalty_enabled']:
             return 0.0, []
             
-        # Get mismatch analysis
         mismatch_analysis = self._detect_mismatch_severity(candidate, query)
         
         if not mismatch_analysis['issues']:
             return 0.0, []  # No mismatch detected
         
-        # FIXED: Determine confidence tier based on base semantic score
         if base_semantic_score >= 0.8:
             confidence_tier = 'very_high'
         elif base_semantic_score >= 0.65:
@@ -217,17 +186,14 @@ class SemanticReRanker:
         else:
             confidence_tier = 'low'
         
-        # FIXED: Get adaptive penalty rate based on confidence
         max_penalty_rate = self.config['adaptive_penalty_rates'][confidence_tier]
         
-        # Calculate penalty based on severity
         concept_penalty = mismatch_analysis['concept_severity'] * max_penalty_rate * 0.6  # 60% weight
         topic_penalty = mismatch_analysis['topic_severity'] * max_penalty_rate * 0.3     # 30% weight  
         context_penalty = mismatch_analysis['context_severity'] * max_penalty_rate * 0.1 # 10% weight
         
         total_penalty = concept_penalty + topic_penalty + context_penalty
         
-        # FIXED: Additional protection for very high confidence answers
         if confidence_tier == 'very_high' and self.config['confidence_preservation']:
             total_penalty = min(total_penalty, 0.08)  # Cap at 8% penalty for very high confidence
             logger.debug(f"🛡️ Confidence preservation applied: penalty capped at {total_penalty:.3f}")
@@ -255,16 +221,9 @@ class SemanticReRanker:
         for candidate in candidates:
             if not candidate:
                 continue
-            
-            # Get original semantic score from retrieval
-            semantic_score = candidate.get('similarity', candidate.get('semantic_score', 0.0))
-            
-            # Calculate pure semantic boost
-            semantic_boost = self.calculate_semantic_boost(candidate, query)
-            
-            # FIXED: Calculate smart penalty based on confidence
+            semantic_score = candidate.get('similarity', candidate.get('semantic_score', 0.0))            
+            semantic_boost = self.calculate_semantic_boost(candidate, query)            
             concept_penalty, mismatch_issues = self._calculate_smart_penalty(candidate, query, semantic_score)
-            
             # Final stage 1 score: semantic + boost - smart_penalty
             stage1_score = semantic_score + semantic_boost - concept_penalty
             stage1_score = max(0.0, min(1.0, stage1_score))  # Clamp to [0,1]
@@ -284,10 +243,8 @@ class SemanticReRanker:
             
             logger.debug(f"🎯 FIXED Stage 1: semantic={semantic_score:.3f}, boost={semantic_boost:.3f}, penalty={concept_penalty:.3f}, final={stage1_score:.3f}")
         
-        # Sort by stage1_score in descending order
         enhanced_candidates.sort(key=lambda x: x['stage1_score'], reverse=True)
         
-        # Return top-k candidates for stage 2
         stage1_candidates = enhanced_candidates[:self.config['stage1_top_k']]
         
         logger.info(f"🎯 FIXED Stage 1: {len(stage1_candidates)} candidates selected for cross-encoder re-ranking")
@@ -302,22 +259,17 @@ class SemanticReRanker:
         logger.info(f"🔄 Stage 2: Cross-encoder re-ranking {len(candidates)} candidates")
         
         try:
-            # Enhanced cross-encoder simulation with semantic focus
             cross_encoder_scores = self._simulate_cross_encoder_semantic(query, candidates)
-            
-            # Combine Stage 1 and Stage 2 scores
             final_candidates = []
             for i, candidate in enumerate(candidates):
                 stage1_score = candidate.get('stage1_score', 0.0)
                 stage2_score = cross_encoder_scores[i] if i < len(cross_encoder_scores) else 0.0
                 
-                # Weighted combination
                 final_score = (
                     self.config['semantic_weight'] * stage1_score + 
                     self.config['cross_encoder_weight'] * stage2_score
                 )
                 
-                # Ensure final_score doesn't exceed 1.0
                 final_score = min(1.0, final_score)
                 
                 final_candidate = candidate.copy()
@@ -332,7 +284,6 @@ class SemanticReRanker:
                 
                 logger.debug(f"🔄 Stage 2: s1={stage1_score:.3f}, s2={stage2_score:.3f}, final={final_score:.3f}")
             
-            # Sort by final_score and return top-n
             final_candidates.sort(key=lambda x: x['final_score'], reverse=True)
             
             logger.info(f"✅ Stage 2 Complete: Top-{self.config['stage2_top_n']} candidates selected")
@@ -386,9 +337,6 @@ class SemanticReRanker:
         return scores
 
     def rerank(self, candidates, query=""):
-        """
-        🎯 FIXED MAIN METHOD: Two-stage re-ranking with smart penalty system
-        """
         if not candidates:
             return []
         
@@ -411,7 +359,6 @@ class SemanticReRanker:
 
 class PureSemanticDecisionEngine:
     def __init__(self):
-        # 🎯 FIXED: Balanced semantic confidence thresholds
         self.semantic_confidence_thresholds = {
             'very_high': 0.8,    # Keep original - for truly excellent matches
             'high': 0.65,        # Slightly raised - for good matches  
@@ -420,7 +367,6 @@ class PureSemanticDecisionEngine:
             'very_low': 0.1      # Kept original - for very poor matches
         }
         
-        # 🧠 FIXED: Smart decision factors
         self.decision_factors = {
             'preserve_high_confidence': True,     # Don't over-penalize good answers
             'mismatch_tolerance': {               # Tolerance levels by confidence
@@ -432,7 +378,6 @@ class PureSemanticDecisionEngine:
             'smart_clarification_threshold': 0.3  # When to use smart vs generic clarification
         }
         
-        # External API detection keywords (kept minimal)
         self.personal_info_keywords = [
             'lịch của tôi', 'lich cua toi', 'thời khóa biểu của tôi', 'tkb của tôi',
             'lịch giảng của tôi', 'lich giang cua toi', 'lịch dạy của tôi', 'lich day cua toi',
@@ -441,7 +386,6 @@ class PureSemanticDecisionEngine:
             'hôm nay', 'hom nay', 'ngày mai', 'ngay mai', 'tuần này', 'tuan nay'
         ]
         
-        # Basic education keywords for scope checking
         self.education_keywords = [
             'học', 'trường', 'sinh viên', 'giảng viên', 'dạy', 'bdu', 'đại học',
             'ngân hàng đề thi', 'báo cáo', 'kê khai', 'tạp chí', 'nghiên cứu'
@@ -453,9 +397,6 @@ class PureSemanticDecisionEngine:
         logger.info("   🧠 Adaptive mismatch tolerance")
 
     def categorize_semantic_confidence(self, final_score):
-        """
-        🎯 PURE SEMANTIC: Categorize confidence based only on semantic score
-        """
         if final_score >= self.semantic_confidence_thresholds['very_high']:
             return 'very_high'
         elif final_score >= self.semantic_confidence_thresholds['high']:
@@ -468,18 +409,12 @@ class PureSemanticDecisionEngine:
             return 'very_low'
 
     def is_education_related(self, query):
-        """
-        🎯 SIMPLIFIED: Basic education scope check
-        """
         if not query:
             return False
         
-        query_lower = query.lower()
-        
-        # Simple keyword-based education detection
+        query_lower = query.lower()        
         education_found = any(kw in query_lower for kw in self.education_keywords)
         
-        # Basic pattern matching for education context
         if not education_found:
             education_patterns = [
                 r'(?:bdu|đại học|trường)',
@@ -503,16 +438,12 @@ class PureSemanticDecisionEngine:
         
         query_lower = query.lower()
         
-        # Simple personal keyword detection
         needs_api = any(keyword in query_lower for keyword in self.personal_info_keywords)
         
         logger.debug(f"🌐 API check: '{query}' -> {needs_api}")
         return needs_api
 
     def _assess_mismatch_impact(self, best_candidate, original_score):
-        """
-        🧠 FIXED: Assess if mismatch issues should affect decision
-        """
         if not best_candidate:
             return False, []
         
@@ -522,16 +453,12 @@ class PureSemanticDecisionEngine:
         if not mismatch_issues:
             return False, []  # No mismatch issues
         
-        # FIXED: Determine confidence tier based on ORIGINAL score (before penalty)
         confidence_tier = self.categorize_semantic_confidence(original_score)
         
-        # FIXED: Get mismatch tolerance for this confidence level
         tolerance = self.decision_factors['mismatch_tolerance'].get(confidence_tier, 0.5)
         
-        # FIXED: Calculate mismatch severity score
         severity_score = smart_penalty / 0.3  # Normalize to 0-1 scale (max penalty is ~0.3)
         
-        # FIXED: Decision logic
         should_impact_decision = severity_score > tolerance
         
         logger.debug(f"🧠 Mismatch impact assessment:")
@@ -545,15 +472,11 @@ class PureSemanticDecisionEngine:
         return should_impact_decision, mismatch_issues
 
     def _create_smart_clarification_response(self, query, mismatch_issues, session_id):
-        """
-        🤔 FIXED: Create smart clarification based on detected mismatches
-        """
         try:
             personal_address = "giảng viên"  # Default fallback
         except:
             personal_address = "giảng viên"
         
-        # Analyze mismatch to provide specific clarification
         if any('Work reporting vs Student' in issue for issue in mismatch_issues):
             return f"""Dạ {personal_address}, em thấy câu hỏi về "báo cáo khối lượng công việc" của giảng viên, nhưng thông tin em tìm được lại về khối lượng học tập của sinh viên.
 
@@ -585,13 +508,11 @@ Em sẽ tìm đúng thông tin {personal_address} cần! 💳"""
 Em sẽ tìm thông tin chính xác hơn! 🔍"""
         
         else:
-            # Generic clarification
             return f"""Dạ {personal_address}, để em có thể hỗ trợ chính xác nhất, {personal_address} có thể làm rõ hơn về vấn đề cần hỗ trợ không ạ?
 
 Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
 
     def make_decision(self, query, candidates_list, session_memory=None, jwt_token=None, document_text=None):
-        # 🎯 DOCUMENT CONTEXT PRIORITY (unchanged)
         if document_text and document_text.strip():
             logger.info("📄 DOCUMENT CONTEXT PRIORITY: Document text provided")
             return 'use_document_context', {
@@ -603,13 +524,11 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
                 'semantic_decision': True
             }, True
         
-        # 🎯 BASIC EDUCATION SCOPE CHECK
         is_education = self.is_education_related(query)
         if not is_education and session_memory and len(session_memory) == 0:  # First message
             logger.info("📚 SCOPE: Rejecting non-education query")
             return 'reject_non_education', None, False
         
-        # 🎯 EXTERNAL API CHECK
         if self.needs_external_api(query, 0.0):  # Use dummy score for API check
             if jwt_token and jwt_token.strip():
                 return 'use_external_api', {
@@ -630,7 +549,6 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
                     'semantic_decision': True
                 }, True
         
-        # 🔬 ENHANCED: Smart candidate selection from top 5
         if not candidates_list:
             logger.warning("⚠️ No candidates provided for decision making")
             return 'say_dont_know', {
@@ -645,7 +563,6 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
         selection_info = []
         
         if len(candidates_list) > 1:
-            # 🔬 SMART SELECTION: Pick best from top 5 based on suitability
             logger.info(f"🔬 SMART SELECTION: Analyzing {len(candidates_list)} candidates")
             
             for i, candidate in enumerate(candidates_list[:5]):
@@ -653,7 +570,6 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
                 mismatch_count = len(candidate.get('mismatch_issues', []))
                 semantic_score = candidate.get('semantic_score', 0)
                 
-                # Suitability = semantic_score - mismatch_penalty + position_bonus
                 position_bonus = (5 - i) * 0.01  # Small bonus for higher positions
                 suitability = semantic_score - (mismatch_count * 0.1) + position_bonus
                 
@@ -682,14 +598,9 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
             best_candidate = candidates_list[0]
             logger.info("🔬 SINGLE CANDIDATE: Using the only available candidate")
         
-        # Get final score from selected candidate
         final_score = best_candidate.get('final_score', 0.0)
-        original_score = best_candidate.get('semantic_score', final_score)
-        
-        # 🧠 FIXED: Smart mismatch assessment
-        should_impact, mismatch_issues = self._assess_mismatch_impact(best_candidate, original_score)
-        
-        # 🎯 FIXED: Determine confidence level and decision
+        original_score = best_candidate.get('semantic_score', final_score)        
+        should_impact, mismatch_issues = self._assess_mismatch_impact(best_candidate, original_score)        
         confidence_level = self.categorize_semantic_confidence(final_score)
         
         logger.info(f"🎯 ENHANCED Semantic Decision Analysis:")
@@ -699,11 +610,8 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
         logger.info(f"   🎯 Confidence level: {confidence_level}")
         logger.info(f"   🧠 Mismatch should impact: {should_impact}")
         logger.info(f"   🔍 Mismatch issues: {len(mismatch_issues)}")
-        
-        # 🛡️ FIXED DECISION LOGIC: Preserve high confidence + smart mismatch handling
-        
+                
         if confidence_level == 'very_high':
-            # VERY HIGH CONFIDENCE: Almost always answer, even with light mismatch
             decision = 'use_db_direct'
             context = {
                 'instruction': 'direct_answer_lecturer',
@@ -719,7 +627,6 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
             logger.info(f"✅ ENHANCED Decision: {decision} (very high confidence preserved)")
             
         elif confidence_level == 'high':
-            # HIGH CONFIDENCE: Answer unless serious mismatch
             if should_impact and mismatch_issues:
                 decision = 'ask_clarification'
                 context = {
@@ -749,7 +656,6 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
                 logger.info(f"✅ ENHANCED Decision: {decision} (high confidence)")
                 
         elif confidence_level == 'medium':
-            # MEDIUM CONFIDENCE: Smart handling based on mismatch
             if should_impact and mismatch_issues:
                 decision = 'ask_clarification'
                 context = {
@@ -778,7 +684,6 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
                 logger.info(f"✅ ENHANCED Decision: {decision} (medium confidence)")
                 
         elif confidence_level == 'low':
-            # LOW CONFIDENCE: Ask clarification (smart if mismatch)
             smart_clarification = bool(mismatch_issues)
             decision = 'ask_clarification'
             context = {
@@ -795,7 +700,6 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
             logger.info(f"🤔 ENHANCED Decision: {decision} (low confidence)")
             
         else:  # very_low
-            # VERY LOW CONFIDENCE: Don't know
             decision = 'say_dont_know'
             context = {
                 'instruction': 'dont_know_lecturer',
@@ -813,16 +717,13 @@ Em sẽ tìm thông tin phù hợp nhất cho {personal_address}! 🎯"""
 
 class PureSemanticChatbotAI:
     def __init__(self, shared_response_generator):
-        # Import the simplified retriever service
         from .phobert_service import retriever_service
         
-        # Initialize components with FIXED semantic approach
         self.sbert_retriever = ChatbotAI(shared_response_generator=shared_response_generator)
         self.retriever_service = retriever_service
         self.response_generator = shared_response_generator
         self.decision_engine = PureSemanticDecisionEngine()
         
-        # 🎯 FIXED: Use SemanticReRanker with smart penalty system
         self.semantic_reranker = SemanticReRanker(retriever_service=self.retriever_service)
         
         self.conversation_memory = {}
@@ -942,7 +843,6 @@ class PureSemanticChatbotAI:
                 )
                 return response_data
             
-            # 🔍 DEBUG: Log top 3 candidates for quality analysis
             logger.info(f"🔍 DEBUG - Top 3 candidates quality check:")
             for i, candidate in enumerate(reranked_candidates[:3]):
                 question_preview = candidate.get('question', '')[:80]
@@ -1055,12 +955,8 @@ class PureSemanticChatbotAI:
             }
 
     def _execute_fixed_semantic_decision(self, decision_type, query, context, session_id):
-        """
-        🎯 FIXED: Execute semantic decision with smart clarification
-        """
         logger.info(f"🎯 Executing FIXED semantic decision: {decision_type}")
         
-        # 🛡️ CHECK GEMINI AVAILABILITY FIRST
         gemini_available = self._check_gemini_availability()
         
         if not gemini_available:
@@ -1092,7 +988,6 @@ class PureSemanticChatbotAI:
                 )
                 response_text = response.get('response', '') if response else ''
                 
-                # 🛡️ CRITICAL: Validate response and fallback if needed
                 if not response_text or len(response_text.strip()) < 10:
                     logger.warning("⚠️ Empty/invalid response from Gemini - using FIXED semantic fallback")
                     return self._create_fixed_semantic_fallback_response(decision_type, query, context, session_id)
@@ -1100,7 +995,6 @@ class PureSemanticChatbotAI:
                 return response_text
             
             elif decision_type == 'ask_clarification':
-                # 🤔 FIXED: Check if smart clarification is needed
                 if context and context.get('smart_clarification', False):
                     logger.info("🤔 Creating FIXED smart clarification response")
                     mismatch_issues = context.get('mismatch_issues', [])
@@ -1139,17 +1033,12 @@ class PureSemanticChatbotAI:
             return self._create_fixed_semantic_fallback_response(decision_type, query, context, session_id)
 
     def _create_fixed_semantic_fallback_response(self, decision_type, query, context, session_id):
-        """
-        🛡️ FIXED: Create semantic fallback response with smart handling
-        """
         personal_address = self._get_personal_address(session_id)
         
-        # Get information from context
         raw_answer = context.get('db_answer', '') if context else ''
         mismatch_issues = context.get('mismatch_issues', []) if context else []
         confidence_preserved = context.get('confidence_preserved', False) if context else False
         
-        # 🤔 FIXED: If there are mismatch issues, provide smart clarification
         if mismatch_issues and decision_type in ['use_db_direct', 'enhance_db_answer', 'ask_clarification']:
             logger.info("🤔 FIXED fallback: Using smart clarification due to detected mismatches")
             return self.decision_engine._create_smart_clarification_response(
@@ -1158,28 +1047,21 @@ class PureSemanticChatbotAI:
         
         if decision_type in ['use_db_direct', 'enhance_db_answer']:
             if raw_answer and raw_answer.strip():
-                # 🔍 DEBUG: Log raw answer for analysis
                 logger.info(f"🔍 DEBUG - Raw database answer: '{raw_answer[:300]}...'")
                 
-                # Format raw database answer with minimal enhancement
                 clean_answer = raw_answer.strip()
                 
-                # Remove any existing personalized parts to avoid duplication
                 clean_answer = re.sub(r'^(dạ\s+(thầy|cô|giảng viên)[^,]*,?\s*)', '', clean_answer, flags=re.IGNORECASE)
                 clean_answer = re.sub(r'^(xin chào|chào)[^.!?]*[.!?]\s*', '', clean_answer, flags=re.IGNORECASE)
                 
-                # Ensure it starts with capital letter
                 if clean_answer and not clean_answer[0].isupper():
                     clean_answer = clean_answer[0].upper() + clean_answer[1:]
                 
-                # Add personalized greeting
                 personalized_response = f"Dạ {personal_address}, {clean_answer}"
                 
-                # Ensure proper ending
                 if not personalized_response.strip().endswith(('?', '!', '.')):
                     personalized_response += '.'
                 
-                # Add FIXED closing
                 if confidence_preserved:
                     personalized_response += f' {personal_address.title()} có cần em hỗ trợ thêm gì không ạ? 🎯'
                 else:
@@ -1190,11 +1072,9 @@ class PureSemanticChatbotAI:
             else:
                 return f"Dạ {personal_address}, em chưa có thông tin về vấn đề này. {personal_address.title()} có thể liên hệ phòng ban liên quan để được hỗ trợ chi tiết ạ. 🎯"
         
-        # Other fallback cases...
         return f"Dạ {personal_address}, em sẵn sàng hỗ trợ {personal_address} về các vấn đề liên quan đến BDU. {personal_address.title()} có thể chia sẻ cụ thể hơn về điều cần hỗ trợ không ạ? 🎯"
 
     def _check_gemini_availability(self):
-        """🛡️ Check if Gemini API is available"""
         try:
             if not self.response_generator:
                 return False
@@ -1213,12 +1093,10 @@ class PureSemanticChatbotAI:
             return False
 
     def _validate_answer_relevance(self, query, answer):
-        """🔍 VALIDATION: Check if answer is relevant to query"""
         try:
             query_lower = query.lower()
             answer_lower = answer.lower()
             
-            # Extract key concepts from query
             concept_patterns = {
                 'báo cáo khối lượng': ['báo cáo', 'khối lượng', 'công việc'],
                 'kê khai nhiệm vụ': ['kê khai', 'nhiệm vụ'],
@@ -1228,7 +1106,6 @@ class PureSemanticChatbotAI:
                 'hạn nộp': ['hạn', 'deadline', 'chậm nhất']
             }
             
-            # Find main concept in query
             main_concept = None
             for concept, keywords in concept_patterns.items():
                 if any(kw in query_lower for kw in keywords):
@@ -1238,19 +1115,15 @@ class PureSemanticChatbotAI:
             if not main_concept:
                 return True  # Can't determine, assume relevant
             
-            # Check if answer contains related concepts
             concept_keywords = concept_patterns[main_concept]
             answer_has_concept = any(kw in answer_lower for kw in concept_keywords)
             
-            # Additional specific checks
             relevance_issues = []
             
             if 'báo cáo khối lượng' in query_lower and 'khối lượng học tập' in answer_lower:
                 relevance_issues.append("Query về 'báo cáo khối lượng công việc' nhưng answer về 'khối lượng học tập sinh viên'")
-            
             if 'kê khai nhiệm vụ' in query_lower and 'kê khai' not in answer_lower:
                 relevance_issues.append("Query về 'kê khai nhiệm vụ' nhưng answer không chứa 'kê khai'")
-            
             if relevance_issues:
                 logger.warning(f"🔍 ANSWER RELEVANCE WARNING:")
                 for issue in relevance_issues:
@@ -1264,7 +1137,6 @@ class PureSemanticChatbotAI:
             return True  # Default to relevant to avoid breaking flow
 
     def _clean_query(self, query):
-        """Clean and prepare query"""
         if not query:
             return ""
         
@@ -1275,7 +1147,6 @@ class PureSemanticChatbotAI:
         return query
 
     def _update_semantic_memory(self, session_id, query, final_score, decision_type, was_education, context, document_text):
-        """Update conversation memory with FIXED semantic info"""
         if session_id not in self.conversation_memory:
             self.conversation_memory[session_id] = []
         
@@ -1301,14 +1172,11 @@ class PureSemanticChatbotAI:
             'architecture': 'fixed_semantic_rag'
         }
         
-        self.conversation_memory[session_id].append(interaction)
-        
-        # Keep only recent history
+        self.conversation_memory[session_id].append(interaction)        
         self.conversation_memory[session_id] = self.conversation_memory[session_id][-15:]
         
         logger.info(f"🧠 FIXED semantic memory updated for session {session_id}: {len(self.conversation_memory[session_id])} interactions")
 
-    # Helper methods with FIXED personal addressing
     def _get_personal_address(self, session_id):
         try:
             if hasattr(self.response_generator, '_get_personal_address'):
@@ -1358,7 +1226,6 @@ class PureSemanticChatbotAI:
         return f"Dạ {personal_address}, em đã xem xét tài liệu nhưng gặp khó khăn trong việc trả lời. {personal_address.title()} có thể đặt câu hỏi cụ thể hơn không ạ? 🎯"
 
     def _handle_external_api_decision(self, query, context, session_id):
-        """Handle external API call"""
         try:
             jwt_token = context.get('jwt_token')
             api_result = external_api_service.get_lecturer_schedule(jwt_token, query)
@@ -1401,7 +1268,6 @@ class PureSemanticChatbotAI:
         return f"Dạ {personal_address}, em gặp khó khăn kỹ thuật khi truy xuất thông tin cá nhân. {personal_address.title()} có thể thử lại sau ạ. 🎯"
 
     def _format_sources(self, results):
-        """Format sources for display with FIXED semantic scores"""
         sources = []
         for result in results:
             if result and result.get('final_score', 0) > 0.2:
@@ -1418,7 +1284,6 @@ class PureSemanticChatbotAI:
                 })
         return sources
 
-    # Delegate methods
     def get_conversation_context(self, session_id):
         return self.conversation_memory.get(session_id, [])
 
@@ -1461,16 +1326,13 @@ class ChatbotAI:
         self.load_models()
 
     def load_models(self):
-        """Load AI models and knowledge base"""
         try:
             from sentence_transformers import SentenceTransformer
-            # Load fine-tuned model if available
             fine_tuned_path = os.path.join(settings.BASE_DIR, 'fine_tuned_phobert')
             if os.path.exists(fine_tuned_path):
                 self.model = SentenceTransformer(fine_tuned_path)
                 logger.info("✅ Fine-tuned SBERT loaded from: fine_tuned_phobert")
             else:
-                # Fallback to base model
                 self.model = SentenceTransformer('keepitreal/vietnamese-sbert')
                 logger.info("✅ Base Vietnamese SBERT loaded")
             
@@ -1480,7 +1342,6 @@ class ChatbotAI:
             self.model = None
 
     def load_link_mapping(self):
-        """Load link mapping"""
         try:
             link_csv_path = os.path.join(settings.BASE_DIR, 'data', 'link.csv')
             if os.path.exists(link_csv_path):
@@ -1496,7 +1357,6 @@ class ChatbotAI:
             self.link_mapping = {}
 
     def get_reference_links(self, qa_item):
-        """Get reference links"""
         reference_links = []
         stt_value = qa_item.get('STT', '')
         
@@ -1517,16 +1377,12 @@ class ChatbotAI:
                     'stt': stt,
                     'url': link_url,
                     'title': f"Tài liệu tham khảo {stt}"
-                })
-        
+                })        
         return reference_links
     
     def load_knowledge_base(self):
-        """Load knowledge base with auto-keywords"""
         try:
-            self.load_link_mapping()
-            
-            # Load from QA Management database
+            self.load_link_mapping()            
             db_qa_entries = []
             try:
                 from qa_management.models import QAEntry
@@ -1543,7 +1399,6 @@ class ChatbotAI:
             except Exception as e:
                 logger.warning(f"⚠️ QA Management not available: {str(e)}")
             
-            # Load from CSV files
             csv_knowledge = []
             try:
                 drive_data = drive_service.get_csv_data()
@@ -1553,7 +1408,6 @@ class ChatbotAI:
             except Exception as e:
                 logger.error(f"❌ Failed to load from Google Drive: {str(e)}")
             
-            # Fallback to local CSV
             if not csv_knowledge and not db_qa_entries:
                 csv_path = os.path.join(settings.BASE_DIR, 'data', 'QA.csv')
                 if os.path.exists(csv_path):
@@ -1572,15 +1426,12 @@ class ChatbotAI:
                     except Exception as e:
                         logger.error(f"❌ Fallback CSV also failed: {str(e)}")
             
-            # Load from legacy database
             db_knowledge = list(KnowledgeBase.objects.filter(is_active=True).values(
                 'question', 'answer', 'category'
             ))
             
-            # Combine all sources
             self.knowledge_data = db_qa_entries + csv_knowledge + db_knowledge
             
-            # Build FAISS index
             if self.model and self.knowledge_data:
                 self.build_faiss_index()
             
@@ -1591,7 +1442,6 @@ class ChatbotAI:
             self.knowledge_data = []
 
     def build_faiss_index(self):
-        """Build FAISS index for fast retrieval"""
         try:
             questions = [item['question'] for item in self.knowledge_data]
             embeddings = self.model.encode(questions)
@@ -1609,13 +1459,11 @@ class ChatbotAI:
             self.index = None
 
     def semantic_search_top_k(self, query, top_k=20):
-        """Semantic search with fine-tuned model"""
         try:
             if not self.model or not self.index:
                 logger.warning("⚠️ Model or index not available")
                 return []
             
-            # Restore Vietnamese if needed
             if self.vietnamese_restorer and not self.vietnamese_restorer.has_vietnamese_accents(query):
                 restored_query = self.vietnamese_restorer.restore_vietnamese_tone(query)
                 if restored_query != query:
@@ -1643,19 +1491,11 @@ class ChatbotAI:
             logger.error(f"Semantic search error: {str(e)}")
             return []
 
-
 class BDUChatbotService:
     def __init__(self):
-        # Create shared response_generator
         self.response_generator = GeminiResponseGenerator()
-        
-        # Initialize conversation memory
-        self.query_cache = query_response_cache
-        
-        # 🎯 FIXED: Use PureSemanticChatbotAI with FIXED logic
+        self.query_cache = query_response_cache        
         self.semantic_chatbot = PureSemanticChatbotAI(shared_response_generator=self.response_generator)
-        
-        # Keywords phát hiện thông tin cá nhân
         self.personal_info_keywords = [
             # Từ khóa cốt lõi
             'tôi là ai', 'toi la ai', 'thông tin của tôi', 'thong tin cua toi',
@@ -1672,9 +1512,6 @@ class BDUChatbotService:
         logger.info("🎯 ENHANCED BDUChatbotService initialized with Top-5 Smart Selection")
 
     def _needs_external_api(self, query: str) -> bool:
-        """
-        🎯 SIMPLIFIED: Basic personal info detection for API calls
-        """
         if not query:
             return False
         
@@ -1685,13 +1522,10 @@ class BDUChatbotService:
         return needs_api
 
     def process_query(self, query: str, session_id: str = None, jwt_token: str = None, document_text: str = None) -> dict:
-        start_time = time.time()
-        
-        logger.info(f"🎯 ENHANCED BDU Service Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
-        
+        start_time = time.time()        
+        logger.info(f"🎯 ENHANCED BDU Service Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")        
         try:
             if not query or len(query.strip()) < 2:
-                # Get personal address for empty query response
                 try:
                     if hasattr(self.response_generator, '_get_personal_address') and session_id:
                         personal_address = self.response_generator._get_personal_address(session_id)
@@ -1710,7 +1544,6 @@ class BDUChatbotService:
                     'cache_hit': False
                 }
             
-            # 🎯 CACHE CHECK
             cached_response = self.query_cache.get(query)
             if cached_response:
                 cached_response['processing_time'] = time.time() - start_time
@@ -1719,33 +1552,27 @@ class BDUChatbotService:
             
             logger.info("💨 CACHE MISS: Proceeding with ENHANCED semantic processing")
             
-            # 🎯 SIMPLIFIED API PRIORITY CHECK
             if self._needs_external_api(query):
                 logger.info("🚨 API PRIORITY: Personal info query detected")
                 
                 if jwt_token and jwt_token.strip():
-                    # Has token -> Call external API
                     api_result = self._handle_external_api_call(query, session_id, jwt_token)
                     api_result['cache_hit'] = False
                     api_result['cache_skipped'] = 'personal_query'
                     return api_result
                 else:
-                    # No token -> Require authentication
                     auth_result = self._handle_authentication_required(session_id)
                     auth_result['cache_hit'] = False
                     auth_result['cache_skipped'] = 'authentication_required'
                     return auth_result
             
-            # 🎯 ENHANCED SEMANTIC RAG PROCESSING with Top-5 Selection
             logger.info("📚 Using ENHANCED Semantic RAG System with Top-5 Smart Selection")
             result = self.semantic_chatbot.process_query(query, session_id, jwt_token, document_text)
             
-            # Add service-level flags
             result['api_priority_activated'] = False
             result['fallback_to_enhanced_semantic'] = True
             result['cache_hit'] = False
             
-            # 🎯 CACHE STORE
             cache_stored = self.query_cache.set(query, result)
             result['cache_stored'] = cache_stored
             
@@ -1757,7 +1584,6 @@ class BDUChatbotService:
         except Exception as e:
             logger.error(f"❌ ENHANCED BDU Service Error: {str(e)}")
             
-            # Get personal address for error response
             try:
                 if hasattr(self.response_generator, '_get_personal_address'):
                     personal_address = self.response_generator._get_personal_address(session_id)
@@ -1779,7 +1605,6 @@ class BDUChatbotService:
             }
 
     def _handle_external_api_call(self, query: str, session_id: str, jwt_token: str) -> dict:
-        """Handle external API call for personal info"""
         try:
             logger.info("🌐 Calling external API for personal information")
             
@@ -1827,8 +1652,6 @@ class BDUChatbotService:
                 
         except Exception as e:
             logger.error(f"❌ Error in external API call: {str(e)}")
-            
-            # Get personal address for error response
             try:
                 if hasattr(self.response_generator, '_get_personal_address'):
                     personal_address = self.response_generator._get_personal_address(session_id)
@@ -1848,7 +1671,6 @@ class BDUChatbotService:
             }
 
     def _handle_authentication_required(self, session_id: str) -> dict:
-        """Handle authentication required"""
         try:
             if hasattr(self.response_generator, '_get_personal_address'):
                 personal_address = self.response_generator._get_personal_address(session_id)
@@ -1898,8 +1720,7 @@ class BDUChatbotService:
     def get_system_status(self):
         semantic_status = self.semantic_chatbot.get_system_status()
         api_status = external_api_service.get_system_status()
-        cache_stats = self.query_cache.get_cache_stats()
-        
+        cache_stats = self.query_cache.get_cache_stats()        
         return {
             'service_name': 'BDUChatbotService',
             'architecture': 'enhanced_semantic_rag_top5',
@@ -1944,37 +1765,27 @@ class BDUChatbotService:
             ]
         }
 
-    # Delegate methods to semantic chatbot
     def get_conversation_memory(self, session_id):
         return self.semantic_chatbot.get_conversation_memory(session_id)
-
     def clear_conversation_memory(self, session_id=None):
         return self.semantic_chatbot.clear_conversation_memory(session_id)
-
     def reload_after_qa_update(self):
         return self.semantic_chatbot.reload_after_qa_update()
-
     @property
     def model(self):
         return self.semantic_chatbot.model
-
     @property
     def index(self):
         return self.semantic_chatbot.index
-
     @property
     def knowledge_data(self):
         return self.semantic_chatbot.knowledge_data
-
     def get_cache_stats(self):
         return self.query_cache.get_cache_stats()
-
     def clear_cache(self):
         return self.query_cache.clear_cache()
-
     def update_cache_ttl(self, new_ttl: int):
         self.query_cache.update_ttl(new_ttl)
         logger.info(f"🔄 Cache TTL updated to {new_ttl} seconds")
 
-# Global instance for the application
 chatbot_ai = BDUChatbotService()
