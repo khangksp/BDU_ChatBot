@@ -33,3 +33,12 @@
 ",0.5631,enhance_db_answer,cache_rejected_confidence_too_low_0.563076478062254
 2025-08-21T15:49:52.791263,ông Dương Anh tuấn là gì,Bot decided to 'ask_clarification',0.4857,ask_clarification,decision_engine_ask_clarification
 2025-08-21T15:49:52.852519,ông Dương Anh tuấn là gì,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4857,ask_clarification,cache_rejected_confidence_too_low_0.48572837909062705
+2025-08-26T08:59:46.887418,hoc phi chinh quy,Bot decided to 'ask_clarification',0.4422,ask_clarification,decision_engine_ask_clarification
+2025-08-26T08:59:46.891418,hoc phi chinh quy,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4422,ask_clarification,cache_rejected_confidence_too_low_0.44224407577514646
+2025-08-26T09:03:37.379439,hoc phi chinh quy,"Dạ cô Khánh, Lệ phí nhập học trình độ đại học chính quy là 2,000,000 đồng/sinh viên. 🎓 Cô Khánh có cần hỗ trợ thêm gì không ạ?",0.5187,enhance_db_answer,cache_rejected_confidence_too_low_0.5186920349438985
+2025-08-26T09:13:00.895697,nghi them sau khi het ngay nghi phep nam goi la gi,"Dạ cô Khánh,
+
+Nghỉ thêm sau khi hết phép năm được gọi là nghỉ không hưởng lương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.572,enhance_db_answer,cache_rejected_confidence_too_low_0.5719516526222228
