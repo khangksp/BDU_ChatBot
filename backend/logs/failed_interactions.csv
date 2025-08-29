@@ -42,3 +42,582 @@ Nghỉ thêm sau khi hết phép năm được gọi là nghỉ không hưởng 
 
 Cô Khánh có cần em hỗ trợ thêm gì không ạ?
 ",0.572,enhance_db_answer,cache_rejected_confidence_too_low_0.5719516526222228
+2025-08-26T09:30:16.269481,chuong trinh dao tao hoc theo hinh thuc nao,"Dạ cô Khánh,
+
+Chương trình đào tạo của mình học online từ xa 100% ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5405,enhance_db_answer,cache_rejected_confidence_too_low_0.5405320556540238
+2025-08-26T10:18:47.994071,hoc phi chinh quy,"Dạ cô Khánh,
+
+Cô Khánh muốn hỏi về học phí của chương trình nào ạ? Nếu là lệ phí nhập học đại học chính quy thì là 2 triệu đồng/sinh viên ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5187,enhance_db_answer,cache_rejected_confidence_too_low_0.5186920349438985
+2025-08-26T10:19:14.061383,hieu truong la ai,"Dạ cô Khánh,
+
+Hiệu trưởng trường mình là GS.TS. Cao Việt Hiếu ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.513,enhance_db_answer,cache_rejected_confidence_too_low_0.513003680896759
+2025-08-26T10:19:26.721537,vay pho hieu truong,Bot decided to 'ask_clarification',0.2905,ask_clarification,decision_engine_ask_clarification
+2025-08-26T10:19:26.736947,vay pho hieu truong,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2905,ask_clarification,cache_rejected_confidence_too_low_0.29051890144348147
+2025-08-26T10:19:41.625255,vay pho hieu truong la ai?,"Dạ cô Khánh, em chưa có thông tin về phó hiệu trưởng ạ. Để em tìm hiểu thêm rồi báo lại cô Khánh sau nhé.
+
+Cô Khánh có muốn em hỗ trợ gì khác không ạ?
+",0.4665,enhance_db_answer,cache_rejected_confidence_too_low_0.4665398613611857
+2025-08-26T10:20:16.979297,Cao Viet Hieu la ai?,Bot decided to 'ask_clarification',0.3784,ask_clarification,decision_engine_ask_clarification
+2025-08-26T10:20:16.989872,Cao Viet Hieu la ai?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3784,ask_clarification,cache_rejected_confidence_too_low_0.3784391363102457
+2025-08-26T10:20:32.786647,GS.TS Cao Việt Hiếu là ai?,"Dạ cô Khánh, em chưa có thông tin về GS.TS Cao Việt Hiếu ạ. Cô Khánh có muốn em tìm hiểu thêm không ạ?
+",0.4635,enhance_db_answer,cache_rejected_confidence_too_low_0.4635494987169902
+2025-08-26T13:37:20.647255,hieu truong la ai,"Dạ cô Khánh,
+
+Hiệu trưởng Trường Đại học Bình Dương là GS.TS. Cao Việt Hiếu ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.513,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.513003680896759
+2025-08-26T13:37:38.034019,vay Cao Viet Hieu la ai,Bot decided to 'ask_clarification',0.3747,ask_clarification_normal,decision_engine_ask_clarification
+2025-08-26T13:37:38.041035,vay Cao Viet Hieu la ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3747,ask_clarification_normal,cache_rejected_confidence_too_low_0.3747147512435913
+2025-08-26T13:38:10.938411,vậy Cao Việt Hiếu là ai?,Bot decided to 'ask_clarification',0.4304,ask_clarification_normal,decision_engine_ask_clarification
+2025-08-26T13:38:10.946351,vậy Cao Việt Hiếu là ai?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4304,ask_clarification_normal,cache_rejected_confidence_too_low_0.43035526272041214
+2025-08-26T13:55:21.935623,vậy Cao Việt Hiếu là ai?,Bot decided to 'ask_clarification',0.4304,ask_clarification_normal,decision_engine_ask_clarification
+2025-08-26T13:55:21.945139,vậy Cao Việt Hiếu là ai?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4304,ask_clarification_normal,cache_rejected_confidence_too_low_0.43035526272041214
+2025-08-26T14:07:36.111628,vậy Cao Việt Hiếu là ai?,Bot decided to 'ask_clarification',0.4196,ask_clarification_context,decision_engine_ask_clarification
+2025-08-26T14:07:36.154644,vậy Cao Việt Hiếu là ai?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4196,ask_clarification_context,cache_rejected_confidence_too_low_0.4195594787238301
+2025-08-26T14:21:33.912102,vậy Cao Việt Hiếu là ông nào?,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5963,enhance_db_answer_context,cache_rejected_confidence_too_low_0.5962512418928599
+2025-08-26T14:22:00.680823,hoc phi chinh quy,"Dạ cô Khánh,
+
+Em xin cung cấp thông tin về các loại phí liên quan đến học phí hệ đại học chính quy ạ:
+
+*   **Lệ phí nhập học:** 2,000,000 đồng/sinh viên.
+*   **Học phí trọn gói:** 64,000,000 đồng/học viên/toàn khóa (được giảm 8,000,000 đồng bằng tiền mặt).
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5187,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5186920349438985
+2025-08-26T14:22:11.606462,thầy Sơn,"Dạ cô Khánh,
+
+Thầy Sơn hiện đang công tác tại Trường Đại học Bình Dương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5111,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5110698382695515
+2025-08-26T14:23:59.422947,thầy Tuấn là ai,Bot decided to 'ask_clarification',0.4492,ask_clarification_normal,decision_engine_ask_clarification
+2025-08-26T14:23:59.429456,thầy Tuấn là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4492,ask_clarification_normal,cache_rejected_confidence_too_low_0.4492013754874845
+2025-08-26T15:02:26.261134,hiệu trưởng là ai,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-26T15:31:07.396869,ban van hoa truyen thong co nhiem vu gi trong chuong trinh phap luat va suc khoe hoc duong,"Dạ cô Khánh,
+
+Ban Văn hóa – Truyền thông có trách nhiệm truyền thông về chương trình pháp luật và sức khỏe học đường, cập nhật thông tin trên các kênh của trường, và thiết kế hình ảnh cho chương trình ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5981,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5980634653120114
+2025-08-26T15:34:46.114166,ai trong mini car fighting 02,"Dạ cô Khánh,
+
+Em chưa có thông tin về ai thắng trong Mini Car Fighting 02. Cô Khánh có muốn em tìm hiểu thêm thông tin này không ạ?
+",0.5793,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5793049863974253
+2025-08-26T15:38:14.104491,cao viet hieu nam giu chuc vu gi,"Dạ cô Khánh,
+
+Em không tìm thấy thông tin về Cao Việt Hiếu đang giữ chức vụ gì tại trường. Cô Khánh có thể cung cấp thêm thông tin chi tiết về người này để em tìm kiếm chính xác hơn không ạ?
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5729,enhance_db_answer_context,cache_rejected_confidence_too_low_0.5729267565084963
+2025-08-26T15:38:28.531704,cao viet hieu nam giu chuc vu gi,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ. Cô Khánh có muốn biết thêm thông tin gì về thầy Hiếu không ạ?
+",0.5462,enhance_db_answer_context,cache_rejected_confidence_too_low_0.5461942163778811
+2025-08-28T08:50:15.511171,hoc phi chinh quy,"Dạ cô Khánh,
+
+Lệ phí nhập học hệ đại học chính quy là 2,000,000 đồng/sinh viên ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5187,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5186920349438985
+2025-08-28T08:50:30.687183,hoc phi,Bot decided to 'ask_clarification',0.438,ask_clarification_normal,decision_engine_ask_clarification
+2025-08-28T08:50:30.755075,hoc phi,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.438,ask_clarification_normal,cache_rejected_confidence_too_low_0.43796428585052494
+2025-08-28T09:10:14.388666,"ok, vậy tôi muốn hỏi về học phí","Dạ cô Khánh,
+
+Cô Khánh muốn hỏi về vấn đề gì liên quan đến học phí ạ? Ví dụ như cách đóng học phí, thông tin về tài khoản ngân hàng của trường, hay các vấn đề khác ạ?
+
+Thông tin về tài khoản ngân hàng của trường để đóng học phí là:
+
+*   Tên tài khoản: Trường Đại học Bình Dương
+*   Số tài khoản: 8603931959
+*   Ngân hàng: TMCP Đầu tư và Phát triển Việt Nam, chi nhánh Bình Dương (BIDV)
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5479,enhance_db_answer_context,cache_rejected_confidence_too_low_0.5478949520199798
+2025-08-28T09:57:17.462458,vậy ông ấy là người như thế nào?,"Dạ cô Khánh, em chưa có thông tin chi tiết về ông Trần Thanh Cơ. Em chỉ biết ông ấy sẽ kiêm nhiệm phụ trách công tác thanh tra tại Phòng Thanh tra - Pháp chế và Kiểm toán nội bộ thôi ạ. Cô Khánh có muốn em tìm hiểu thêm thông tin về ông ấy không ạ?
+",0.4911,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4911215436976889
+2025-08-28T09:58:47.052494,cho tôi biết thêm về TS. Đỗ Đoan Trang,"Dạ cô Khánh, em chưa có thông tin về TS. Đỗ Đoan Trang ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.537,enhance_db_answer_context,cache_rejected_confidence_too_low_0.5369650919186442
+2025-08-28T10:14:07.396456,vậy còn đỗ đoan trang là ai,Bot decided to 'ask_clarification',0.4616,ask_clarification_normal_forced,decision_engine_ask_clarification
+2025-08-28T10:14:07.408231,vậy còn đỗ đoan trang là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4616,ask_clarification_normal_forced,cache_rejected_confidence_too_low_0.4616425864230421
+2025-08-28T10:41:35.288139,hieu truong la ai,"Dạ cô Khánh,
+
+Hiệu trưởng Trường Đại học Bình Dương là GS.TS. Cao Việt Hiếu ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.513,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.513003680896759
+2025-08-28T10:41:47.629113,ai la pho hieu truong,"Dạ cô Khánh,
+
+Hiện tại em chưa có thông tin về phó hiệu trưởng ạ. Em có thể tìm thông tin này giúp cô Khánh được không ạ?
+",0.4699,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4698790500958761
+2025-08-28T10:42:39.451609,vậy ai là Cao Việt Hiếu,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4429,ask_clarification_normal,cache_rejected_confidence_too_low_0.442927834033966
+2025-08-28T10:44:29.386413,Cao Việt Hiếu là ông nào,"Dạ cô Khánh,
+
+Em tìm thấy thông tin sinh viên Nguyễn Văn Hiếu, lớp 241100MB005, ngành Quản trị kinh doanh ạ. Có phải cô Khánh muốn hỏi về sinh viên này không ạ?
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5059,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5059269221623739
+2025-08-28T10:47:24.137069,Cao Việt Hiếu là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4407,ask_clarification_normal,cache_rejected_confidence_too_low_0.44066790215174356
+2025-08-28T10:49:33.670571,đô đoan trang là ai,"Dạ cô Khánh, em chưa có thông tin về người này ạ. Cô Khánh có muốn em tìm kiếm thông tin liên hệ của phòng ban nào để hỏi không ạ?
+",0.5313,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5313298815529922
+2025-08-28T10:50:10.455343,vậy Cao Việt Hiếu là ông nào?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.448,ask_clarification_normal,cache_rejected_confidence_too_low_0.44797789904503593
+2025-08-28T10:53:50.296778,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng của trường mình đó ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4561,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45608678817749027
+2025-08-28T10:55:07.872342,vậy cao việt hiếu là ai,"Dạ cô Khánh,
+
+Em xin lỗi vì đã hiểu sai ý của cô. ""Cao Việt Hiếu"" là tên của Hiệu trưởng trường mình, GS.TS. Cao Việt Hiếu đó ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T10:56:47.664351,vậy cao việt hiếu là ai,"Dạ cô Khánh,
+
+Em có thông tin về Nguyễn Văn Hiếu được ưu đãi 10% học phí toàn khóa học. Cô Khánh có muốn biết thêm gì về trường hợp này không ạ?
+",0.5842,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.5841576993106068
+2025-08-28T11:01:32.783964,vậy Cao Việt Hiếu là ông nào?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.448,ask_clarification_normal,cache_rejected_confidence_too_low_0.44797789904503593
+2025-08-28T11:04:10.247697,vậy cao việt hiếu là a ?,"Dạ cô Khánh, em không có thông tin về ""Cao Việt Hiếu"" ngoài việc GS.TS. Cao Việt Hiếu là Hiệu trưởng trường mình ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.572,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.5720110648794945
+2025-08-28T11:35:28.116935,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh, GS.TS. Cao Việt Hiếu là Hiệu trưởng của trường mình ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4561,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45608678817749027
+2025-08-28T11:35:39.036558,vậy cao việt hiếu là ai,"Dạ cô Khánh, em xin lỗi vì lặp lại thông tin. GS.TS. Cao Việt Hiếu là Hiệu trưởng của trường mình ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T11:37:13.785704,vậy còn nhớ cao việt hiếu không?,"Dạ cô Khánh, em không có thông tin về người tên Cao Việt Hiếu ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5276,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.527586950472423
+2025-08-28T11:37:23.638211,cao việt hiếu là ai,"Dạ cô Khánh, em không có thông tin về người này ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5976,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.5975877888638041
+2025-08-28T11:37:57.348919,vậy cao việt hiếu là là ai,"Dạ cô Khánh, em không có thông tin về người này ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5929,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.5928719639418782
+2025-08-28T11:50:11.796853,vậy Cao Việt Hiếu là ông nào?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.448,ask_clarification_normal,cache_rejected_confidence_too_low_0.44797789904503593
+2025-08-28T11:50:59.722208,thầy Hiếu là ai,"Dạ cô Khánh, em xin lỗi, hình như cô viết nhầm tên rồi ạ. Trong dữ liệu của trường mình, em chỉ tìm thấy sinh viên tên Nguyễn Văn Hiếu, lớp 241100MB005, ngành Quản trị kinh doanh thôi ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4763,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.47631428480148313
+2025-08-28T11:51:21.665133,vậy cao việt hiếu là a ?,"Dạ cô Khánh,
+
+Ý cô Khánh là GS.TS. Cao Việt Hiếu phải không ạ? Thầy là Hiệu trưởng trường mình đó ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.572,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.5720110648794945
+2025-08-28T12:30:15.200193,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng của trường mình đó ạ. Cô Khánh có muốn biết thêm thông tin gì về thầy Hiếu không ạ?
+",0.4561,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45608678817749027
+2025-08-28T12:30:23.972743,vậy cao việt hiếu là ai,"Dạ cô Khánh,
+
+Ý của cô Khánh là thầy Cao Việt Hiếu phải không ạ? Thầy là Hiệu trưởng trường mình đó ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T12:30:44.856644,ông Cao việt Hiếu là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4479,ask_clarification_normal,cache_rejected_confidence_too_low_0.44789238354503247
+2025-08-28T12:31:14.540044,vậy cao việt hiếu là ai,"Dạ cô Khánh, em chưa có thông tin về người này. Cô Khánh có thể cung cấp thêm thông tin để em tìm kiếm được không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T12:35:34.780191,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng của trường mình đó ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4561,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45608678817749027
+2025-08-28T12:35:44.908701,vậy cao việt hiếu là ai,"Dạ cô Khánh,
+
+Có phải ý cô Khánh là muốn biết thông tin về GS.TS. Cao Việt Hiếu đúng không ạ? Em xin phép nhắc lại, thầy là Hiệu trưởng của trường mình đó ạ. Cô Khánh muốn biết thêm thông tin gì về thầy Hiếu không ạ?
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T12:36:22.914648,ông Cao việt Hiếu là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4479,ask_clarification_normal,cache_rejected_confidence_too_low_0.44789238354503247
+2025-08-28T12:36:43.475673,vậy cao việt hiếu là ai,"Dạ cô Khánh,
+
+Thầy Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T12:37:00.261938,tôi hỏi lại ông Cao việt Hiếu là ai?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4001,ask_clarification_normal,cache_rejected_confidence_too_low_0.40005292059580483
+2025-08-28T12:38:05.128030,vậy Cao Việt Hiếu là ông nào?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.448,ask_clarification_normal,cache_rejected_confidence_too_low_0.44797789904503593
+2025-08-28T12:38:37.639461,vậy GS.TS. Cao Việt Hiếu là ai?,"Dạ cô Khánh, GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương mình đó ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.464,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4639528489112854
+2025-08-28T12:38:48.150572,vậy cao việt hiếu là a ?,"Dạ cô Khánh, em nghĩ ý cô là ""vậy Cao Việt Hiếu là ai?"". GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương mình đó ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4639,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.46391432074400096
+2025-08-28T12:49:49.032645,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng của trường mình đó ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4561,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45608678817749027
+2025-08-28T12:49:57.625703,vậy cao việt hiếu là ai,"Dạ cô Khánh, em chưa có thông tin về người này ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T12:52:37.264954,Hiệu trưởng trường mình là ai,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-28T12:54:43.540457,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng của trường mình đó ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4561,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45608678817749027
+2025-08-28T12:54:57.188550,vậy cao việt hiếu là ai,"Dạ cô Khánh,
+
+Em xin lỗi vì câu trả lời trước chưa rõ ràng. ""Cao Việt Hiếu"" là cách gọi tắt của GS.TS. Cao Việt Hiếu, hiện là Hiệu trưởng trường Đại học Bình Dương mình đó ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T12:56:51.860312,vậy Cao Việt Hiếu là ai?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4304,ask_clarification_normal,cache_rejected_confidence_too_low_0.43035526272041214
+2025-08-28T12:57:21.611919,vậy cao việt hiếu là a ?,"Dạ cô Khánh, em xin lỗi vì đã gây nhầm lẫn. Nguyễn Văn Hiếu chứ không phải Cao Việt Hiếu ạ. Nguyễn Văn Hiếu là sinh viên nhận được ưu đãi 10% học phí toàn khóa học. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.572,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.5720110648794945
+2025-08-28T13:13:48.067874,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh, em chưa có thông tin về GS.TS. Cao Việt Hiếu ạ. Cô Khánh có muốn em tìm kiếm thông tin này trên trang web của trường hoặc liên hệ phòng ban liên quan không ạ?
+",0.4561,enhance_db_answer,cache_rejected_confidence_too_low_0.4560868239402771
+2025-08-28T13:33:38.081573,who is president of BDU,Bot decided to 'ask_clarification',0.4236,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:33:38.083940,who is president of BDU,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4236,ask_clarification,cache_rejected_confidence_too_low_0.42355757179260256
+2025-08-28T13:33:54.099754,ai la hieu truong truong,"Dạ cô Khánh,
+
+Hiện tại, GS.TS Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5433,enhance_db_answer,cache_rejected_confidence_too_low_0.5433468247413635
+2025-08-28T13:34:12.548568,ai la Cao Việt Hiếu,Bot decided to 'ask_clarification',0.3706,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:34:12.549587,ai la Cao Việt Hiếu,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3706,ask_clarification,cache_rejected_confidence_too_low_0.3705981986958048
+2025-08-28T13:34:27.198590,y la cao hviet hieu l ai,Bot decided to 'ask_clarification',0.3145,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:34:27.201071,y la cao hviet hieu l ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3145,ask_clarification,cache_rejected_confidence_too_low_0.31452612484202663
+2025-08-28T13:35:35.026306,Cao Việt Hiếu là ai,Bot decided to 'ask_clarification',0.4407,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:35:35.028317,Cao Việt Hiếu là ai,"Dạ thầy Khang, để em hỗ trợ chính xác nhất, thầy Khang có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4407,ask_clarification,cache_rejected_confidence_too_low_0.44066790215174356
+2025-08-28T13:35:51.273519,cho tôi đoạn code python vẽ hình vuông 2x2,Bot decided to 'ask_clarification',0.3866,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:35:51.274651,cho tôi đoạn code python vẽ hình vuông 2x2,"Dạ thầy Admin, để em hỗ trợ chính xác nhất, thầy Admin có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3866,ask_clarification,cache_rejected_confidence_too_low_0.38659077974494527
+2025-08-28T13:35:51.561649,k25 co nhung ai,Bot decided to 'ask_clarification',0.3775,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:35:51.564039,k25 co nhung ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3775,ask_clarification,cache_rejected_confidence_too_low_0.3774716377258301
+2025-08-28T13:36:00.140343,cho tôi đoạn code vẽ hình vuông 2x2,Bot decided to 'ask_clarification',0.4103,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:36:00.142639,cho tôi đoạn code vẽ hình vuông 2x2,"Dạ thầy Admin, để em hỗ trợ chính xác nhất, thầy Admin có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4103,ask_clarification,cache_rejected_confidence_too_low_0.4102699365781701
+2025-08-28T13:36:07.051313,cho tôi code python vẽ hình vuông 2x2,Bot decided to 'ask_clarification',0.3892,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:36:07.052973,cho tôi code python vẽ hình vuông 2x2,"Dạ thầy Admin, để em hỗ trợ chính xác nhất, thầy Admin có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3892,ask_clarification,cache_rejected_confidence_too_low_0.3891561951803124
+2025-08-28T13:36:08.702160,Nguyen Quoc Duy Khang la dai ca cua k25,Bot decided to 'ask_clarification',0.4263,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:36:08.702160,Nguyen Quoc Duy Khang la dai ca cua k25,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4263,ask_clarification,cache_rejected_confidence_too_low_0.42626203547583685
+2025-08-28T13:36:15.581680,Nguyen Quoc Duy Khang la ai,Bot decided to 'ask_clarification',0.5221,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:36:15.583737,Nguyen Quoc Duy Khang  la ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.5221,ask_clarification,cache_rejected_confidence_too_low_0.5221325721740722
+2025-08-28T13:37:04.822633,ban la ai,Bot decided to 'ask_clarification',0.4719,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:37:04.824949,ban la ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4719,ask_clarification,cache_rejected_confidence_too_low_0.4718753369649251
+2025-08-28T13:37:12.820342,api key la ai,Bot decided to 'ask_clarification',0.4195,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:37:12.821352,api key la ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4195,ask_clarification,cache_rejected_confidence_too_low_0.41945911611829484
+2025-08-28T13:37:22.099101,get api key gemini,Bot decided to 'ask_clarification',0.3424,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:37:22.101877,get api key gemini,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3424,ask_clarification,cache_rejected_confidence_too_low_0.34240653785069786
+2025-08-28T13:37:34.084881,Độ tương đồng: NaN%,Bot decided to 'ask_clarification',0.3653,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:37:34.085887,Độ tương đồng: NaN%,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3653,ask_clarification,cache_rejected_confidence_too_low_0.36529981417655943
+2025-08-28T13:37:48.469444,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",Bot decided to 'ask_clarification',0.4678,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:37:48.471531,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓","Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4678,ask_clarification,cache_rejected_confidence_too_low_0.46781573917554775
+2025-08-28T13:38:08.442824,Độ tương đồng: NaN%,Bot decided to 'ask_clarification',0.3653,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:38:08.445239,Độ tương đồng: NaN%,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3653,ask_clarification,cache_rejected_confidence_too_low_0.36529981417655943
+2025-08-28T13:39:59.336416,hello,Bot decided to 'ask_clarification',0.2843,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:39:59.338741,hello,"Dạ thầy Admin, để em hỗ trợ chính xác nhất, thầy Admin có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2843,ask_clarification,cache_rejected_confidence_too_low_0.2842992236981025
+2025-08-28T13:40:35.595344,GS.TS Cao Việt Hiếu là ai,"Dạ thầy Admin, thầy Hiệu trưởng hiện tại của trường mình là GS.TS Cao Việt Hiếu ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.4595,enhance_db_answer,cache_rejected_confidence_too_low_0.45947314898173014
+2025-08-28T13:40:45.035377,Cao Việt Hiếu là ai,Bot decided to 'ask_clarification',0.4407,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:40:45.037393,Cao Việt Hiếu là ai,"Dạ thầy Admin, để em hỗ trợ chính xác nhất, thầy Admin có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4407,ask_clarification,cache_rejected_confidence_too_low_0.44066790215174356
+2025-08-28T13:42:26.794552,xin chào,Bot decided to 'ask_clarification',0.443,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:42:26.795553,xin chào,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.443,ask_clarification,cache_rejected_confidence_too_low_0.4430082954088847
+2025-08-28T13:53:30.795278,vậy ai là Cao Việt Hiếu ?,Bot decided to 'ask_clarification',0.4134,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:53:30.814436,vậy ai là Cao Việt Hiếu ?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4134,ask_clarification,cache_rejected_confidence_too_low_0.41338168918331214
+2025-08-28T13:53:37.042043,GS.TS Cao Việt Hiếu,Bot decided to 'ask_clarification',0.4007,ask_clarification,decision_engine_ask_clarification
+2025-08-28T13:53:37.048163,GS.TS Cao Việt Hiếu,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4007,ask_clarification,cache_rejected_confidence_too_low_0.4007439756393433
+2025-08-28T13:59:19.149085,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh, em chưa có thông tin về GS.TS. Cao Việt Hiếu. Cô Khánh có muốn em tìm kiếm thông tin này trên website của trường không ạ?
+",0.4561,enhance_db_answer,cache_rejected_confidence_too_low_0.4560868239402771
+2025-08-28T14:06:18.698048,Hiệu trưởng trường mình là ai,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-28T14:08:51.243137,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu hiện là Hiệu trưởng của trường mình đó ạ. Cô Khánh có muốn biết thêm thông tin gì về thầy Hiếu không ạ?
+",0.4561,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4560868239402771
+2025-08-28T14:09:16.458239,vậy cao việt hiếu là ai,"Dạ cô Khánh, em chưa có thông tin về người này ạ. Cô Khánh có muốn em tìm kiếm thông tin về các cán bộ khác của trường không ạ?
+",0.5421,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.542104562398715
+2025-08-28T14:09:54.211242,vậy Cao Việt Hiếu là ông nào?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.448,ask_clarification_normal,cache_rejected_confidence_too_low_0.44797789904503593
+2025-08-28T14:10:19.369064,còn nhớ bà Lê Văn Cường là ai không?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3938,ask_clarification_normal,cache_rejected_confidence_too_low_0.3937565353544349
+2025-08-28T14:10:26.548555,Lê Văn Cường là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4584,ask_clarification_normal,cache_rejected_confidence_too_low_0.45839285700409493
+2025-08-28T14:10:43.781259,Cao Việt Hiếu là ông nào?,"Dạ cô Khánh, em tìm thấy thông tin về Nguyễn Văn Hiếu, không có thông tin về Cao Việt Hiếu ạ. Nguyễn Văn Hiếu được ưu đãi 10% học phí toàn khóa học. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4879,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.48792146046956386
+2025-08-28T14:11:12.626247,vậy GS.TS. Cao Việt Hiếu là ai,"Dạ cô Khánh, em chưa có thông tin về GS.TS. Cao Việt Hiếu ạ. Cô Khánh có muốn em tìm kiếm thông tin này trên trang web của trường không ạ?
+",0.4561,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4560868239402771
+2025-08-28T14:22:30.551813,toi dang bi loi khi nao truy cap la loi cho toi code python,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4118,ask_clarification_normal,cache_rejected_confidence_too_low_0.41181086944811274
+2025-08-28T14:22:43.997179,code python ve hinh a Khang,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.369,ask_clarification_normal,cache_rejected_confidence_too_low_0.3690039127037443
+2025-08-28T14:22:57.914392,code python ve hinh a Khang,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.369,ask_clarification_normal,cache_rejected_confidence_too_low_0.3690039127037443
+2025-08-28T14:23:11.696127,cho toi code python ve hinh code python ve hinh a Khang bang cac ****,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3864,ask_clarification_normal,cache_rejected_confidence_too_low_0.38641087079048153
+2025-08-28T14:23:25.438301,cho toi code html co ban de hoc,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4227,ask_clarification_normal,cache_rejected_confidence_too_low_0.4226752948760986
+2025-08-28T14:23:31.059190,code html,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3081,ask_clarification_normal,cache_rejected_confidence_too_low_0.30814606046676635
+2025-08-28T14:23:38.626910,html,"Dạ cô Khánh, em chưa có thông tin về vấn đề này. Cô Khánh có thể liên hệ phòng ban liên quan qua email info@bdu.edu.vn để được hỗ trợ chi tiết ạ. 🎓",0.2492,say_dont_know_normal,cache_rejected_confidence_too_low_0.24918676045361687
+2025-08-28T14:23:46.942576,code html de ve hinhh,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3421,ask_clarification_normal,cache_rejected_confidence_too_low_0.3420542656353541
+2025-08-28T14:23:49.394039,vậy Lê Văn Cường là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4565,ask_clarification_normal,cache_rejected_confidence_too_low_0.4565368033338476
+2025-08-28T14:23:56.724063,? sao dua ra quyet dinh,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4351,ask_clarification_normal,cache_rejected_confidence_too_low_0.4351410609051801
+2025-08-28T14:24:26.047075,ông Lê Văn Cường,"Dạ cô Khánh, em chưa có thông tin về ông Lê Văn Cường. Tuy nhiên, em biết ông Hoàng Ngọc Cường là thành viên Ban biên tập Tạp chí Khoa học và Công nghệ của trường mình. Cô Khánh có cần em tìm hiểu thêm về ông Lê Văn Cường không ạ?
+",0.596,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5960230526217708
+2025-08-28T14:27:03.411185,vậy Cao Việt Hiếu là ông nào?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.448,ask_clarification_normal,cache_rejected_confidence_too_low_0.44797789904503593
+2025-08-28T14:27:42.056004,vậy cao việt hiếu là a ?,"Dạ cô Khánh, em xin lỗi, em không có thông tin về ""cao việt hiếu"". Cô Khánh có muốn em tìm thông tin về người khác không ạ?
+",0.572,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.5720110648794945
+2025-08-28T14:45:51.214494,quyet dinh gi,"Dạ cô Khánh, quyết định về việc cử nhân sự tham dự Hội thảo Khoa học Quốc tế và Quan hệ doanh nghiệp tại Trường Đại học Nam Cần Thơ ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5819,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5818591431209019
+2025-08-28T14:46:03.966275,ai ban hanh,"Dạ cô Khánh,
+
+Quyết định này do các đơn vị và cá nhân sau thi hành:
+
+*   Phòng Tổng hợp
+*   Phòng Tài chính - Kế toán
+*   Phòng Quản lý đào tạo và Công tác sinh viên
+*   Phòng Thanh tra - Pháp chế và Kiểm toán nội bộ
+*   Viện Đào tạo liên tục, Phục vụ cộng đồng
+*   Phòng Thi đua Trường Đại học Bình Dương
+*   Ông Nguyễn Minh Tùng
+*   Các đơn vị, cá nhân có liên quan
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5835,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5835189477602641
+2025-08-28T14:46:22.128918,u know me ?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3224,ask_clarification_normal,cache_rejected_confidence_too_low_0.3223995588885413
+2025-08-28T14:46:33.556058,wanna go home yet ?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3206,ask_clarification_normal,cache_rejected_confidence_too_low_0.3206462105115255
+2025-08-28T14:46:40.512365,wwwwww,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2954,ask_clarification_normal,cache_rejected_confidence_too_low_0.2954250365860608
+2025-08-28T14:46:58.919858,"code nay de lam gi // index.js
+import { AppRegistry } from 'react-native';
+import App from '.';
+import './polyfills';
+import { name as appName } from './app.json';
+
+AppRegistry.registerComponent(appName, () => App);","Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3867,ask_clarification_normal,cache_rejected_confidence_too_low_0.38669211474331944
+2025-08-28T14:47:06.112443,full code,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2823,ask_clarification_normal,cache_rejected_confidence_too_low_0.2822984226400202
+2025-08-28T14:47:19.493499,ai lam app sinh vien,"Dạ cô Khánh,
+
+Theo em biết, bạn Đào Văn Hiếu (21050011) và Trần Đăng Trị (21050049) đã cùng nhau làm app sinh viên ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5851,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5851355663226201
+2025-08-28T14:48:54.288595,trang web cua sinh vien,"Dạ cô Khánh,
+
+Ý cô Khánh là trang web để sinh viên đăng nhập vào tài khoản cá nhân đúng không ạ? Sinh viên có thể đăng nhập bằng tài khoản đã được cấp để đăng ký môn học đó cô.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5171,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5171330229167281
+2025-08-28T15:31:13.893867,cao việt hiếu là ai,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ. Cô Khánh có muốn biết thêm thông tin gì về thầy Hiếu không ạ?
+",0.5736,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-28T15:31:31.564698,đỗ đoan trang là ai,"Dạ cô Khánh,
+
+Cô Đỗ Đoan Trang hiện là Phó Hiệu trưởng của trường mình ạ. Cô Khánh có muốn biết thêm thông tin gì về cô Trang không ạ?
+",0.5142,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5141645268712725
+2025-08-28T15:31:43.910012,lê văn cường là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4459,ask_clarification_normal,cache_rejected_confidence_too_low_0.4459072802861532
+2025-08-28T15:32:08.922719,còn nhớ cao việt hiếu là ai không?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.349,ask_clarification_normal,cache_rejected_confidence_too_low_0.34902782926559445
+2025-08-28T15:47:18.539453,alo,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2847,ask_clarification_normal,cache_rejected_confidence_too_low_0.2847346063454946
+2025-08-28T15:47:27.905672,"💬
+Chat mới - 14:18:43
+28/8/2025
+⋯
+Đã kết nối
+
+⚙️
+Cài đặt
+Xin chào giảng viên Khánh!
+
+Tôi là ChatBDU, trợ lý AI của Đại học Bình Dương. 💡 Bạn có thể thiết lập 'Ghi nhớ và chỉ dẫn' trong cài đặt để tôi phục vụ bạn tốt hơn!
+
+Tôi có thể hỗ trợ bạn về:
+•
+📚 Thông tin đào tạo và ngành học
+
+•
+🎓 Quy định và thủ tục
+
+•
+💰 Học phí và chính sách
+
+•
+🏢 Cơ sở vật chất
+
+•
+📞 Thông tin liên hệ
+
+•
+📄 Phân tích tài liệu PDF/DOCX
+
+•
+🖼️ Trích xuất văn bản từ ảnh
+
+
+Hãy đặt câu hỏi để bắt đầu!
+
+
+💡
+
+Mới:
+
+
+Bạn có thể tải lên tài liệu PDF/DOCX hoặc ảnh chứa văn bản để tôi phân tích và trả lời câu hỏi về nội dung!
+Độ tin cậy: 100.0%
+14:18:43
+code python ve hinh a Khang
+14:18:45
+Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓
+📚 Nguồn tham khảo:
+Q: Quyết định số 433/QĐ-ĐHBD dựa trên kế hoạch nào của Khoa Công nghệ thông tin, Robot và Trí tuệ nhân tạo?
+Độ tương đồng: NaN%
+Q: Địa điểm tổ chức cuộc thi AIOT Developer Innoworks 2024 được nêu trong Quyết đ","Dạ cô Khánh,
+
+Em chưa hiểu rõ ý cô Khánh lắm ạ. Cô Khánh muốn vẽ hình gì bằng Python ạ? Cô Khánh có thể cho em biết thêm chi tiết được không ạ?
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4774,enhance_db_answer_smart_entity_fallback,cache_rejected_confidence_too_low_0.4773899295512541
+2025-08-28T15:47:48.976538,co muon hoi code python printhello word,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3487,ask_clarification_normal,cache_rejected_confidence_too_low_0.34870415903801144
+2025-08-28T16:15:28.242696,cao việt hiếu là ai,"Dạ cô Khánh,
+
+Em chưa có thông tin chi tiết về cá nhân Cao Việt Hiếu ngoài việc thầy là Hiệu trưởng trường Đại học Bình Dương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5736,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-28T16:16:03.019764,đỗ đoan trang là ai,"Dạ cô Khánh,
+
+Cô Đỗ Đoan Trang hiện là Phó Hiệu trưởng của trường mình ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5142,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5141645268712725
+2025-08-28T16:16:15.105164,lê văn cường là ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.4459,ask_clarification_normal,cache_rejected_confidence_too_low_0.4459072802861532
+2025-08-28T16:16:37.223595,còn nhớ cao việt hiếu là ai không?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.5342,ask_clarification_fallback,cache_rejected_confidence_too_low_0.534223326011326
+2025-08-28T16:26:35.160214,cao việt hiếu là ai,"Dạ cô Khánh,
+
+Em đã trả lời câu hỏi này rồi ạ. Cô Khánh có muốn biết thêm thông tin gì khác về thầy Hiếu không ạ?
+",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-28T16:27:05.117633,đỗ đoan trang là ai,"Dạ cô Khánh,
+
+Hiện tại, trường mình có cô Đỗ Đoan Trang và thầy Lê Văn Cường là Phó Hiệu trưởng ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5142,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5141645268712725
+2025-08-28T16:27:19.762299,lê văn cường là ai,"Dạ cô Khánh,
+
+Thầy Lê Văn Cường là Phó Hiệu trưởng của trường mình ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4459,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4459072802861532
+2025-08-28T16:27:31.895230,còn nhớ cao việt hiếu là ai không?,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.349,ask_clarification_normal,cache_rejected_confidence_too_low_0.34902782926559445
+2025-08-28T16:27:45.636797,cao việt hiếu là ai,"Dạ cô Khánh, em chưa có thông tin về người này ạ. Cô Khánh có muốn em tìm kiếm thông tin về vấn đề khác không ạ?
+",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-28T16:36:24.547280,thành viên mini car fighting 02,"Dạ cô Khánh,
+
+Đội tuyển BDU-FIGHTING 02 đã đạt Giải Khuyến khích tại cuộc thi Mini Car Racing – Năm thứ 10 và nhận được mức thưởng 2.000.000 đồng ạ. Em chưa có thông tin chi tiết về thành viên của đội.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4743,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.47425868272781374
+2025-08-28T16:36:39.192158,thành viên mini car fighting 02 gồm những ai,"Dạ cô Khánh,
+
+Thành viên đội Mini Car Fighting 02 gồm có: Võ Chí Linh, Nguyễn Xuân Long, Trần Đăng Trị và Nguyễn Quốc Duy Khang ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4594,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45936153213183084
+2025-08-28T16:37:06.497645,Duy Khang là ai,"Dạ cô Khánh,
+
+Nguyễn Quốc Duy Khang là thành viên của đội Mini Car Fighting 02 ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5947,use_db_direct_normal,cache_rejected_confidence_too_low_0.5947180539766947
+2025-08-28T16:37:43.098523,vậy sinh viên Duy Khang là ai?,"Dạ cô Khánh,
+
+Em xin cung cấp thêm thông tin về sinh viên Duy Khang ạ:
+
+*   **Họ và tên:** Nguyễn Quốc Duy Khang
+*   **Lớp:** 25TH01
+*   **Thành tích:** Thành viên đội Mini Car Fighting 02, người tạo ra chatbot này.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4786,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.47856271283967156
+2025-08-28T16:40:05.958565,Duy Khang là ai,"Dạ cô Khánh, em không tìm thấy thông tin về người tên Duy Khang trong dữ liệu của trường. Cô Khánh có thể cho em thêm thông tin để em tìm kiếm chính xác hơn không ạ?
+",0.5947,use_db_direct_normal,cache_rejected_confidence_too_low_0.5947180539766947
+2025-08-28T16:40:12.808989,Duy Khang là ai,"Dạ cô Khánh,
+
+Em không biết Duy Khang là ai ạ. Cô Khánh có muốn em tìm hiểu thêm không ạ?
+",0.5947,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5947180539766947
+2025-08-28T16:46:27.876116,Do ai tạo ra ?,"Dạ cô Khánh,
+
+Ý cô Khánh hỏi ""ai"" ở đây là ai tạo ra cơ sở vật chất của trường mình phải không ạ?
+
+Cơ sở vật chất là do trường mình trang bị hoặc tài trợ ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5299,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5299166624546051
+2025-08-28T16:59:16.712785,Đào Văn Hiếu và thầy Trần Đăng Trị làm gì?,"Dạ cô Khánh, theo em biết thì thầy Đào Văn Hiếu và thầy Trần Đăng Trị làm app sinh viên ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5816,use_db_direct_normal,cache_rejected_confidence_too_low_0.581619291305542
+2025-08-28T17:00:47.323011,Cao Việt Hiếu là ai,"Dạ cô Khánh, hiệu trưởng trường mình là GS.TS. Cao Việt Hiếu ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4407,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.44066790215174356
+2025-08-28T17:01:04.134831,GS.TS. Cao Việt Hiếu,"Dạ cô Khánh, em hiểu là cô Khánh muốn biết thông tin về GS.TS. Cao Việt Hiếu ạ. Em xin phép được tìm hiểu thêm thông tin về thầy để hỗ trợ cô Khánh tốt hơn nhé. Cô Khánh có muốn biết thông tin cụ thể nào về thầy không ạ?
+",0.4184,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4184017622470856
+2025-08-28T17:01:26.480500,em a khang la ai,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2871,ask_clarification_normal,cache_rejected_confidence_too_low_0.2870892915725708
+2025-08-29T08:20:05.491929,5 ông thầy,"Dạ cô Khánh, ""5 ông thầy"" trong phương pháp Cộng học của trường mình là: ""Cha Mẹ"", ""Thầy/Cô; Bạn bè"", ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học"", ""Dr. Google"", và ""Chính bản thân mình"" ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T08:21:55.853825,giám đốc trung tâm CDS là ai,"Dạ cô Khánh, thầy Tuấn là Giám đốc Trung tâm CDS từ năm 2025 ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5772,use_db_direct_smart_entity_fallback,cache_rejected_confidence_too_low_0.577190980230059
+2025-08-29T08:23:24.910831,cao việt hiếu là ai,"Dạ cô Khánh, GS.TS. Cao Việt Hiếu là Hiệu trưởng trường mình ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-29T08:24:52.410218,Lê Văn Cường là ai,"Dạ cô Khánh, em chưa có thông tin về người tên Lê Văn Cường ạ. Tuy nhiên, có ông Hoàng Ngọc Cường được điều động từ Phòng Quản lý khoa học và Quan hệ đối ngoại sang Khoa Công nghệ thực phẩm. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4584,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4583930000552424
+2025-08-29T08:25:34.052429,Cao Việt Hiếu là ai?,"Dạ cô Khánh, em chỉ có thông tin về Nguyễn Văn Hiếu, bạn này được giảm 10% học phí toàn khóa học ạ. Cô Khánh có muốn biết thêm gì về bạn này không ạ?
+",0.4976,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.49762926363945004
+2025-08-29T08:34:26.032130,Lê Văn Cường là ai,"Dạ cô Khánh, em xin lỗi vì đã nhầm lẫn thông tin trước đó. Thầy Lê Văn Cường là Phó Hiệu trưởng của trường ạ. Còn ông Hoàng Ngọc Cường trước đây làm ở Phòng Quản lý khoa học và Quan hệ đối ngoại, giờ đã chuyển sang Khoa Công nghệ thực phẩm rồi ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4584,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4583930000552424
+2025-08-29T09:25:23.092664,5 ông thầy,"Dạ cô Khánh, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ!",0.5,rejected_non_education,cache_rejected_confidence_too_low_0.5
+2025-08-29T09:46:57.270208,5 ông thầy,"Dạ cô Khánh, em chỉ hỗ trợ các vấn đề liên quan đến công việc giảng viên tại BDU thôi ạ!",0.5766,rejected_non_education,cache_rejected_confidence_too_low_0.5765676975250245
+2025-08-29T09:55:45.436761,giám đốc trung tâm CDS là ai,"Dạ cô Khánh, em chưa có thông tin về giám đốc trung tâm CDS ạ. Cô Khánh có muốn em tìm thông tin liên hệ của phòng ban liên quan để cô Khánh hỏi không ạ?
+",0.5772,use_db_direct_smart_entity_fallback,cache_rejected_confidence_too_low_0.577190980230059
+2025-08-29T10:10:09.498987,5 ông thầy,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:11:43.741414,5 ông thầy,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:13:06.709181,học phí,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:16:43.882048,học phí,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:19:41.740060,5 ông thầy,"Dạ cô Khánh,
+
+""5 ông thầy"" trong phương pháp Cộng học của trường mình là:
+
+*   Thầy là Cha Mẹ
+*   Thầy là Thầy/Cô, Bạn bè
+*   Thầy là Sách, Tài liệu, Giáo trình, Hội thảo khoa học
+*   Thầy là Dr. Google
+*   Thầy là Chính bản thân mình
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T10:19:51.824503,học phí,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:20:53.682583,thầy Tuấn là ai,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:21:23.000641,ai là giám đốc trung tâm CDS,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:24:51.196738,học phí,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:25:12.190549,thầy Tuấn là ai,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:27:23.105312,thầy Tuấn là ai,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T10:35:08.125354,5 ông thầy,"Dạ cô Khánh,
+
+""5 ông thầy"" trong phương pháp Cộng học của trường mình là:
+
+*   Thầy là Cha Mẹ
+*   Thầy là Thầy/Cô; Bạn bè
+*   Thầy là Sách; Tài liệu; Giáo trình; Hội thảo khoa học
+*   Thầy là Dr. Google
+*   Thầy là Chính bản thân mình
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T10:36:08.193690,Lê Văn Cường là ai,"Dạ cô Khánh,
+
+Hiện tại trường mình có thầy Lê Văn Cường là Phó Hiệu trưởng ạ. Ngoài ra, có một thông tin nữa là ông Hoàng Ngọc Cường đã được điều động từ Phòng Quản lý khoa học và Quan hệ đối ngoại sang Khoa Công nghệ thực phẩm ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4584,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4583930000552424
+2025-08-29T11:04:33.604520,taaaa,"Dạ giảng viên, để em hỗ trợ chính xác nhất, giảng viên có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.2931,ask_clarification_normal,cache_rejected_confidence_too_low_0.29313772735141574
+2025-08-29T11:05:41.084458,ai la hieu truong,"Dạ giảng viên,
+
+Hiện tại, Hiệu trưởng Trường Đại học Bình Dương là GS.TS. Cao Việt Hiếu. Thầy là người chịu trách nhiệm cao nhất trong việc quản lý và điều hành mọi hoạt động của trường, bao gồm:
+
+*   **Định hướng phát triển:** Xây dựng và triển khai các chiến lược, kế hoạch phát triển dài hạn và ngắn hạn của trường.
+*   **Quản lý đào tạo:** Đảm bảo chất lượng đào tạo, phát triển chương trình đào tạo, và nâng cao trình độ đội ngũ giảng viên.
+*   **Nghiên cứu khoa học:** Thúc đẩy hoạt động nghiên cứu khoa học, chuyển giao công nghệ, và ứng dụng các kết quả nghiên cứu vào thực tiễn.
+*   **Hợp tác quốc tế:** Mở rộng quan hệ hợp tác với các trường đại học, tổ chức quốc tế để nâng cao vị thế và uy tín của trường.
+*   **Quản lý tài chính:** Quản lý và sử dụng hiệu quả nguồn tài chính của trường, đảm bảo các hoạt động được thực hiện đúng quy định.
+*   **Xây dựng đội ngũ:** Xây dựng và phát triển đội ngũ cán bộ, giảng viên có trình độ chuyên môn cao, tâm huyết với nghề.
+*   **Đảm bảo cơ sở vật chất:** Đầu tư và nâng cấp cơ sở vật chất, trang thiết bị phục vụ cho công tác giảng dạy, học tập và nghiên cứu.
+
+Nếu giảng viên cần thêm thông tin về các hoạt động cụ thể của trường hoặc muốn liên hệ với thầy Hiệu trưởng, có thể truy cập trang web của trường hoặc liên hệ với văn phòng Hiệu trưởng để được hỗ trợ.
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.488,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.48802997471945625

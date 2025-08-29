@@ -176,6 +176,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+FORCE_SCRIPT_NAME = '/bdu_chatbot'
 
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
@@ -237,7 +238,7 @@ CORS_ALLOWED_ORIGINS = [
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
-    "https://eeb59d0339b3.ngrok-free.app"
+    "https://ec1bd752cf14.ngrok-free.app"
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -285,7 +286,7 @@ CSRF_TRUSTED_ORIGINS = [
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
     "https://*.ngrok.io",
     "https://*.ngrok-free.app",
-    "https://f280-14-191-196-66.ngrok-free.app",
+    "https://ec1bd752cf14.ngrok-free.app",
 ]
 
 # =============================================================================

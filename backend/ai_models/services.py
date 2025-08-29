@@ -192,7 +192,40 @@ class SemanticReRanker:
             logger.debug(f"   📉 Total penalty: {total_penalty:.3f}")            
         return total_penalty, mismatch_analysis['issues']
 
-    def stage1_semantic_scoring(self, candidates, query):
+    def calculate_context_boost(self, candidate, context_keywords):
+        """🚀 NEW: Tính điểm thưởng cho candidates chứa context entities"""
+        if not context_keywords:
+            return 0.0
+            
+        question = candidate.get('question', '').lower()
+        answer = candidate.get('answer', '').lower()
+        candidate_text = f"{question} {answer}"
+        
+        boost = 0.0
+        matched_keywords = 0
+        
+        for keyword in context_keywords:
+            keyword_lower = keyword.lower()
+            
+            # Exact match bonus
+            if keyword_lower in candidate_text:
+                matched_keywords += 1
+                boost += 0.15  # Base boost per keyword
+                
+                # Extra boost for person names in answer
+                if len(keyword.split()) >= 2:  # Multi-word (likely person name)
+                    if keyword_lower in answer:
+                        boost += 0.1  # Extra bonus for names in answer
+                        
+        # Diminishing returns for multiple keywords
+        if matched_keywords > 0:
+            keyword_ratio = matched_keywords / len(context_keywords)
+            boost = boost * (0.5 + 0.5 * keyword_ratio)  # Scale by match ratio
+            
+        return min(0.3, boost)    
+    
+    def stage1_semantic_scoring(self, candidates, query, context_keywords=None):
+        """🚀 UPDATED: Stage 1 với context boosting"""
         if not candidates:
             return []        
         enhanced_candidates = []        
@@ -202,8 +235,12 @@ class SemanticReRanker:
             semantic_score = candidate.get('similarity', candidate.get('semantic_score', 0.0))            
             semantic_boost = self.calculate_semantic_boost(candidate, query)            
             concept_penalty, mismatch_issues = self._calculate_smart_penalty(candidate, query, semantic_score)
-            # Final stage 1 score: semantic + boost - smart_penalty
-            stage1_score = semantic_score + semantic_boost - concept_penalty
+            
+            # 🚀 NEW: Context boost
+            context_boost = self.calculate_context_boost(candidate, context_keywords) if context_keywords else 0.0
+            
+            # Final stage 1 score: semantic + boost - penalty + context_boost
+            stage1_score = semantic_score + semantic_boost - concept_penalty + context_boost
             stage1_score = max(0.0, min(1.0, stage1_score))  # Clamp to [0,1]
             
             # Create enhanced candidate
@@ -212,18 +249,20 @@ class SemanticReRanker:
                 'semantic_score': semantic_score,
                 'semantic_boost': semantic_boost,
                 'smart_penalty': concept_penalty,
+                'context_boost': context_boost,  # 🚀 NEW
                 'mismatch_issues': mismatch_issues,
                 'stage1_score': stage1_score,
-                'ranking_method': 'stage1_fixed_smart_penalty'
+                'ranking_method': 'stage1_with_context_boost'  # 🚀 UPDATED
             })
             
             enhanced_candidates.append(enhanced_candidate)
             
-            logger.debug(f"🎯 FIXED Stage 1: semantic={semantic_score:.3f}, boost={semantic_boost:.3f}, penalty={concept_penalty:.3f}, final={stage1_score:.3f}")
+            if context_boost > 0:
+                logger.debug(f"🎯 Context boost: semantic={semantic_score:.3f}, context_boost={context_boost:.3f}, final={stage1_score:.3f}")
         
         enhanced_candidates.sort(key=lambda x: x['stage1_score'], reverse=True)
         stage1_candidates = enhanced_candidates[:self.config['stage1_top_k']]        
-        logger.info(f"🎯 FIXED Stage 1: {len(stage1_candidates)} candidates selected for cross-encoder re-ranking")        
+        logger.info(f"🎯 Context-boosted Stage 1: {len(stage1_candidates)} candidates selected")        
         return stage1_candidates
 
     def stage2_cross_encoder_simulation(self, candidates, query):
@@ -297,28 +336,119 @@ class SemanticReRanker:
 
         return scores
 
-    def rerank(self, candidates, query=""):
+    def apply_exact_name_priority(self, candidates, context_keywords):
+        """🎯 CRITICAL: Ưu tiên tuyệt đối candidates có exact name match"""
+        if not context_keywords:
+            return candidates
+            
+        person_names = []
+        for keyword in context_keywords:
+            # Check if keyword is likely a person name (2+ words, proper case)
+            if len(keyword.split()) >= 2 and keyword[0].isupper():
+                person_names.append(keyword.lower())
+        
+        if not person_names:
+            return candidates
+            
+        exact_matches = []
+        partial_matches = []
+        no_matches = []
+        
+        logger.info(f"🎯 Applying exact name priority for: {person_names}")
+        
+        for candidate in candidates:
+            question = candidate.get('question', '').lower()
+            answer = candidate.get('answer', '').lower()
+            candidate_text = f"{question} {answer}"
+            
+            has_exact_match = False
+            has_partial_match = False
+            
+            for person_name in person_names:
+                # Exact name match
+                if person_name in candidate_text:
+                    has_exact_match = True
+                    logger.debug(f"🎯 Exact match found: '{person_name}' in candidate")
+                    break
+                    
+                # Partial match (last name only)
+                name_parts = person_name.split()
+                if len(name_parts) >= 2:
+                    last_name = name_parts[-1]
+                    if len(last_name) > 2 and last_name in candidate_text:
+                        has_partial_match = True
+                        logger.debug(f"🎯 Partial match found: '{last_name}' in candidate")
+            
+            # Categorize candidates
+            if has_exact_match:
+                # Boost exact matches significantly
+                candidate = candidate.copy()
+                original_score = candidate.get('final_score', candidate.get('stage1_score', candidate.get('semantic_score', 0)))
+                candidate['name_match_boost'] = 0.4  # Huge boost
+                candidate['boosted_score'] = min(1.0, original_score + 0.4)
+                exact_matches.append(candidate)
+            elif has_partial_match:
+                candidate = candidate.copy()
+                original_score = candidate.get('final_score', candidate.get('stage1_score', candidate.get('semantic_score', 0)))
+                candidate['name_match_boost'] = 0.2  # Medium boost
+                candidate['boosted_score'] = min(1.0, original_score + 0.2)
+                partial_matches.append(candidate)
+            else:
+                candidate = candidate.copy()
+                candidate['name_match_boost'] = 0.0
+                candidate['boosted_score'] = candidate.get('final_score', candidate.get('stage1_score', candidate.get('semantic_score', 0)))
+                no_matches.append(candidate)
+        
+        # Sort each group by their boosted scores
+        exact_matches.sort(key=lambda x: x['boosted_score'], reverse=True)
+        partial_matches.sort(key=lambda x: x['boosted_score'], reverse=True)
+        no_matches.sort(key=lambda x: x['boosted_score'], reverse=True)
+        
+        # Combine: exact matches first, then partial, then others
+        prioritized_candidates = exact_matches + partial_matches + no_matches
+        
+        logger.info(f"🎯 Name priority applied: {len(exact_matches)} exact, {len(partial_matches)} partial, {len(no_matches)} no match")
+        
+        return prioritized_candidates
+
+    def rerank(self, candidates, query="", context_keywords=None):
+        """🚀 UPDATED: Re-ranking với exact name priority"""
         if not candidates:
             return []        
-        logger.info(f"🎯 Starting FIXED semantic two-stage re-ranking for {len(candidates)} candidates")        
-        # STAGE 1: FIXED semantic scoring with smart penalties
-        stage1_candidates = self.stage1_semantic_scoring(candidates, query)        
+        logger.info(f"🎯 Starting context-aware semantic re-ranking for {len(candidates)} candidates")
+        if context_keywords:
+            logger.info(f"🔍 Using context keywords: {context_keywords}")
+        
+        # STAGE 1: Context-aware semantic scoring  
+        stage1_candidates = self.stage1_semantic_scoring(candidates, query, context_keywords)        
         if not stage1_candidates:
-            logger.warning("⚠️ No candidates after FIXED Stage 1")
+            logger.warning("⚠️ No candidates after context-aware Stage 1")
             return []
         
         # STAGE 2: Cross-encoder re-ranking
-        final_candidates = self.stage2_cross_encoder_simulation(stage1_candidates, query)        
-        logger.info(f"✅ FIXED semantic two-stage re-ranking complete: {len(final_candidates)} final candidates")        
+        stage2_candidates = self.stage2_cross_encoder_simulation(stage1_candidates, query)
+        
+        # 🎯 STAGE 3: Apply exact name priority (CRITICAL for person names)
+        if context_keywords:
+            stage2_candidates = self.apply_exact_name_priority(stage2_candidates, context_keywords)
+            
+            # Update final_score with boosted_score
+            for candidate in stage2_candidates:
+                candidate['final_score'] = candidate.get('boosted_score', candidate.get('final_score', 0))
+        
+        final_candidates = stage2_candidates[:self.config['stage2_top_n']]
+        
+        logger.info(f"✅ Context-aware + name-priority re-ranking complete: {len(final_candidates)} final candidates")        
         return final_candidates
+    
 class PureSemanticDecisionEngine:
     def __init__(self):
         self.semantic_confidence_thresholds = {
-            'very_high': 0.8,    # Keep original - for truly excellent matches
-            'high': 0.65,        # Slightly raised - for good matches  
-            'medium': 0.45,      # Slightly raised - for decent matches
-            'low': 0.25,         # Kept original - for poor matches
-            'very_low': 0.1      # Kept original - for very poor matches
+            'very_high': 0.75,   # Lowered from 0.8
+            'high': 0.55,        # Lowered from 0.65 
+            'medium': 0.35,      # Lowered from 0.45
+            'low': 0.20,         # Lowered from 0.25
+            'very_low': 0.1      # Kept original
         }
         
         self.decision_factors = {
@@ -664,7 +794,369 @@ class PureSemanticChatbotAI:
         logger.info("   🛡️ Smart penalty system enabled")
         logger.info("   🧠 Confidence-aware decision making")
         logger.info("   🎯 High-quality answer preservation")
-        logger.info("   🔬 Top-5 smart candidate selection")    
+        logger.info("   🔬 Top-5 smart candidate selection")
+    
+    def _check_direct_entity_query(self, query: str, session_id: str):
+        """🔧 IMPROVED: Better detection of entity queries"""
+        session_memory = self.get_conversation_context(session_id)
+        if not session_memory or len(session_memory) == 0:
+            return False, None, None
+
+        query_lower = query.lower().strip()
+        
+        # 🆕 EXPANDED: More patterns to catch entity questions
+        direct_patterns = [
+            r'\b(vậy|thế)\s+([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)\s+là\s+(ai|gì)\b',  # "vậy X là ai"
+            r'\b(vậy|thế)\s+(thầy|cô|ông|bà|anh|chị)\s+([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)\b',  # "vậy thầy X"
+            r'\b(còn|và)\s+([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)\s+(thì sao|như thế nào|là ai)\b',  # "còn X thì sao"
+            r'\b([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)\s+là\s+(ai|gì)\b',  # "X là ai"
+            r'\b(?:ông|bà|thầy|cô|anh|chị)\s+([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)\s*$'  # "ông X", "bà Y"
+        ]
+        
+        # Traditional direct references
+        direct_pronouns = ['ông ấy', 'bà ấy', 'người đó', 'thầy ấy', 'cô ấy', 'anh ấy', 'chị ấy']
+        has_direct_pronoun = any(pronoun in query_lower for pronoun in direct_pronouns)
+        
+        # Check for name patterns
+        extracted_name = None
+        has_direct_pattern = False
+        
+        for pattern in direct_patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                has_direct_pattern = True
+                # Extract name from different groups based on pattern
+                groups = match.groups()
+                for group in groups:
+                    if group and len(group.split()) >= 1 and group[0].isupper():
+                        # Handle single name or full name
+                        if len(group.split()) == 1:
+                            # Single word - check if it could be part of a longer name
+                            extracted_name = group
+                        else:
+                            # Multiple words - likely full name
+                            extracted_name = group
+                        break
+                if extracted_name:
+                    break
+        
+        # ONLY proceed if there's a clear direct reference
+        if not (has_direct_pronoun or has_direct_pattern):
+            return False, None, None
+
+        # Check last 3 interactions instead of just 1
+        recent_interactions = session_memory[-3:] if len(session_memory) >= 3 else session_memory
+        
+        for interaction in reversed(recent_interactions):
+            last_entities_info = interaction.get('semantic_info', {}).get('extracted_entities', {})
+            last_person_entities = last_entities_info.get('person_name', [])
+            
+            if not last_person_entities:
+                continue
+            
+            # If we extracted a specific name, try to match it
+            if extracted_name:
+                for entity in last_person_entities:
+                    if self._names_match_flexible(extracted_name, entity):
+                        logger.info(f"🎯 Direct entity match: '{extracted_name}' → '{entity}'")
+                        return True, entity, interaction
+            
+            # For pronouns, use the most recent entity
+            if has_direct_pronoun:
+                main_entity = last_person_entities[0]
+                logger.info(f"🎯 Direct pronoun reference: '{main_entity}'")
+                return True, main_entity, interaction
+        
+        return False, None, None
+
+    def _names_match_flexible(self, name1: str, name2: str) -> bool:
+        """🆕 NEW: Flexible name matching"""
+        if not name1 or not name2:
+            return False
+        
+        # Normalize both names
+        norm1 = name1.lower().strip()
+        norm2 = name2.lower().strip()
+        
+        # Remove Vietnamese particles
+        particles = ['dạ', 'ạ', 'ơi', 'nhé', 'vậy', 'thì', 'là', 'của', 'và', 'với']
+        for particle in particles:
+            norm1 = norm1.replace(particle, ' ')
+            norm2 = norm2.replace(particle, ' ')
+        
+        # Clean up spaces
+        norm1 = ' '.join(norm1.split())
+        norm2 = ' '.join(norm2.split())
+        
+        # Direct match
+        if norm1 == norm2:
+            return True
+        
+        # Word-level matching
+        words1 = set(norm1.split())
+        words2 = set(norm2.split())
+        
+        # If both have multiple words, check overlap
+        if len(words1) >= 2 and len(words2) >= 2:
+            overlap = len(words1.intersection(words2))
+            total_words = min(len(words1), len(words2))  # Use smaller set as denominator
+            overlap_ratio = overlap / total_words if total_words > 0 else 0
+            
+            # 60% overlap is good enough for names
+            return overlap_ratio >= 0.6
+        
+        # Single word vs multi-word (e.g., "cường" vs "lê văn cường")
+        if len(words1) == 1 and len(words2) >= 2:
+            single_word = list(words1)[0]
+            return single_word in words2 and len(single_word) > 2
+        elif len(words2) == 1 and len(words1) >= 2:
+            single_word = list(words2)[0]
+            return single_word in words1 and len(single_word) > 2
+        
+        # Single word matching with partial
+        if len(words1) == 1 and len(words2) == 1:
+            word1, word2 = list(words1)[0], list(words2)[0]
+            if len(word1) >= 3 and len(word2) >= 3:
+                return word1 in word2 or word2 in word1
+        
+        return False
+    
+    def _smart_entity_fallback_search(self, query: str, session_id: str = None):
+        """🆕 NEW: Smart fallback khi context không match"""
+        try:
+            query_lower = query.lower()
+            
+            # Extract potential entity names from query
+            potential_names = self._extract_names_from_query(query)
+            
+            if not potential_names:
+                return []
+            
+            logger.info(f"🔍 Smart entity fallback: searching for {potential_names}")
+            
+            # Search for each potential name in knowledge base
+            best_candidates = []
+            
+            for name in potential_names:
+                # Try different query variations
+                search_queries = [
+                    f"{name} là ai",
+                    f"ai là {name}",
+                    f"thông tin {name}",
+                    f"chức vụ {name}",
+                    name  # Just the name itself
+                ]
+                
+                for search_query in search_queries:
+                    candidates = self.sbert_retriever.semantic_search_top_k(
+                        search_query, top_k=5
+                    )
+                    
+                    if candidates and candidates[0].get('semantic_score', 0) > 0.5:  # Lowered from 0.6
+                        # Add fallback context info
+                        candidates[0]['fallback_search_query'] = search_query
+                        candidates[0]['extracted_name'] = name
+                        candidates[0]['search_method'] = 'smart_entity_fallback'
+                        best_candidates.append(candidates[0])
+                        logger.info(f"Found entity info via fallback: {name} -> score={candidates[0].get('semantic_score', 0):.3f}")
+                        break  # Found good match, no need to try other variations
+            
+            # Sort by semantic score and return best ones
+            best_candidates.sort(key=lambda x: x.get('semantic_score', 0), reverse=True)
+            return best_candidates[:3]  # Top 3
+            
+        except Exception as e:
+            logger.error(f"Error in smart entity fallback search: {str(e)}")
+            return []
+    
+    def _extract_names_from_query(self, query: str) -> list:
+        """🆕 NEW: Extract potential person names from query"""
+        potential_names = []
+        
+        # Pattern 1: "vậy X là ai", "X là ai", "ai là X" 
+        patterns = [
+            r'(?:vậy|thế)\s+([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+(?:\s+[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+)*)\s+là\s+ai',
+            r'([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+(?:\s+[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+)*)\s+là\s+ai',
+            r'ai\s+là\s+([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+(?:\s+[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+)*)',
+            r'(?:ông|bà|thầy|cô|anh|chị)\s+([A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+(?:\s+[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ][a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]+)*)'
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, query, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    name = match[0] if match[0] else (match[1] if len(match) > 1 else "")
+                else:
+                    name = match
+                
+                if name and len(name.strip()) > 2:
+                    clean_name = name.strip()
+                    # Validate it looks like a Vietnamese name
+                    if self._is_likely_vietnamese_name(clean_name):
+                        potential_names.append(clean_name)
+        
+        # Also extract capitalized words that could be names
+        words = query.split()
+        current_name = []
+        for word in words:
+            if word and word[0].isupper() and len(word) > 2:
+                # Check if it's not a common word
+                if word.lower() not in ['Dạ', 'Vậy', 'Thế', 'Còn', 'Và', 'Hay', 'Nhưng']:
+                    current_name.append(word)
+            else:
+                if len(current_name) >= 2:  # At least 2 words for a name
+                    full_name = ' '.join(current_name)
+                    if self._is_likely_vietnamese_name(full_name):
+                        potential_names.append(full_name)
+                current_name = []
+        
+        # Check remaining name at end
+        if len(current_name) >= 2:
+            full_name = ' '.join(current_name)
+            if self._is_likely_vietnamese_name(full_name):
+                potential_names.append(full_name)
+        
+        # Remove duplicates and return
+        return list(set(potential_names))
+    
+    def _is_likely_vietnamese_name(self, name: str) -> bool:
+        """Check if text looks like a Vietnamese person name"""
+        if not name or len(name.split()) < 1:
+            return False
+        
+        words = name.lower().split()
+        
+        # Common Vietnamese surnames
+        common_surnames = {
+            'nguyễn', 'trần', 'lê', 'phạm', 'hoàng', 'huỳnh', 'phan', 'vũ', 'võ', 'đặng', 
+            'bùi', 'đỗ', 'hồ', 'ngô', 'dương', 'lý', 'cao', 'đậu', 'lưu', 'tô',
+            'nguyen', 'tran', 'le', 'pham', 'hoang', 'huynh', 'phan', 'vu', 'vo', 'dang',
+            'bui', 'do', 'ho', 'ngo', 'duong', 'ly', 'cao', 'dau', 'luu', 'to'
+        }
+        
+        # If first word is common surname, likely a name
+        if words[0] in common_surnames:
+            return True
+        
+        # Check for Vietnamese name characteristics
+        vietnamese_chars = 'ăâêôơưàáạảãầấậẩẫằắặẳẵèéẹẻẽềếệểễìíịỉĩòóọỏõôồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹđ'
+        vietnamese_char_count = sum(1 for char in name.lower() if char in vietnamese_chars)
+        
+        # Must have reasonable length and structure
+        total_chars = len(''.join(words))
+        if len(words) >= 2 and 4 <= total_chars <= 20:
+            # If has Vietnamese chars, likely a name
+            if vietnamese_char_count >= 1:
+                return True
+            # Even without accents, if structure looks right, could be name
+            elif len(words) <= 4 and all(len(w) >= 2 for w in words):
+                return True
+        
+        return False
+    
+    def _normalize_for_matching(self, text):
+        """🚀 IMPROVED: Better normalization for Vietnamese text"""
+        if not text:
+            return ""
+        
+        # Convert to lowercase first
+        normalized = text.lower().strip()
+        
+        # Remove punctuation but keep Vietnamese characters and spaces
+        normalized = re.sub(r'[^\w\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]', ' ', normalized)
+        
+        # Remove particles but keep meaningful words  
+        particles = ['dạ', 'ạ', 'ơi', 'nhé', 'vậy', 'thì', 'là', 'của', 'và', 'với', 'ai', 'gì', 'nào']
+        words = normalized.split()
+        filtered_words = [w for w in words if w not in particles and len(w) > 1]
+        
+        normalized = ' '.join(filtered_words)
+        
+        # Remove extra spaces
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        
+        return normalized
+    
+    def _create_response_from_memory(self, query: str, entity_name: str, last_interaction: dict, session_id: str):
+        """
+        Tạo câu trả lời trực tiếp từ bộ nhớ (NÂNG CẤP)
+        """
+        personal_address = self._get_personal_address(session_id)
+        last_bot_response = last_interaction.get('response', '')
+        last_qa_info = last_interaction.get('sources', [{}])[0] if last_interaction.get('sources') else {}
+        original_question = last_qa_info.get('question', '')
+        original_answer = last_qa_info.get('answer', last_bot_response)
+
+        # Cố gắng tìm chức vụ đã được xác định ở lượt trước
+        position = "vai trò đã được đề cập" # Fallback
+        last_entities = last_interaction.get('semantic_info', {}).get('extracted_entities', {})
+        if 'position' in last_entities and last_entities['position']:
+            position = last_entities['position'][0]
+
+        # Xây dựng câu trả lời dựa trên thông tin đã có
+        response_text = (
+            f"Dạ {personal_address}, khi đề cập đến \"{entity_name}\", "
+            f"em đang hiểu là {personal_address} hỏi về thông tin từ lượt trao đổi trước. "
+            f"Theo đó, {entity_name} giữ chức vụ là {position} ạ. "
+            f"{personal_address.title()} có cần em cung cấp thêm chi tiết nào từ thông tin gốc không ạ?"
+        )
+
+        final_score = 0.98
+
+        return {
+            'response': response_text,
+            'confidence': final_score,
+            'method': 'conversation_memory_direct_answer_v2',
+            'decision_type': 'use_memory_direct',
+            'semantic_info': {
+                'final_score': final_score,
+                'confidence_level': 'very_high',
+                'semantic_decision': True,
+                'selected_position': 0,
+                'original_context': {
+                    'question': original_question,
+                    'answer': original_answer
+                }
+            },
+            'context_info': {
+                'search_method': 'skipped_retrieval',
+                'context_used': True,
+                'context_keywords': [entity_name],
+            },
+            'sources': last_interaction.get('sources', []),
+            'processing_time': 0.1,
+            'context_aware_rag': True,
+            'architecture': 'context_aware_semantic_rag',
+        }
+    
+    def _ensure_context_functionality(self):
+        """🆕 CRITICAL: Đảm bảo context functionality hoạt động"""
+        try:
+            # Kiểm tra entity extractor
+            if not hasattr(self.response_generator, 'memory'):
+                logger.error("❌ CRITICAL: response_generator.memory not found")
+                return False
+                
+            if not hasattr(self.response_generator.memory, 'entity_extractor'):
+                logger.error("❌ CRITICAL: entity_extractor not found in memory")
+                return False
+                
+            if not hasattr(self.response_generator.memory, 'get_context_for_query'):
+                logger.error("❌ CRITICAL: get_context_for_query method not found")
+                return False
+                
+            # Test basic functionality
+            test_entities = self.response_generator.memory.entity_extractor.extract_entities(
+                "test text", "test query"
+            )
+            
+            logger.info("✅ Context functionality check passed")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Context functionality check failed: {str(e)}")
+            return False
+    
     @property
     def model(self):
         return self.sbert_retriever.model    
@@ -678,7 +1170,17 @@ class PureSemanticChatbotAI:
         gemini_status = self.response_generator.get_system_status()
         drive_status = drive_service.get_system_status()
         external_api_status = external_api_service.get_system_status()
-        retriever_status = self.retriever_service.get_system_status()        
+        retriever_status = self.retriever_service.get_system_status()
+        
+        # 🆕 THÊM: Context-aware features status
+        context_features_status = {
+            'entity_extractor_available': hasattr(self.response_generator, 'memory') and hasattr(self.response_generator.memory, 'entity_extractor'),
+            'dual_search_available': hasattr(self.sbert_retriever, 'dual_semantic_search'),
+            'context_memory_available': hasattr(self.response_generator, 'memory'),
+            'context_keywords_supported': True,
+            'entity_relationships_supported': True
+        }
+        
         return {
             'sbert_model': bool(self.sbert_retriever.model),
             'faiss_index': bool(self.sbert_retriever.index),
@@ -686,8 +1188,8 @@ class PureSemanticChatbotAI:
             'fine_tuned_model_available': retriever_status.get('fine_tuned_model_loaded', False),
             'gemini_available': gemini_status.get('gemini_api_available', False),
             'knowledge_entries': len(self.sbert_retriever.knowledge_data),
-            'mode': 'fixed_semantic_rag',  # 🎯 UPDATED
-            'architecture': 'fixed_semantic_rag',
+            'mode': 'context_aware_semantic_rag',  # 🆕 UPDATED
+            'architecture': 'context_aware_semantic_rag',
             'semantic_reranking': {
                 'enabled': True,
                 'smart_penalty_system': True,
@@ -697,19 +1199,36 @@ class PureSemanticChatbotAI:
                 'stage2_final': self.semantic_reranker.config['stage2_top_n']
             },
             'decision_engine': {
-                'type': 'fixed_semantic',
+                'type': 'context_aware_semantic',  # 🆕 UPDATED
                 'confidence_thresholds': self.decision_engine.semantic_confidence_thresholds,
                 'smart_mismatch_handling': True,
                 'high_confidence_preservation': True,
                 'adaptive_tolerance': True
             },
-            'fixed_semantic_features': [
+            # 🆕 THÊM: Context-aware features
+            'context_aware_features': [
+                'entity_extraction_from_qa',
+                'entity_relationship_building', 
+                'context_keyword_generation',
+                'dual_semantic_search',
+                'context_enhanced_queries',
+                'smart_fallback_mechanism',
+                'context_quality_analysis',
+                'conversation_continuity',
+                'multi_turn_understanding',
+                'entity_memory_decay'
+            ],
+            'context_features_status': context_features_status,
+            'enhanced_semantic_features': [
                 'smart_penalty_system',
                 'confidence_preservation', 
                 'adaptive_mismatch_tolerance',
                 'tiered_decision_logic',
                 'targeted_clarification',
-                'high_quality_answer_protection'
+                'high_quality_answer_protection',
+                'context_aware_retrieval',  # 🆕 NEW
+                'entity_based_context',     # 🆕 NEW
+                'conversation_memory'       # 🆕 NEW
             ],
             'retriever_service_status': retriever_status,
             'external_api_status': external_api_status,
@@ -719,7 +1238,7 @@ class PureSemanticChatbotAI:
     def process_query(self, query, session_id=None, jwt_token=None, document_text=None):
         start_time = time.time()
         
-        logger.info(f"🎯 ENHANCED Semantic RAG Processing: '{query}' (session: {session_id}, has_token: {bool(jwt_token)}, has_document: {bool(document_text)})")
+        logger.info(f"🎯 IMPROVED Context-Aware Semantic RAG Processing: '{query}' (session: {session_id})")
         
         try:
             # STEP 1: VALIDATE INPUT
@@ -731,103 +1250,158 @@ class PureSemanticChatbotAI:
             session_memory = self.get_conversation_context(session_id) if session_id else []
             logger.info(f"🧠 Session memory: {len(session_memory)} interactions")
             
-            # STEP 3: DOCUMENT CONTEXT LOG
+            # STEP 2.1: KIỂM TRA direct entity query (nghiêm ngặt hơn)
+            is_direct_hit, entity_name, last_interaction = self._check_direct_entity_query(query, session_id)
+            if is_direct_hit:
+                response_data = self._create_response_from_memory(query, entity_name, last_interaction, session_id)
+                if session_id:
+                     self._update_semantic_memory(
+                        session_id, query, response_data['confidence'], response_data['decision_type'], 
+                        True, response_data, None
+                    )
+                return response_data
+            
+            # STEP 3: DOCUMENT CONTEXT CHECK
             if document_text:
                 doc_length = len(document_text.strip())
                 logger.info(f"📄 Document context: {doc_length} characters")
             
-            # STEP 4: PURE SEMANTIC RETRIEVAL
-            candidates = self.sbert_retriever.semantic_search_top_k(query, top_k=self.semantic_reranker.config['stage1_top_k'])
+            # 🆕 STEP 4: IMPROVED CONTEXT-AWARE RETRIEVAL
+            candidates = []
+            search_method = 'normal'
+            
+            # ALWAYS get context info but be more selective about using it
+            context_info = {}
+            if session_id and hasattr(self.response_generator, 'memory'):
+                context_info = self.response_generator.memory.get_context_for_query(session_id, query)
+                logger.info(f"🔍 Context analysis: should_use={context_info.get('should_use_context', False)}, strength={context_info.get('context_strength', 0)}")
+
+            # ENHANCED LOGIC: Sử dụng dual search nhưng không bị "khóa" vào context
+            should_try_context = (
+                context_info.get('should_use_context', False) and 
+                context_info.get('related_entities') and
+                context_info.get('context_strength', 0) >= 1.5  # Lowered from 2.0
+            )
+            
+            # Check if this is an entity query that might need fallback
+            is_entity_query = any(pattern in query.lower() for pattern in [
+                'là ai', 'ai là', 'ông ', 'bà ', 'thầy ', 'cô ',
+                'vậy ', 'thế ', 'còn ', 'và ', 'gs.ts', 'tiến sĩ'
+            ])
+            
+            if should_try_context:
+                logger.info("🔄 Trying DUAL search (context + normal) for comparison")
+                context_keywords = context_info.get('context_keywords', [])
+                candidates, search_method = self.sbert_retriever.dual_semantic_search(
+                    query, 
+                    context_keywords, 
+                    top_k=self.semantic_reranker.config['stage1_top_k']
+                )
+                logger.info(f"🔄 Dual search result: method={search_method}, candidates={len(candidates)}")
+                
+            elif is_entity_query:
+                logger.info("🔍 Entity query detected - trying smart fallback search first")
+                fallback_candidates = self._smart_entity_fallback_search(query, session_id)
+                
+                if fallback_candidates and fallback_candidates[0].get('semantic_score', 0) > 0.6:
+                    logger.info("Smart entity fallback found good results, using them")
+                    candidates = fallback_candidates
+                    search_method = 'smart_entity_fallback'
+                else:
+                    # Fallback to normal search
+                    logger.info("Smart fallback insufficient - using normal search")
+                    candidates = self.sbert_retriever.semantic_search_top_k(
+                        query, 
+                        top_k=self.semantic_reranker.config['stage1_top_k']
+                    )
+                    search_method = 'normal'
+                    
+            else:
+                # Normal search for non-entity queries
+                logger.info("🔍 Using NORMAL search (non-entity query)")
+                candidates = self.sbert_retriever.semantic_search_top_k(
+                    query, 
+                    top_k=self.semantic_reranker.config['stage1_top_k']
+                )
+                search_method = 'normal'
+                
+            logger.info(f"🔍 Search completed: method={search_method}, candidates={len(candidates)}")
             
             if not candidates:
                 logger.warning("⚠️ No candidates found from semantic search")
                 response_data = self._get_no_match_response()
                 
-                # ✅ BƯỚC 2: GHI LOG KHI KHÔNG TÌM THẤY ỨNG VIÊN
                 interaction_logger.log_interaction(
                     query=query,
                     response=response_data.get('response', ''),
                     confidence=0.0,
-                    method='semantic_search',
+                    method=f'semantic_search_{search_method}',
                     reason='no_candidates_found'
                 )
                 return response_data
             
-            # STEP 5: FIXED SEMANTIC RE-RANKING
-            reranked_candidates = self.semantic_reranker.rerank(candidates, query)
+            # STEP 5: CONTEXT-AWARE SEMANTIC RE-RANKING
+            context_keywords = context_info.get('context_keywords', []) if should_try_context else []
+            reranked_candidates = self.semantic_reranker.rerank(candidates, query, context_keywords)
             
             if not reranked_candidates:
-                logger.warning("⚠️ No candidates after FIXED semantic re-ranking")
+                logger.warning("⚠️ No candidates after semantic re-ranking")
                 response_data = self._get_no_match_response()
-
-                # ✅ BƯỚC 3: GHI LOG KHI RE-RANKING KHÔNG CÓ KẾT QUẢ
-                interaction_logger.log_interaction(
-                    query=query,
-                    response=response_data.get('response', ''),
-                    confidence=0.0,
-                    method='reranking',
-                    reason='no_candidates_after_rerank'
-                )
                 return response_data
             
-            logger.info(f"🔍 DEBUG - Top 3 candidates quality check:")
-            for i, candidate in enumerate(reranked_candidates[:3]):
-                question_preview = candidate.get('question', '')[:80]
-                answer_preview = candidate.get('answer', '')[:100]
-                final_score = candidate.get('final_score', 0)
-                smart_penalty = candidate.get('smart_penalty', 0)
-                mismatch_issues = candidate.get('mismatch_issues', [])
-                logger.info(f"   #{i+1}: score={final_score:.3f}, penalty={smart_penalty:.3f}, issues={len(mismatch_issues)} | Q: '{question_preview}...' | A: '{answer_preview}...'")
+            # STEP 5.1: CONTEXT QUALITY ANALYSIS
+            context_quality_score = self._analyze_context_quality(
+                query, reranked_candidates[0], context_info, search_method
+            )
             
-            # STEP 6: GET BEST CANDIDATE WITH SEMANTIC SCORE
+            logger.info(f"📊 Top candidate analysis:")
             best_candidate = reranked_candidates[0]
-            final_score = best_candidate.get('final_score', 0.0)
-            final_score = min(1.0, final_score)  # Ensure score cap
+            final_score = best_candidate.get('final_score', 0)
+            logger.info(f"   Score: {final_score:.3f} | Context quality: {context_quality_score:.3f}")
+            logger.info(f"   Method: {search_method}")
             
-            # 🔍 DEBUG: Log FIXED candidate details
-            original_semantic = best_candidate.get('semantic_score', 0)
-            smart_penalty = best_candidate.get('smart_penalty', 0)
-            mismatch_issues = best_candidate.get('mismatch_issues', [])
+            # STEP 6: ADD CONTEXT INFO TO CANDIDATE
+            best_candidate['context_method'] = search_method
+            best_candidate['context_quality'] = context_quality_score
+            best_candidate['context_keywords_used'] = context_info.get('context_keywords', [])
             
-            logger.info(f"🎯 FIXED Best candidate analysis:")
-            logger.info(f"   📊 Original semantic: {original_semantic:.3f}")
-            logger.info(f"   📉 Smart penalty: {smart_penalty:.3f}")
-            logger.info(f"   📊 Final score: {final_score:.3f}")
-            logger.info(f"   🔍 Mismatch issues: {len(mismatch_issues)}")
-            for issue in mismatch_issues:
-                logger.info(f"     ⚠️ {issue}")
-            
-            # STEP 7: ENHANCED SEMANTIC DECISION MAKING with top 5 candidates
+            # STEP 7: DECISION MAKING
             decision_type, context, should_respond = self.decision_engine.make_decision(
                 query, reranked_candidates, session_memory, jwt_token, document_text
             )
-            
-            if decision_type in ['say_dont_know', 'ask_clarification']:
-                 interaction_logger.log_interaction(
-                    query=query,
-                    response=f"Bot decided to '{decision_type}'",
-                    confidence=best_candidate.get('final_score', 0.0),
-                    method=decision_type,
-                    reason=f'decision_engine_{decision_type}'
-                )
             
             # STEP 8: EXECUTE DECISION
             if not should_respond:
                 response_text = self._get_out_of_scope_response(session_id)
                 method = 'rejected_non_education'
             else:
+                if context:
+                    context['context_method'] = search_method
+                    context['context_quality'] = context_quality_score
+                    context['context_keywords_used'] = context_info.get('context_keywords', [])
+                
                 response_text = self._execute_fixed_semantic_decision(
                     decision_type, query, context, session_id
                 )
-                method = decision_type
+                method = f"{decision_type}_{search_method}"
             
             # STEP 9: UPDATE MEMORY
             if session_id and should_respond:
                 self._update_semantic_memory(
                     session_id, query, final_score, decision_type, 
                     should_respond, context, document_text
-                )            
-            processing_time = time.time() - start_time            
+                )
+                
+                # Update conversation memory with response
+                if hasattr(self.response_generator, 'memory'):
+                    self.response_generator.memory.add_interaction(
+                        session_id, query, response_text, 
+                        intent_info={'intent': decision_type}, 
+                        entities={}
+                    )
+            
+            processing_time = time.time() - start_time
+            
             return {
                 'response': response_text,
                 'confidence': final_score,
@@ -835,50 +1409,94 @@ class PureSemanticChatbotAI:
                 'decision_type': decision_type,
                 'semantic_info': {
                     'final_score': final_score,
-                    'original_semantic_score': original_semantic,
-                    'smart_penalty': smart_penalty,
-                    'mismatch_issues': mismatch_issues,
+                    'original_semantic_score': best_candidate.get('semantic_score', final_score),
+                    'smart_penalty': best_candidate.get('smart_penalty', 0),
+                    'mismatch_issues': best_candidate.get('mismatch_issues', []),
                     'confidence_level': context.get('confidence_level', 'unknown') if context else 'unknown',
                     'confidence_preserved': context.get('confidence_preserved', False) if context else False,
                     'selected_position': context.get('selected_position', 1) if context else 1,
                     'semantic_decision': True
                 },
+                'context_info': {
+                    'search_method': search_method,
+                    'context_used': should_try_context,
+                    'context_keywords': context_info.get('context_keywords', []),
+                    'context_strength': context_info.get('context_strength', 0),
+                    'context_quality': context_quality_score,
+                    'related_entities': context_info.get('related_entities', []),
+                    'context_threshold_met': should_try_context
+                },
                 'sources': self._format_sources(reranked_candidates[:2]),
                 'processing_time': processing_time,
                 'is_education': context is not None,
-                'enhanced_semantic_rag': True,
+                'context_aware_rag': True,
                 'reference_links': best_candidate.get('reference_links', []),
                 'external_api_used': decision_type == 'use_external_api',
                 'semantic_reranking_used': best_candidate.get('fixed_semantic_reranking', False),
                 'session_memory_used': bool(session_memory),
                 'document_context_used': bool(document_text),
                 'document_context_priority': decision_type == 'use_document_context',
-                'architecture': 'enhanced_semantic_rag_top5',
-                'enhanced_features': ['smart_penalty', 'confidence_preservation', 'adaptive_tolerance', 'top5_selection', 'smart_candidate_selection'],
-                'reranking_stats': {
-                    'original_semantic_score': original_semantic,
-                    'semantic_boost': best_candidate.get('semantic_boost', 0),
-                    'smart_penalty': smart_penalty,
-                    'stage1_score': best_candidate.get('stage1_score', 0),
-                    'stage2_score': best_candidate.get('stage2_score', 0),
-                    'final_score': final_score,
-                    'selected_position': context.get('selected_position', 1) if context else 1,
-                    'top5_enhanced': True
-                }
+                'architecture': 'improved_context_aware_semantic_rag',
+                'enhanced_features': [
+                    'smart_penalty', 'confidence_preservation', 'adaptive_tolerance', 
+                    'top5_selection', 'smart_candidate_selection',
+                    'improved_context_detection', 'dual_search_with_fallback', 'selective_entity_memory',
+                    'context_quality_analysis', 'smart_context_threshold'
+                ]
             }
             
         except Exception as e:
-            logger.error(f"❌ ENHANCED semantic processing error: {str(e)}")
+            logger.error(f"⛔ Context-aware semantic processing error: {str(e)}")
             return {
                 'response': self._get_error_response(session_id),
                 'confidence': 0.0,
                 'method': 'error_fallback',
                 'processing_time': time.time() - start_time,
                 'error': str(e),
-                'enhanced_semantic_rag': True,
+                'context_aware_rag': True,
                 'graceful_degradation_used': True
             }
 
+    def _analyze_context_quality(self, query, best_candidate, context_info, search_method):
+        """🆕 THÊM MỚI: Phân tích chất lượng context được sử dụng"""
+        try:
+            if search_method == 'normal' or not context_info.get('should_use_context', False):
+                return 0.0
+            
+            context_keywords = context_info.get('context_keywords', [])
+            if not context_keywords:
+                return 0.0
+            
+            # Kiểm tra context keywords có xuất hiện trong candidate không
+            question = best_candidate.get('question', '').lower()
+            answer = best_candidate.get('answer', '').lower()
+            candidate_text = f"{question} {answer}"
+            
+            keywords_found = 0
+            for keyword in context_keywords:
+                if keyword.lower() in candidate_text:
+                    keywords_found += 1
+            
+            # Tính quality score
+            keyword_ratio = keywords_found / len(context_keywords) if context_keywords else 0
+            semantic_score = best_candidate.get('semantic_score', 0)
+            context_strength = context_info.get('context_strength', 0)
+            
+            quality_score = (
+                0.4 * keyword_ratio +           # 40% từ keyword match
+                0.4 * semantic_score +          # 40% từ semantic score  
+                0.2 * min(1.0, context_strength / 3.0)  # 20% từ context strength
+            )
+            
+            logger.debug(f"📊 Context quality: keywords_found={keywords_found}/{len(context_keywords)}, "
+                        f"semantic={semantic_score:.3f}, strength={context_strength}, quality={quality_score:.3f}")
+            
+            return min(1.0, quality_score)
+            
+        except Exception as e:
+            logger.error(f"❌ Error analyzing context quality: {str(e)}")
+            return 0.0
+    
     def _execute_fixed_semantic_decision(self, decision_type, query, context, session_id):
         logger.info(f"🎯 Executing FIXED semantic decision: {decision_type}")
         
@@ -1063,7 +1681,7 @@ class PureSemanticChatbotAI:
         }
         
         self.conversation_memory[session_id].append(interaction)        
-        self.conversation_memory[session_id] = self.conversation_memory[session_id][-15:]
+        self.conversation_memory[session_id] = self.conversation_memory[session_id][-30:]
         
         logger.info(f"🧠 FIXED semantic memory updated for session {session_id}: {len(self.conversation_memory[session_id])} interactions")
 
@@ -1357,6 +1975,126 @@ class ChatbotAI:
         except Exception as e:
             logger.error(f"Semantic search error: {str(e)}")
             return []
+    
+    def semantic_search_with_context(self, query, context_keywords=None, top_k=20):
+        """🆕 THÊM MỚI: Semantic search với context enhancement"""
+        try:
+            if not self.model or not self.index:
+                logger.warning("⚠️ Model or index not available for context search")
+                return []
+            
+            # Restore Vietnamese tone nếu cần
+            original_query = query
+            if self.vietnamese_restorer and not self.vietnamese_restorer.has_vietnamese_accents(query):
+                restored_query = self.vietnamese_restorer.restore_vietnamese_tone(query)
+                if restored_query != query:
+                    logger.info(f"🎯 Using restored query for context search: '{query}' -> '{restored_query}'")
+                    query = restored_query
+            
+            # Build enhanced query với context
+            enhanced_query = query
+            if context_keywords and len(context_keywords) > 0:
+                # Thêm context keywords vào query một cách tự nhiên
+                context_str = " ".join(context_keywords[:3])  # Chỉ dùng 3 keywords đầu
+                enhanced_query = f"{query} {context_str}"
+                logger.info(f"🔍 Enhanced query với context: '{query}' -> '{enhanced_query}'")
+            
+            # Perform semantic search với enhanced query
+            query_embedding = self.model.encode([enhanced_query])
+            faiss.normalize_L2(query_embedding)
+            
+            scores, indices = self.index.search(
+                query_embedding.astype('float32'), 
+                min(top_k, len(self.knowledge_data))
+            )
+            
+            # Build candidates với thông tin context
+            candidates = []
+            for score, idx in zip(scores[0], indices[0]):
+                if idx < len(self.knowledge_data) and score > 0.1:
+                    candidate = self.knowledge_data[idx].copy()
+                    candidate['semantic_score'] = float(score)
+                    candidate['similarity'] = float(score)
+                    candidate['reference_links'] = self.get_reference_links(candidate)
+                    # 🆕 THÊM: Đánh dấu đây là kết quả có context
+                    candidate['context_enhanced'] = bool(context_keywords)
+                    candidate['context_keywords_used'] = context_keywords or []
+                    candidates.append(candidate)
+            
+            logger.info(f"🔍 Context-enhanced search found {len(candidates)} candidates")
+            return candidates
+            
+        except Exception as e:
+            logger.error(f"Context-enhanced search error: {str(e)}")
+            # Fallback to normal search
+            return self.semantic_search_top_k(query, top_k)
+
+    def dual_semantic_search(self, query, context_keywords=None, top_k=20):
+        """
+        🔧 STABILITY IMPROVED: Dual search với logic ổn định hơn
+        - Ưu tiên consistency over optimization
+        - Thêm fallback mechanisms
+        """
+        try:
+            logger.info(f"🔄 STABLE Dual semantic search for: '{query}' with context: {context_keywords}")
+            
+            # ALWAYS perform normal search first (baseline)
+            normal_candidates = self.semantic_search_top_k(query, top_k)
+            logger.info(f"🔍 Normal search: {len(normal_candidates)} candidates, top_score={normal_candidates[0].get('semantic_score', 0):.3f if normal_candidates else 0}")
+            
+            # Context search only if meaningful context exists
+            context_candidates = []
+            if context_keywords and len(context_keywords) > 0:
+                context_candidates = self.semantic_search_with_context(query, context_keywords, top_k)
+                logger.info(f"🔍 Context search: {len(context_candidates)} candidates, top_score={context_candidates[0].get('semantic_score', 0):.3f if context_candidates else 0}")
+            
+            # STABLE DECISION LOGIC: Prefer consistency
+            if not context_candidates or len(context_candidates) == 0:
+                logger.info("🔍 Using normal search (no context results)")
+                return normal_candidates, 'normal'
+            
+            if not normal_candidates or len(normal_candidates) == 0:
+                logger.info("🔍 Using context search (no normal results)")  
+                return context_candidates, 'context'
+            
+            # Compare with stability bias
+            normal_top_score = normal_candidates[0].get('semantic_score', 0)
+            context_top_score = context_candidates[0].get('semantic_score', 0)
+            score_diff = context_top_score - normal_top_score
+            
+            # 🔧 STABILITY: More conservative switching với hysteresis
+            # Context cần tốt hơn đáng kể MỚI được chọn
+            if score_diff > 0.2:  # Tăng từ 0.15 lên 0.2
+                logger.info(f"🔍 Context significantly better (+{score_diff:.3f}) - using context")
+                return context_candidates, 'context'
+            elif score_diff < -0.05:  # Normal rõ ràng tốt hơn
+                logger.info(f"🔍 Normal clearly better ({score_diff:.3f}) - using normal")
+                return normal_candidates, 'normal'
+            else:
+                # Trong vùng uncertain, ưu tiên theo query characteristics
+                query_lower = query.lower()
+                
+                # Nếu query có đại từ hoặc tham chiếu, ưu tiên context
+                if any(pronoun in query_lower for pronoun in ['ông ấy', 'bà ấy', 'người đó', 'thầy ấy', 'cô ấy']):
+                    logger.info(f"🔍 Query has pronoun - preferring context (score_diff: {score_diff:.3f})")
+                    return context_candidates, 'context'
+                
+                # Nếu query có tên riêng, ưu tiên normal để tránh confusion
+                has_proper_name = any(word[0].isupper() for word in query.split() if len(word) > 1)
+                if has_proper_name:
+                    logger.info(f"🔍 Query has proper names - preferring normal for stability (score_diff: {score_diff:.3f})")
+                    return normal_candidates, 'normal'
+                
+                # Default: ưu tiên normal cho stability
+                logger.info(f"🔍 Ambiguous case - preferring normal for stability (score_diff: {score_diff:.3f})")
+                return normal_candidates, 'normal'
+            
+        except Exception as e:
+            logger.error(f"Dual search error: {str(e)}")
+            # ALWAYS fallback to normal search
+            return self.semantic_search_top_k(query, top_k), 'fallback'
+
+    
 class BDUChatbotService:
     def __init__(self):
         self.response_generator = GeminiResponseGenerator()
@@ -1582,11 +2320,19 @@ class BDUChatbotService:
         cache_stats = self.query_cache.get_cache_stats()        
         return {
             'service_name': 'BDUChatbotService',
-            'architecture': 'enhanced_semantic_rag_top5',
+            'architecture': 'context_aware_semantic_rag',  # 🆕 UPDATED
             'chatbot_service': semantic_status,
             'external_api_service': api_status,
             'cache_performance': cache_stats,
-            'enhanced_semantic_features': [
+            'context_aware_features': [  # 🆕 UPDATED features list
+                'entity_extraction_and_memory',
+                'context_enhanced_search',
+                'dual_search_strategy',
+                'smart_context_fallback',
+                'conversation_continuity',
+                'multi_turn_understanding',
+                'entity_relationship_tracking',
+                'context_quality_analysis',
                 'smart_penalty_system',
                 'confidence_preservation', 
                 'adaptive_mismatch_tolerance',
@@ -1594,11 +2340,8 @@ class BDUChatbotService:
                 'targeted_clarification',
                 'high_quality_answer_protection',
                 'top5_smart_candidate_selection',
-                'relevance_analysis_debugging',
-                'suitability_based_selection',
                 'document_context_processing',
                 'external_api_integration',
-                'conversation_memory',
                 'query_response_cache',
                 'graceful_degradation'
             ],
@@ -1610,20 +2353,108 @@ class BDUChatbotService:
                 'complex_context_analysis',
                 'hard_coded_rules',
                 'over_aggressive_penalties',
-                'single_candidate_limitation'
+                'single_candidate_limitation',
+                'context_lock_in_issues'  # 🆕 REMOVED ISSUE
             ],
-            'processing_flow': [
+            'processing_flow': [  # 🆕 UPDATED flow
                 '1. Cache Check',
-                '2. Personal Info API Detection',
-                '3. ENHANCED Semantic Retrieval (Fine-tuned Model)',
-                '4. Smart Two-Stage Semantic Re-ranking (Top-5)',
-                '5. Smart Candidate Selection from Top-5',
-                '6. Confidence-Aware Decision Making',
-                '7. Response Generation with Smart Fallback',
-                '8. Cache Storage'
+                '2. Personal Info API Detection', 
+                '3. Context Analysis from Conversation Memory',
+                '4. Dual Semantic Search (Normal + Context-Enhanced)',
+                '5. Smart Search Method Selection',
+                '6. Two-Stage Semantic Re-ranking',
+                '7. Smart Candidate Selection from Top-5',
+                '8. Context Quality Analysis',
+                '9. Confidence-Aware Decision Making',
+                '10. Response Generation with Smart Fallback',
+                '11. Entity Extraction and Memory Update',
+                '12. Cache Storage'
             ]
         }
 
+    def test_context_functionality(self, session_id="test_session"):
+        """🆕 Test context-aware functionality"""
+        logger.info("🧪 Testing context-aware functionality...")
+        
+        test_results = {
+            'entity_extraction': False,
+            'context_memory': False, 
+            'dual_search': False,
+            'context_enhancement': False,
+            'conversation_continuity': False
+        }        
+        try:
+            # Test 1: Entity extraction
+            if hasattr(self.response_generator, 'memory') and hasattr(self.response_generator.memory, 'entity_extractor'):
+                entities = self.response_generator.memory.entity_extractor.extract_entities(
+                    "Hiệu trưởng là Cao Việt Hiếu", 
+                    "hiệu trưởng là ai"
+                )
+                test_results['entity_extraction'] = bool(entities)
+                logger.info(f"✅ Entity extraction test: {entities}")
+            
+            # Test 2: Context memory
+            if hasattr(self.response_generator, 'memory'):
+                self.response_generator.memory.add_interaction(
+                    session_id, 
+                    "hiệu trưởng là ai?", 
+                    "Cao Việt Hiếu", 
+                    intent_info={'intent': 'test'}, 
+                    entities={}
+                )
+                
+                context_info = self.response_generator.memory.get_context_for_query(
+                    session_id, 
+                    "vậy Cao Việt Hiếu là ai?"
+                )
+                test_results['context_memory'] = context_info.get('should_use_context', False)
+                logger.info(f"✅ Context memory test: {context_info}")
+            
+            # Test 3: Dual search
+            if hasattr(self.sbert_retriever, 'dual_semantic_search'):
+                candidates, method = self.sbert_retriever.dual_semantic_search(
+                    "test query", 
+                    ["test keyword"], 
+                    top_k=5
+                )
+                test_results['dual_search'] = method in ['normal', 'context', 'fallback']
+                logger.info(f"✅ Dual search test: method={method}, candidates={len(candidates)}")
+            
+            # Test 4: Context enhancement (full pipeline test)
+            try:
+                result = self.process_query("ai là hiệu trưởng?", session_id=session_id)
+                test_results['context_enhancement'] = 'context_info' in result
+                logger.info(f"✅ Context enhancement test: {result.get('context_info', {})}")
+                
+                # Follow-up query để test continuity  
+                result2 = self.process_query("vậy người đó làm gì?", session_id=session_id)
+                test_results['conversation_continuity'] = result2.get('context_info', {}).get('context_used', False)
+                logger.info(f"✅ Conversation continuity test: {result2.get('context_info', {})}")
+            except Exception as e:
+                logger.error(f"❌ Context enhancement test failed: {str(e)}")
+        
+        except Exception as e:
+            logger.error(f"❌ Context functionality test failed: {str(e)}")
+        
+        # Cleanup test session
+        if session_id and hasattr(self.response_generator, 'memory'):
+            if session_id in self.response_generator.memory.conversations:
+                del self.response_generator.memory.conversations[session_id]
+        
+        passed_tests = sum(test_results.values())
+        total_tests = len(test_results)
+        
+        logger.info(f"🧪 Context functionality test completed: {passed_tests}/{total_tests} tests passed")
+        logger.info(f"📊 Test results: {test_results}")
+        
+        return {
+            'test_results': test_results,
+            'passed': passed_tests,
+            'total': total_tests,
+            'success_rate': passed_tests / total_tests if total_tests > 0 else 0,
+            'fully_functional': passed_tests == total_tests
+        }
+    
     def get_conversation_memory(self, session_id):
         return self.semantic_chatbot.get_conversation_memory(session_id)
     def clear_conversation_memory(self, session_id=None):

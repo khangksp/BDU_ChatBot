@@ -287,20 +287,58 @@ class SmartTokenManager:
         return min(additional_needed, 150)  # Cap at 150 additional tokens
 
 class ConversationMemory:    
-    def __init__(self, max_history=10):
+    def __init__(self, max_history=30):
         self.conversations = {}  # {session_id: conversation_data}
         self.max_history = max_history
-    
+        try:
+            self.entity_extractor = SimpleEntityExtractor()
+            logger.info("✅ SimpleEntityExtractor initialized successfully in ConversationMemory")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize SimpleEntityExtractor: {str(e)}")
+            self.entity_extractor = None
+        
     def add_interaction(self, session_id: str, user_query: str, bot_response: str, 
                        intent_info: dict = None, entities: dict = None):
-        """Thêm interaction vào memory"""
+        
+        # 🆕 DEBUG LOG
+        logger.info(f"🔍 DEBUG add_interaction: session={session_id}")
+        logger.info(f"🔍 DEBUG query: '{user_query}'")
+        logger.info(f"🔍 DEBUG response preview: '{bot_response[:100]}...'")
+        
+        if not hasattr(self, 'entity_extractor') or self.entity_extractor is None:
+            logger.error("❌ CRITICAL: entity_extractor is None!")
+            return  # STOP here if no extractor
+        
+        # Extract entities from Q&A pair
+        qa_text = f"{user_query} {bot_response}"
+        extracted_entities = self.entity_extractor.extract_entities(qa_text, user_query)
+        
+        logger.info(f"🔍 DEBUG extracted entities: {extracted_entities}")
+        
+        """Thêm interaction vào memory với entity extraction"""
         if session_id not in self.conversations:
             self.conversations[session_id] = {
                 'history': [],
                 'context_summary': "",
                 'user_interests': set(),
-                'conversation_type': 'lecturer'
+                'conversation_type': 'lecturer',
+                # ✅ THÊM MỚI: Entity memory và relationships
+                'entity_memory': {},  # {entity: {type, related_entities, context, confidence}}
+                'entity_relationships': [],  # List các mối quan hệ
+                'context_keywords': []  # Keywords để enhance query
             }
+        
+        # Extract entities from Q&A pair
+        qa_text = f"{user_query} {bot_response}"
+        extracted_entities = self.entity_extractor.extract_entities(qa_text, user_query)
+        
+        # Build relationships
+        relationships = self.entity_extractor.build_entity_relationships(
+            user_query, bot_response, extracted_entities
+        )
+        
+        # Update entity memory
+        self._update_entity_memory(session_id, extracted_entities, relationships, user_query, bot_response)
         
         # Extract user interests from entities
         if entities:
@@ -313,7 +351,10 @@ class ConversationMemory:
             'user_query': user_query,
             'bot_response': bot_response,
             'intent': intent_info.get('intent', 'unknown') if intent_info else 'unknown',
-            'entities': entities or {}
+            'entities': entities or {},
+            # ✅ THÊM MỚI: Lưu extracted entities cho interaction này
+            'extracted_entities': extracted_entities,
+            'entity_relationships': relationships
         }
         
         self.conversations[session_id]['history'].append(interaction)
@@ -324,23 +365,460 @@ class ConversationMemory:
         
         # Update context summary
         self._update_context_summary(session_id)
-    
-    def get_conversation_context(self, session_id: str) -> dict:
-        if session_id not in self.conversations:
-            return {'history': [], 'context_summary': '', 'user_interests': [], 'recent_conversation_summary': ''}
         
+        # ✅ THÊM MỚI: Update context keywords for next queries
+        self._update_context_keywords(session_id)
+    
+    def _update_entity_memory(self, session_id: str, extracted_entities: dict, relationships: list, query: str, response: str):
+        """Cập nhật entity memory với thông tin mới"""
         conv = self.conversations[session_id]
         
-        # ✅ NEW: Tạo tóm tắt 2-3 tương tác gần nhất
+        # Update entities
+        for entity_type, entity_list in extracted_entities.items():
+            for entity in entity_list:
+                entity_key = entity.lower().strip()
+                
+                if entity_key not in conv['entity_memory']:
+                    conv['entity_memory'][entity_key] = {
+                        'original_form': entity,
+                        'type': entity_type,
+                        'contexts': [],
+                        'related_entities': set(),
+                        'confidence': 0.5,
+                        'first_seen': time.time(),
+                        'last_used': time.time()
+                    }
+                
+                # Update context
+                context_snippet = f"Q: {query[:100]}... A: {response[:100]}..."
+                conv['entity_memory'][entity_key]['contexts'].append({
+                    'snippet': context_snippet,
+                    'timestamp': time.time(),
+                    'query': query,
+                    'response_preview': response[:200]
+                })
+                
+                # Keep only recent contexts
+                if len(conv['entity_memory'][entity_key]['contexts']) > 3:
+                    conv['entity_memory'][entity_key]['contexts'] = conv['entity_memory'][entity_key]['contexts'][-3:]
+                
+                conv['entity_memory'][entity_key]['last_used'] = time.time()
+        
+        # Update relationships
+        for rel in relationships:
+            entity1_key = rel['entity1'].lower().strip()
+            entity2_key = rel['entity2'].lower().strip()
+            
+            # Add bidirectional relationships
+            if entity1_key in conv['entity_memory']:
+                conv['entity_memory'][entity1_key]['related_entities'].add(entity2_key)
+                conv['entity_memory'][entity1_key]['confidence'] = min(0.9, conv['entity_memory'][entity1_key]['confidence'] + 0.1)
+            
+            if entity2_key in conv['entity_memory']:
+                conv['entity_memory'][entity2_key]['related_entities'].add(entity1_key)
+                conv['entity_memory'][entity2_key]['confidence'] = min(0.9, conv['entity_memory'][entity2_key]['confidence'] + 0.1)
+        
+        # Add relationships to list (keep recent)
+        conv['entity_relationships'].extend(relationships)
+        if len(conv['entity_relationships']) > 20:
+            conv['entity_relationships'] = conv['entity_relationships'][-20:]
+    
+    def _update_context_keywords(self, session_id: str):
+        """Cập nhật context keywords từ entity memory"""
+        conv = self.conversations[session_id]
+        
+        # Get high-confidence entities from recent interactions
+        recent_entities = []
+        current_time = time.time()
+        
+        for entity_key, entity_data in conv['entity_memory'].items():
+            # Entities used in last 5 interactions (roughly)
+            time_since_last_use = current_time - entity_data['last_used']
+            if time_since_last_use < 300:  # 5 minutes
+                if entity_data['confidence'] > 0.6:
+                    recent_entities.append({
+                        'entity': entity_data['original_form'],
+                        'type': entity_data['type'],
+                        'confidence': entity_data['confidence'],
+                        'recency': time_since_last_use
+                    })
+        
+        # Sort by confidence and recency
+        recent_entities.sort(key=lambda x: (x['confidence'], -x['recency']), reverse=True)
+        
+        # Extract keywords
+        context_keywords = []
+        for entity_info in recent_entities[:5]:  # Top 5
+            entity = entity_info['entity']
+            if len(entity.strip()) > 2:
+                context_keywords.append(entity)
+        
+        conv['context_keywords'] = context_keywords
+        
+        logger.debug(f"📝 Updated context keywords for session {session_id}: {context_keywords}")
+
+    def get_conversation_context(self, session_id: str) -> dict:
+        if session_id not in self.conversations:
+            return {
+                'history': [], 
+                'context_summary': '', 
+                'user_interests': [], 
+                'recent_conversation_summary': '',
+                # ✅ THÊM MỚI: Context enhancement data
+                'context_keywords': [],
+                'entity_memory': {},
+                'active_entities': []
+            }
+        
+        conv = self.conversations[session_id]
+        # Tạo tóm tắt 2-3 tương tác gần nhất
         recent_summary = self._create_recent_conversation_summary(session_id)
+        
+        # ✅ THÊM MỚI: Get active entities (high confidence, recently used)
+        active_entities = self._get_active_entities(session_id)
         
         return {
             'history': conv['history'][-5:],  # Last 5 interactions
             'context_summary': conv['context_summary'],
             'user_interests': list(conv['user_interests']),
             'conversation_type': conv['conversation_type'],
-            'recent_conversation_summary': recent_summary  # ✅ NEW
+            'recent_conversation_summary': recent_summary,
+            # ✅ THÊM MỚI: Enhanced context data
+            'context_keywords': conv.get('context_keywords', []),
+            'entity_memory': conv.get('entity_memory', {}),
+            'active_entities': active_entities,
+            'entity_relationships': conv.get('entity_relationships', [])[-10:]  # Recent 10 relationships
         }
+    
+    def _get_active_entities(self, session_id: str) -> list:
+        """Lấy danh sách entities đang active (confidence cao, dùng gần đây)"""
+        if session_id not in self.conversations:
+            return []
+        
+        conv = self.conversations[session_id]
+        active_entities = []
+        current_time = time.time()
+        
+        for entity_key, entity_data in conv['entity_memory'].items():
+            time_since_last_use = current_time - entity_data['last_used']
+            
+            # Entity active nếu: confidence > 0.6 VÀ dùng trong 10 phút gần đây
+            if entity_data['confidence'] > 0.6 and time_since_last_use < 600:
+                active_entities.append({
+                    'entity': entity_data['original_form'],
+                    'type': entity_data['type'], 
+                    'confidence': entity_data['confidence'],
+                    'related_entities': list(entity_data['related_entities'])[:3],  # Top 3 related
+                    'last_context': entity_data['contexts'][-1]['snippet'] if entity_data['contexts'] else ""
+                })
+        
+        # Sort by confidence
+        active_entities.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        return active_entities[:5]
+    
+    def get_context_for_query(self, session_id: str, current_query: str) -> dict:
+        """🔧 IMPROVED: Enhanced context detection with fallback mechanisms"""
+        
+        logger.info(f"🔍 DEBUG get_context_for_query called: session={session_id}, query='{current_query}'")
+        
+        if session_id not in self.conversations:
+            logger.info(f"🔍 DEBUG: No conversations found for session {session_id}")
+            return {
+                'context_keywords': [], 
+                'related_entities': [], 
+                'should_use_context': False,
+                'context_strength': 0
+            }
+        
+        conv = self.conversations[session_id]
+        logger.info(f"🔍 DEBUG: Found conversation with {len(conv.get('entity_memory', {}))} entities")
+        
+        # 🔧 IMPROVED: Normalize query for better matching
+        current_query_normalized = self._normalize_for_matching(current_query)
+        logger.info(f"🔍 DEBUG: Normalized query: '{current_query_normalized}'")
+        
+        # 🔧 RELAXED: Consider last 3 interactions instead of 2
+        recent_interactions = conv['history'][-3:] if len(conv['history']) >= 3 else conv['history']
+        
+        relevant_entities = []
+        extracted_names = []
+        
+        # 🆕 STEP 1: Check for memory reference patterns (như "còn nhớ...")
+        memory_reference_patterns = [
+            r'\b(còn|vẫn)\s+(nhớ|biết)\s+([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)',
+            r'\b(thế|vậy)\s+([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)\s+là\s+(ai|gì)',
+            r'\b([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)\s+là\s+(ai|gì)',  # "X là ai"
+            r'\bai\s+là\s+([A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*)',  # "ai là X"
+        ]
+        
+        # Extract names from memory reference patterns  
+        for pattern in memory_reference_patterns:
+            matches = re.findall(pattern, current_query, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    for group in match:
+                        if group and len(group.strip()) > 2:
+                            # Check if it looks like a name (has at least 1 uppercase char)
+                            if any(c.isupper() for c in group):
+                                extracted_names.append(group.strip())
+                else:
+                    if len(match.strip()) > 2 and any(c.isupper() for c in match):
+                        extracted_names.append(match.strip())
+        
+        logger.info(f"🔍 DEBUG: Extracted names from patterns: {extracted_names}")
+        
+        # 🆕 STEP 2: Enhanced entity matching với memory references
+        if extracted_names:
+            logger.info(f"🔍 Memory/Direct reference detected: {extracted_names}")
+            for extracted_name in extracted_names:
+                for entity_key, entity_data in conv.get('entity_memory', {}).items():
+                    original_form = entity_data.get('original_form', entity_key)
+                    
+                    # Use flexible name matching for memory references
+                    if self._names_match_flexible(extracted_name, original_form):
+                        relevant_entities.append({
+                            'entity': original_form,
+                            'type': entity_data.get('type', 'unknown'),
+                            'related': list(entity_data.get('related_entities', set()))[:2],
+                            'confidence': 0.8  # Higher confidence for direct references
+                        })
+                        logger.info(f"🎯 Memory reference matched: {extracted_name} → {original_form}")
+        
+        # 🆕 STEP 3: Standard entity matching (existing logic)
+        for entity_key, entity_data in conv.get('entity_memory', {}).items():
+            original_form = entity_data.get('original_form', entity_key)
+            
+            # Skip if already found via memory reference
+            if any(ent['entity'] == original_form for ent in relevant_entities):
+                continue
+            
+            # 🔧 IMPROVED: Use flexible matching
+            is_relevant = self._is_entity_relevant_to_query_strict(
+                current_query_normalized, 
+                entity_key, 
+                original_form
+            )
+            
+            if is_relevant:
+                relevant_entities.append({
+                    'entity': original_form,
+                    'type': entity_data.get('type', 'unknown'),
+                    'related': list(entity_data.get('related_entities', set()))[:2],
+                    'confidence': entity_data.get('confidence', 0.5)
+                })
+                logger.info(f"🎯 Found relevant entity: {original_form} (key: {entity_key})")
+        
+        # 🆕 STEP 4: Fallback cho person name queries không tìm thấy context
+        if not relevant_entities and extracted_names:
+            logger.info(f"🔍 No entity memory found, creating fallback context for: {extracted_names}")
+            for name in extracted_names:
+                if len(name.split()) >= 2:  # Valid name structure
+                    relevant_entities.append({
+                        'entity': name,
+                        'type': 'person_name', 
+                        'related': [],
+                        'confidence': 0.6  # Medium confidence for fallback
+                    })
+                    logger.info(f"🎯 Fallback entity created: {name}")
+        
+        # 🔧 STEP 5: Decision logic với relaxed thresholds
+        context_strength = len(relevant_entities)
+        
+        # 🔧 MUCH MORE RELAXED: Lower confidence threshold
+        should_use_context = (
+            len(relevant_entities) > 0 and 
+            any(entity['confidence'] > 0.3 for entity in relevant_entities)  # Lowered from 0.5
+        )
+        
+        # 🆕 STEP 6: Force context cho entity query patterns
+        entity_query_indicators = [
+            'là ai', 'ai là', 'còn nhớ', 'vậy ', 'thế ', 
+            'ông ', 'bà ', 'thầy ', 'cô ', 'anh ', 'chị '
+        ]
+        
+        if not should_use_context:
+            has_entity_pattern = any(indicator in current_query.lower() for indicator in entity_query_indicators)
+            if has_entity_pattern and (relevant_entities or extracted_names):
+                should_use_context = True
+                logger.info(f"🎯 Force context enabled for entity query pattern")
+        
+        # 🆕 STEP 7: Generate context keywords
+        context_keywords = []
+        if should_use_context:
+            # Prioritize extracted names first
+            for name in extracted_names[:2]:  # Max 2 from direct extraction
+                if name not in context_keywords:
+                    context_keywords.append(name)
+            
+            # Then add from relevant entities
+            for entity_info in relevant_entities[:3]:  # Max 3 total
+                if len(context_keywords) < 3 and entity_info['entity'] not in context_keywords:
+                    context_keywords.append(entity_info['entity'])
+        
+        # 🆕 STEP 8: Enhanced logging
+        logger.info(f"🔍 DEBUG: should_use_context={should_use_context}, relevant_entities={len(relevant_entities)}")
+        logger.info(f"🔍 DEBUG: context_keywords={context_keywords}")
+        logger.info(f"🔍 DEBUG: context_strength={context_strength}")
+        
+        # Calculate final confidence
+        final_confidence = max([e['confidence'] for e in relevant_entities], default=0.0)
+        if extracted_names and not relevant_entities:
+            final_confidence = 0.6  # Fallback confidence
+        
+        return {
+            'context_keywords': context_keywords,
+            'related_entities': relevant_entities,
+            'should_use_context': should_use_context,
+            'context_strength': context_strength,
+            'context_confidence': final_confidence,
+            'extracted_names': extracted_names,  # For debugging
+            'memory_reference_detected': bool(extracted_names),
+            'fallback_used': not relevant_entities and bool(extracted_names)
+        }
+    
+    def _names_match_flexible(self, name1: str, name2: str) -> bool:
+        """🆕 NEW: Flexible name matching"""
+        if not name1 or not name2:
+            return False
+        
+        # Normalize both names
+        norm1 = self._normalize_for_matching(name1.lower())
+        norm2 = self._normalize_for_matching(name2.lower())
+        
+        # Direct match
+        if norm1 == norm2:
+            return True
+        
+        # Word-level matching
+        words1 = set(norm1.split())
+        words2 = set(norm2.split())
+        
+        # If both have multiple words, check overlap
+        if len(words1) >= 2 and len(words2) >= 2:
+            overlap = len(words1.intersection(words2))
+            total_unique = len(words1.union(words2))
+            overlap_ratio = overlap / total_unique if total_unique > 0 else 0
+            
+            # 🔧 FLEXIBLE: 50% overlap is good enough for names
+            return overlap_ratio >= 0.5
+        
+        # Single word matching
+        if len(words1) == 1 and len(words2) == 1:
+            # Allow partial matching for single words if they're long enough
+            word1, word2 = list(words1)[0], list(words2)[0]
+            if len(word1) >= 3 and len(word2) >= 3:
+                return word1 in word2 or word2 in word1
+        
+        return False
+    
+    def _is_entity_relevant_to_query_strict(self, normalized_query, entity_key, original_form):
+        """🔧 IMPROVED: Flexible entity matching để tránh miss các variations"""
+        
+        # Strategy 1: Direct exact match (case insensitive)
+        entity_key_normalized = self._normalize_for_matching(entity_key)
+        original_form_normalized = self._normalize_for_matching(original_form)
+        
+        if entity_key_normalized in normalized_query or original_form_normalized in normalized_query:
+            logger.debug(f"🎯 Exact match found for '{original_form}'")
+            return True
+        
+        # Strategy 2: Word-by-word matching for multi-word entities (RELAXED)
+        entity_words = set(original_form_normalized.split())
+        query_words = set(normalized_query.split())
+        
+        if len(entity_words) >= 2:
+            overlap = len(entity_words.intersection(query_words))
+            overlap_ratio = overlap / len(entity_words)
+            
+            # 🔧 RELAXED: 60% overlap instead of 80%
+            if overlap_ratio >= 0.6:  
+                logger.debug(f"🎯 Name parts match: {overlap}/{len(entity_words)} = {overlap_ratio:.2f}")
+                return True
+        
+        # Strategy 3: Name parts matching (họ + tên)
+        if len(entity_words) >= 2:
+            first_name = list(entity_words)[0]  # Họ
+            last_name = list(entity_words)[-1]  # Tên
+            
+            # Check if both first and last name appear
+            if first_name in query_words and last_name in query_words:
+                logger.debug(f"🎯 First + Last name match: '{first_name}' + '{last_name}'")
+                return True
+            
+            # Check if last name + middle name appear
+            if len(entity_words) >= 3:
+                middle_name = list(entity_words)[1]
+                if last_name in query_words and middle_name in query_words:
+                    logger.debug(f"🎯 Middle + Last name match: '{middle_name}' + '{last_name}'")
+                    return True
+        
+        # Strategy 4: Partial name with title matching
+        titles = ['gs.ts', 'ts', 'gs', 'thầy', 'cô', 'giáo sư', 'tiến sĩ', 'ông', 'bà']
+        query_has_title = any(title in normalized_query for title in titles)
+        
+        if query_has_title and len(entity_words) >= 2:
+            # If query has title, just need last name match
+            last_name = list(entity_words)[-1]
+            if last_name in query_words and len(last_name) > 2:
+                logger.debug(f"🎯 Title + Last name match: '{last_name}'")
+                return True
+        
+        return False
+    
+    def _normalize_for_matching(self, text):
+        """🚀 FIX: Normalize text for better entity matching"""
+        if not text:
+            return ""
+        
+        # Convert to lowercase
+        normalized = text.lower().strip()
+        
+        # Remove Vietnamese particles and common words
+        normalized = re.sub(r'\b(dạ|ạ|à|ơi|nhé|vậy|thì|là|ai|gì|như|thế|nào)\b', ' ', normalized)
+        
+        # Remove extra spaces
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        
+        return normalized
+
+    def _is_entity_relevant_to_query(self, normalized_query, entity_key, original_form):
+        """🚀 FIX: Multiple strategies to check if entity is relevant"""
+        
+        # Strategy 1: Direct substring match with normalized query
+        entity_key_normalized = self._normalize_for_matching(entity_key)
+        original_form_normalized = self._normalize_for_matching(original_form)
+        
+        if entity_key_normalized in normalized_query or entity_key in normalized_query.lower():
+            logger.debug(f"📝 Match strategy 1: entity_key '{entity_key_normalized}' in query")
+            return True
+            
+        if original_form_normalized in normalized_query or original_form.lower() in normalized_query.lower():
+            logger.debug(f"📝 Match strategy 2: original_form '{original_form_normalized}' in query")
+            return True
+        
+        # Strategy 2: Word-by-word matching (for multi-word entities)
+        entity_words = set(original_form_normalized.split())
+        query_words = set(normalized_query.split())
+        
+        # If entity has multiple words, check if most words are in query
+        if len(entity_words) > 1:
+            overlap = len(entity_words.intersection(query_words))
+            overlap_ratio = overlap / len(entity_words)
+            
+            if overlap_ratio >= 0.7:  # 70% of entity words must be in query
+                logger.debug(f"📝 Match strategy 3: word overlap {overlap}/{len(entity_words)} = {overlap_ratio:.2f}")
+                return True
+        
+        # Strategy 3: Partial name matching (for person names)
+        if len(entity_words) >= 2:
+            # Check if last name (assumed to be last word) is in query
+            last_word = list(entity_words)[-1]
+            if len(last_word) > 2 and last_word in query_words:
+                logger.debug(f"📝 Match strategy 4: last name '{last_word}' found")
+                return True
+        
+        return False
     
     def _create_recent_conversation_summary(self, session_id: str) -> str:
         if session_id not in self.conversations:
@@ -502,13 +980,316 @@ class SimpleVietnameseRestorer:
             for k in keys_to_remove:
                 del self.cache[k]
 
+class SimpleEntityExtractor:
+    """Trích xuất thực thể đơn giản từ Q&A để build context memory"""
+    
+    def __init__(self):
+        # 🔧 CẢI TIẾN: Patterns chặt chẽ hơn cho các loại entity
+        self.entity_patterns = {
+            'person_name': [
+                # 🔧 IMPROVED: Tên riêng người Việt (2-4 từ, viết hoa đầu từ) - CHẶT CHẼ HỚN
+                r'\b([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+)\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+)(?:\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+))?(?:\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+))?\b',
+                # Pattern với tiến sĩ, giáo sư
+                r'(?:GS\.TS\.|TS\.|GS\.|tiến sĩ|giáo sư)\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+(?:\s+[A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+){1,2})'
+            ],
+            'position': [
+                r'\b(hiệu trưởng|phó hiệu trưởng|trưởng phòng|phó trưởng phòng|trưởng khoa|phó trưởng khoa|giáo sư|phó giáo sư|tiến sĩ|thạc sĩ)\b',
+                r'\b(chủ tịch|phó chủ tịch|ủy viên|thành viên|trưởng ban|phó ban)\b'
+            ],
+            'department': [
+                r'(khoa [^.!?]*|phòng [^.!?]*|ban [^.!?]*|bộ môn [^.!?]*)',
+                r'(đại học bình dương|bdu|trường đại học)'
+            ],
+            'numbers': [
+                r'(\d+(?:[.,]\d+)*(?:\s*(?:triệu|nghìn|tỷ|đồng|vnđ|usd|phần trăm|%))?)',
+                r'(\d+(?:\.\d+)?(?:\s*tín chỉ)?)'
+            ],
+            'dates': [
+                r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+                r'(ngày \d{1,2}|tháng \d{1,2}|năm \d{4})',
+                r'(học kỳ \d+|năm học \d{4}-\d{4})'
+            ]
+        }
+        
+        # 🆕 THÊM MỚI: Blacklist để loại bỏ false positives
+        self.person_name_blacklist = {
+            # Các cụm từ thường bị nhận nhầm là tên người
+            'hoc phi chinh', 'quy khanh', 'duc tin', 'duc hanh', 'duc duc', 'nam duc',
+            'hoc phi', 'chi phi', 'muc phi', 'le phi', 'phi le', 'thu phi',
+            'quy dinh', 'quy che', 'quy trinh', 'quy tac', 'quy luat',
+            'duc tinh', 'duc tich', 'duc hanh vi', 'duc han che',
+            'nam hoc', 'nam tu', 'nam toi', 'nam sau', 'nam truoc',
+            'tin chi', 'tin tin', 'chi tiet', 'chi tieu', 'chi phi',
+            'bao cao', 'cao cap', 'cao dang', 'cap hoc', 'cap do',
+            'sinh vien', 'giang vien', 'can bo', 'hoc sinh', 'nghien cuu sinh',
+            'dai hoc', 'cao hoc', 'tien si', 'thac si', 'cu nhan',
+            'mon hoc', 'bai hoc', 'gio hoc', 'lop hoc', 'hoc tap',
+            # Thêm các từ khóa BDU thường gặp
+            'binh duong', 'bdu', 'truong dai hoc', 'phong ban', 'khoa hoc',
+            'nghien cuu', 'dao tao', 'quan ly', 'hanh chinh', 'ky thuat',
+            'cong nghe', 'kinh te', 'ngoai ngu', 'su pham', 'y khoa'
+        }
+        
+        # 🆕 THÊM MỚI: Common Vietnamese words that are not names
+        self.common_words_blacklist = {
+            'co the', 'co ban', 'co so', 'co hoi', 'co quan', 'co mat',
+            'la mot', 'la cach', 'la gi', 'la ai', 'la khi', 'la lieu',
+            'duoc su', 'duoc cap', 'duoc phep', 'duoc biet', 'duoc tang',
+            'hay la', 'hay khong', 'hay nhat', 'hay gi', 'hay co',
+            'neu co', 'neu khong', 'neu la', 'neu can', 'neu muon'
+        }
+        
+        logger.info("✅ IMPROVED SimpleEntityExtractor initialized with enhanced patterns and blacklists")
+
+    def extract_entities(self, text, query_context=""):
+        """🔧 IMPROVED: Trích xuất entities với filtering tốt hơn"""
+        if not text:
+            return {}
+            
+        entities = {}
+        text_cleaned = text.strip()
+        
+        # 🔧 IMPROVED: Clean text - remove common phrases but preserve names
+        text_cleaned = re.sub(r'\b(dạ|ạ|thưa|xin chào|chào|em|anh|chị|cảm ơn)\b', ' ', text_cleaned, flags=re.IGNORECASE)
+        text_cleaned = re.sub(r'\s+', ' ', text_cleaned).strip()
+        
+        # Extract theo từng loại pattern
+        for entity_type, patterns in self.entity_patterns.items():
+            entities[entity_type] = []
+            
+            for pattern in patterns:
+                matches = re.finditer(pattern, text_cleaned, re.IGNORECASE)
+                for match in matches:
+                    if entity_type == 'person_name':
+                        # 🔧 SPECIAL HANDLING: Person names need more careful extraction
+                        entity_value = self._extract_person_name_from_match(match)
+                    else:
+                        entity_value = match.group(1) if match.groups() else match.group(0)
+                    
+                    entity_value = entity_value.strip()
+                    
+                    # 🔧 IMPROVED: Strict filtering với blacklist
+                    if self._is_valid_entity(entity_value, entity_type):
+                        # Normalize entity
+                        if entity_type == 'person_name':
+                            entity_value = self._normalize_person_name(entity_value)
+                        else:
+                            entity_value = entity_value.lower()
+                            
+                        if entity_value not in entities[entity_type]:
+                            entities[entity_type].append(entity_value)
+        
+        # Chỉ giữ lại entities có ít nhất 1 item
+        entities = {k: v for k, v in entities.items() if v}
+        
+        logger.debug(f"🔍 Entity extraction result: {entities}")
+        return entities
+
+    def _extract_person_name_from_match(self, match):
+        """🆕 THÊM MỚI: Trích xuất tên người từ regex match"""
+        if match.groups():
+            # Combine all non-empty groups
+            name_parts = [group for group in match.groups() if group and group.strip()]
+            return ' '.join(name_parts)
+        else:
+            return match.group(0)
+
+    def _is_valid_entity(self, entity_value, entity_type):
+        """🔧 IMPROVED: Validate entity quality với blacklist mở rộng"""
+        if not entity_value or len(entity_value.strip()) < 3:
+            return False
+            
+        entity_lower = entity_value.lower().strip()
+        
+        # 🆕 CHECK BLACKLIST FIRST
+        if entity_type == 'person_name':
+            # Check person name blacklist
+            if entity_lower in self.person_name_blacklist:
+                logger.debug(f"🚫 Rejected by person blacklist: '{entity_value}'")
+                return False
+            
+            # Check common words blacklist
+            if entity_lower in self.common_words_blacklist:
+                logger.debug(f"🚫 Rejected by common words blacklist: '{entity_value}'")
+                return False
+            
+            # Check for parts in blacklist
+            entity_words = entity_lower.split()
+            for word in entity_words:
+                if word in self.person_name_blacklist or word in self.common_words_blacklist:
+                    logger.debug(f"🚫 Rejected by word-level blacklist: '{entity_value}' (word: '{word}')")
+                    return False
+        
+        # Remove noise patterns
+        noise_patterns = [
+            r'\b(có|cần|thể|thêm|gì|không|hỗ|trợ|để|em|là|ai|nói|rõ|hơn|về|vấn|đề|chính|xác|nhất)\b',
+            r'^(và|hoặc|với|để|khi|nếu|tại|về|cho|trong|của|từ)',
+            r'(ạ|à|ơi|nhé)$'
+        ]
+        
+        for pattern in noise_patterns:
+            if re.search(pattern, entity_lower):
+                logger.debug(f"🚫 Rejected by noise pattern: '{entity_value}' (pattern: {pattern})")
+                return False
+        
+        # Specific validation by type
+        if entity_type == 'person_name':
+            # 🔧 STRICTER: Must have 2-4 words, each word >= 2 chars
+            words = entity_lower.split()
+            if len(words) < 2 or len(words) > 4:
+                logger.debug(f"🚫 Rejected by word count: '{entity_value}' ({len(words)} words)")
+                return False
+            
+            if any(len(word) < 2 for word in words):
+                logger.debug(f"🚫 Rejected by word length: '{entity_value}'")
+                return False
+            
+            # 🆕 NEW: Check for Vietnamese name patterns
+            if not self._looks_like_vietnamese_name(entity_value):
+                logger.debug(f"🚫 Rejected by Vietnamese name pattern: '{entity_value}'")
+                return False
+            
+            # Must not contain common Vietnamese particles
+            if any(word in ['cô', 'thầy', 'anh', 'chị', 'em', 'dạ', 'được', 'phải', 'theo', 'như', 'từ'] for word in words):
+                logger.debug(f"🚫 Rejected by particle words: '{entity_value}'")
+                return False
+                
+        elif entity_type == 'position':
+            # Must be exactly one of the position words
+            valid_positions = ['hiệu trưởng', 'phó hiệu trưởng', 'trưởng phòng', 'phó trưởng phòng', 'trưởng khoa', 'phó trưởng khoa', 'giáo sư', 'phó giáo sư', 'tiến sĩ', 'thạc sĩ', 'chủ tịch', 'phó chủ tịch']
+            if entity_lower not in valid_positions:
+                logger.debug(f"🚫 Rejected invalid position: '{entity_value}'")
+                return False
+        
+        logger.debug(f"✅ Valid entity: '{entity_value}' (type: {entity_type})")
+        return True
+    
+    def _looks_like_vietnamese_name(self, name):
+        """🆕 THÊM MỚI: Kiểm tra xem có giống tên người Việt không"""
+        name_lower = name.lower()
+        words = name_lower.split()
+        
+        # Vietnamese surname patterns (họ phổ biến)
+        common_surnames = {
+            'nguyễn', 'trần', 'lê', 'phạm', 'hoàng', 'huỳnh', 'phan', 'vũ', 'võ', 'đặng', 
+            'bùi', 'đỗ', 'hồ', 'ngô', 'dương', 'lý', 'cao', 'đậu', 'lưu', 'tô',
+            'nguyen', 'tran', 'le', 'pham', 'hoang', 'huynh', 'phan', 'vu', 'vo', 'dang',
+            'bui', 'do', 'ho', 'ngo', 'duong', 'ly', 'cao', 'dau', 'luu', 'to'
+        }
+        
+        # Check if first word (surname) is common Vietnamese surname
+        if words[0] in common_surnames:
+            return True
+        
+        # Vietnamese name characteristics
+        # - Usually has balanced syllable structure
+        # - Contains Vietnamese-specific characters or patterns
+        vietnamese_chars = 'ăâêôơưàáạảãằắặẳẵầấậẩẫềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹđ'
+        
+        # Count Vietnamese-specific characters
+        vietnamese_char_count = sum(1 for char in name_lower if char in vietnamese_chars)
+        
+        # If has Vietnamese chars and reasonable length, likely a Vietnamese name
+        if vietnamese_char_count >= 1 and len(words) >= 2:
+            return True
+        
+        # Pattern check: avoid common false positives
+        false_positive_patterns = [
+            r'phi|phí|fee',  # Avoid fee-related terms
+            r'quy|qúy',      # Avoid regulation-related terms
+            r'học|hoc',      # Avoid study-related terms
+            r'chí|chi',      # Avoid will/credit-related terms
+        ]
+        
+        for pattern in false_positive_patterns:
+            if re.search(pattern, name_lower):
+                # Double check: if it really contains Vietnamese name elements, still accept
+                if vietnamese_char_count >= 2:  # Higher threshold for suspicious cases
+                    continue
+                else:
+                    return False
+        
+        # Default: accept if passes basic structure checks
+        return True
+    
+    def build_entity_relationships(self, query, answer, entities):
+        """Xây dựng mối quan hệ giữa entities dựa vào ngữ cảnh Q&A"""
+        relationships = []
+        
+        query_lower = query.lower()
+        answer_lower = answer.lower()
+        
+        # Tìm mối quan hệ person - position
+        if 'person_name' in entities and 'position' in entities:
+            for person in entities['person_name']:
+                for position in entities['position']:
+                    # Kiểm tra trong query
+                    if any(keyword in query_lower for keyword in ['là ai', 'ai là', 'chức vụ']):
+                        relationships.append({
+                            'type': 'person_position',
+                            'entity1': person,
+                            'entity2': position,
+                            'relation': 'has_position',
+                            'confidence': 0.8,
+                            'source': 'query_answer_pair'
+                        })
+        
+        # Tìm mối quan hệ person - department
+        if 'person_name' in entities and 'department' in entities:
+            for person in entities['person_name']:
+                for dept in entities['department']:
+                    relationships.append({
+                        'type': 'person_department', 
+                        'entity1': person,
+                        'entity2': dept,
+                        'relation': 'works_at',
+                        'confidence': 0.7,
+                        'source': 'context'
+                    })
+        
+        return relationships
+
+    def _normalize_person_name(self, name):
+        """🔧 IMPROVED: Normalize person name to consistent format"""
+        # Title case each word
+        words = name.lower().split()
+        normalized_words = []
+        for word in words:
+            if len(word) > 0:
+                normalized_words.append(word[0].upper() + word[1:])
+        return ' '.join(normalized_words)
+
+    def get_context_keywords(self, entities, relationships):
+        """🚀 FIX: Generate better context keywords"""
+        context_keywords = []
+        
+        # From entities - prioritize person names and positions
+        if 'person_name' in entities:
+            for entity in entities['person_name'][:2]:  # Max 2 person names
+                context_keywords.append(entity)
+                
+        if 'position' in entities:
+            for entity in entities['position'][:1]:  # Max 1 position
+                context_keywords.append(entity)
+        
+        # From relationships
+        for rel in relationships[:3]:  # Max 3 relationships
+            if rel['confidence'] > 0.7:
+                context_keywords.extend([rel['entity1'], rel['entity2']])
+        
+        # 🚀 FIX: Deduplicate and limit
+        context_keywords = list(set(context_keywords))
+        context_keywords = [kw for kw in context_keywords if len(kw.strip()) > 2]
+        
+        return context_keywords[:3]
+    
 class GeminiResponseGenerator:    
     def __init__(self):
         self.key_manager = GeminiApiKeyManager()
         # Thống nhất phiên bản model ở đây
         self.model_name = "gemini-2.0-flash" 
         self.base_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
-        self.memory = ConversationMemory(max_history=10)
+        self.memory = ConversationMemory(max_history=30)
         self.vietnamese_restorer = SimpleVietnameseRestorer(self.key_manager)
         
         self.token_manager = SmartTokenManager()
@@ -531,6 +1312,33 @@ class GeminiResponseGenerator:
         }
         
         logger.info("✅ Enhanced Gemini Response Generator initialized with Advanced Confidence Management, Smart Token Management, và Two-Stage Re-ranking Integration")
+        # 🆕 DEBUG: Kiểm tra entity extractor được khởi tạo chưa
+        if hasattr(self.memory, 'entity_extractor'):
+            logger.info("✅ Entity Extractor available in ConversationMemory")
+            
+            # Test entity extraction
+            test_entities = self.memory.entity_extractor.extract_entities(
+                "Hiệu trưởng là Cao Việt Hiếu", 
+                "hiệu trưởng là ai"
+            )
+            logger.info(f"🧪 Test entity extraction: {test_entities}")
+            
+        else:
+            logger.error("❌ CRITICAL: Entity Extractor NOT found in ConversationMemory")
+            logger.error("❌ This will cause context-aware functionality to fail")
+            
+        # 🆕 DEBUG: Kiểm tra get_context_for_query method
+        if hasattr(self.memory, 'get_context_for_query'):
+            logger.info("✅ get_context_for_query method available")
+            
+            # Test với session giả
+            
+            test_context = self.memory.get_context_for_query("test", "vậy Cao Việt Hiếu là ai?")
+            logger.info(f"🧪 Test get_context_for_query: {test_context}")
+            
+        else:
+            logger.error("❌ CRITICAL: get_context_for_query method NOT found")
+            logger.error("❌ This will cause context analysis to always return should_use=False")
 
     # 🚀 NEW: Document Context Processing Methods
     def _build_document_context_prompt(self, query: str, document_text: str, session_id: str = None) -> str:
@@ -1826,8 +2634,7 @@ Trả lời:
         ]
         
         if not query:
-            return False
-        
+            return False        
         query_lower = query.lower()
         return any(kw in query_lower for kw in lecturer_education_keywords)
 
@@ -1884,25 +2691,21 @@ Trả lời:"""
         return {'valid': len(errors) == 0, 'errors': errors, 'warnings': warnings}
     
     def get_user_context(self, session_id: str):
-        return self._user_context_cache.get(session_id)
-    
+        return self._user_context_cache.get(session_id)    
     def clear_user_context(self, session_id=None):
         if session_id:
             if session_id in self._user_context_cache:
                 del self._user_context_cache[session_id]
         else:
             self._user_context_cache.clear()
-
     def get_conversation_memory(self, session_id: str):
         return self.memory.get_conversation_context(session_id)
-    
     def clear_conversation_memory(self, session_id: str = None):
         if session_id:
             if session_id in self.memory.conversations:
                 del self.memory.conversations[session_id]
         else:
             self.memory.conversations.clear()
-
     def get_system_status(self) -> Dict[str, Any]:
         try:
             test_prompt = "Test ngắn cho giảng viên"
@@ -1912,11 +2715,11 @@ Trả lời:"""
                 'gemini_api_available': response is not None,
                 'api_key_configured': bool(self.key_manager.keys),
                 'service_status': 'active' if response else 'error',
-                'mode': 'advanced_rag_gemini_with_two_stage_reranking_integration_and_advanced_confidence_management',  # 🚀 Updated
+                'mode': 'advanced_rag_gemini_with_two_stage_reranking_integration_and_advanced_confidence_management',
                 'memory_sessions': len(self.memory.conversations),
                 'personalization_sessions': len(self._user_context_cache),
                 'adaptive_token_range': self.token_manager.adaptive_token_range,
-                'confidence_management': {  # 🚀 NEW: Advanced confidence management info
+                'confidence_management': {
                     'max_confidence': self.confidence_manager.MAX_CONFIDENCE,
                     'decision_thresholds': self.confidence_manager.decision_thresholds,
                     'calibration_rules': self.confidence_manager.confidence_calibration_rules,
@@ -1924,11 +2727,11 @@ Trả lời:"""
                     'confidence_normalization_active': True
                 },
                 'features': [
-                    'advanced_confidence_management',  # 🚀 NEW
-                    'confidence_overflow_protection',  # 🚀 NEW
-                    'confidence_normalization',  # 🚀 NEW
-                    'two_stage_reranking_integration',  # 🚀 NEW
-                    'advanced_rag_compatibility',  # 🚀 NEW
+                    'advanced_confidence_management',
+                    'confidence_overflow_protection',
+                    'confidence_normalization',
+                    'two_stage_reranking_integration',
+                    'advanced_rag_compatibility',
                     'smart_token_management',
                     'auto_response_completion',
                     'adaptive_token_allocation',
@@ -1943,24 +2746,24 @@ Trả lời:"""
                     'personalized_system_prompts',
                     'personalized_addressing',
                     'department_specific_responses',
-                    'user_memory_prompt_support',  # ✅ NEW feature
-                    'flexible_personalization',    # ✅ NEW feature
+                    'user_memory_prompt_support',
+                    'flexible_personalization',
                     'external_api_data_processing',
                     'lecturer_schedule_formatting',
                     'personal_information_handling',
-                    'gender_based_addressing',  # ✅ NEW feature
-                    'conversation_context_summary',  # ✅ NEW feature
-                    'mạch_lạc_response_generation',   # ✅ NEW feature
-                    'consistent_personalization_in_errors',  # 🚀 NEW feature
-                    'session_id_propagation_in_api_calls',  # 🚀 NEW feature
-                    'graceful_error_handling_with_personalization',  # 🚀 NEW feature
-                    'document_context_processing',  # 🚀 NEW feature
-                    'pdf_docx_text_extraction',  # 🚀 NEW feature
-                    'document_based_question_answering',  # 🚀 NEW feature
-                    'ocr_integration_support',  # 🚀 NEW feature
-                    'fine_tuned_model_compatibility',  # 🚀 NEW feature
-                    'cross_encoder_simulation_support',  # 🚀 NEW feature
-                    'hybrid_retrieval_enhancement'  # 🚀 NEW feature
+                    'gender_based_addressing',
+                    'conversation_context_summary',
+                    'mạch_lạc_response_generation',
+                    'consistent_personalization_in_errors',
+                    'session_id_propagation_in_api_calls',
+                    'graceful_error_handling_with_personalization',
+                    'document_context_processing',
+                    'pdf_docx_text_extraction',
+                    'document_based_question_answering',
+                    'ocr_integration_support',
+                    'fine_tuned_model_compatibility',
+                    'cross_encoder_simulation_support',
+                    'hybrid_retrieval_enhancement'
                 ]
             }
         except Exception as e:
@@ -1968,11 +2771,11 @@ Trả lời:"""
                 'gemini_api_available': False,
                 'service_status': 'error',
                 'error': str(e),
-                'consistent_personalization': True,  # 🚀 NEW: Even in error, personalization is supported
-                'graceful_degradation': True,  # 🚀 NEW: System supports graceful degradation
-                'document_context_support': True,  # 🚀 NEW: Document context is supported even in error
-                'advanced_confidence_management': True,  # 🚀 NEW: Advanced confidence is always active
-                'confidence_overflow_protection': True  # 🚀 NEW: Overflow protection is always active
+                'consistent_personalization': True,
+                'graceful_degradation': True,
+                'document_context_support': True,
+                'advanced_confidence_management': True,
+                'confidence_overflow_protection': True
             }
 
 gemini_response_generator = GeminiResponseGenerator()
