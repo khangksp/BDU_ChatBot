@@ -44,6 +44,7 @@ bcrypt==4.1.2
 
 # ✅ REQUIRED: Database Support
 psycopg2-binary==2.9.9  # PostgreSQL support
+dj-database-url==1.2.0  # Database URL parsing
 # sqlite3 is built-in with Python
 
 # ✅ REQUIRED: Vietnamese Language Processing

@@ -647,3 +647,275 @@ Thầy Quyền có thể liên hệ Phòng Tổ chức - Hành chính của trư
 ",0.4492,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.449194815158844
 2025-08-29T12:03:01.597089,hoc phi,"Dạ thầy Quyền, số tài khoản để nộp học phí là 8603931959 ạ. Thầy Quyền có cần em hỗ trợ thêm gì không ạ?
 ",0.438,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.43796428585052494
+2025-08-29T19:14:26.715074,5 ông thầy,"Dạ cô Khánh,
+
+""5 ông thầy"" trong phương pháp Cộng học của trường mình là:
+
+*   Thầy là Cha Mẹ
+*   Thầy là Thầy/Cô; Bạn bè
+*   Thầy là Sách; Tài liệu; Giáo trình; Hội thảo khoa học
+*   Thầy là Dr. Google
+*   Thầy là Chính bản thân mình
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T19:28:56.098471,5 ông thầy,"Dạ cô Khánh,
+
+""5 ông thầy"" trong phương pháp Cộng học của trường mình là:
+
+*   Thầy là Cha Mẹ
+*   Thầy là Thầy/Cô, Bạn bè
+*   Thầy là Sách, Tài liệu, Giáo trình, Hội thảo khoa học
+*   Thầy là Dr. Google
+*   Thầy là Chính bản thân mình
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T19:32:30.132688,5 ông thầy,"Dạ cô Khánh,
+
+""5 ông thầy"" trong phương pháp ""Cộng học"" của trường mình là:
+
+*   Thầy là ""Cha Mẹ""
+*   Thầy là ""Thầy/Cô; Bạn bè""
+*   Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+*   Thầy là ""Dr. Google""
+*   Thầy là ""Chính bản thân mình""
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T19:33:00.044179,cao việt hiếu là ai,"Dạ cô Khánh, thầy Cao Việt Hiếu là Hiệu trưởng trường mình ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T19:53:04.799476,5 ông thầy,"Dạ giảng viên, theo phương pháp ""Cộng học"" tại Đại học Bình Dương, ""5 ông thầy"" bao gồm:
+
+1.  Thầy là ""Cha Mẹ""
+2.  Thầy là ""Thầy/Cô; Bạn bè""
+3.  Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+4.  Thầy là ""Dr. Google""
+5.  Thầy là ""Chính bản thân mình""
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T19:53:07.625164,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T20:01:07.774350,5 ông thầy,"Dạ giảng viên, theo phương pháp ""Cộng học"" tại trường Đại học Bình Dương, ""5 ông thầy"" bao gồm:
+
+1.  Thầy là ""Cha Mẹ""
+2.  Thầy là ""Thầy/Cô; Bạn bè""
+3.  Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+4.  Thầy là ""Dr. Google""
+5.  Thầy là ""Chính bản thân mình""
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T20:01:10.258717,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T20:14:51.628967,5 ông thầy,"Dạ giảng viên, theo phương pháp ""Cộng học"" tại trường Đại học Bình Dương, ""05 người Thầy"" bao gồm:
+
+1.  Thầy là ""Cha Mẹ""
+2.  Thầy là ""Thầy/Cô; Bạn bè""
+3.  Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+4.  Thầy là ""Dr. Google""
+5.  Thầy là ""Chính bản thân mình""
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T20:14:54.277209,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T20:26:09.945926,5 ông thầy,"Dạ giảng viên, theo phương pháp ""Cộng học"" tại trường Đại học Bình Dương, ""5 ông thầy"" bao gồm:
+
+1.  Thầy là ""Cha Mẹ""
+2.  Thầy là ""Thầy/Cô; Bạn bè""
+3.  Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+4.  Thầy là ""Dr. Google""
+5.  Thầy là ""Chính bản thân mình""
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T20:26:12.497245,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T20:30:23.945030,5 ông thầy,"Dạ cô Khánh,
+
+""5 ông thầy"" trong phương pháp Cộng học của trường mình là:
+
+*   Thầy là Cha Mẹ
+*   Thầy là Thầy/Cô, Bạn bè
+*   Thầy là Sách, Tài liệu, Giáo trình, Hội thảo khoa học
+*   Thầy là Dr. Google
+*   Thầy là Chính bản thân mình
+
+Cô Khánh có muốn em giải thích rõ hơn về ""5 ông thầy"" này không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T20:30:47.522982,cao việt hiếu là ai,"Dạ cô Khánh, thầy Cao Việt Hiếu là Hiệu trưởng trường mình ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T20:32:58.206300,đội thi mini car racing 02 gồm những ai,"Dạ cô Khánh, em chưa có thông tin về thành viên đội thi Mini Car Racing 02 ạ. Cô Khánh có muốn em tìm thêm thông tin không ạ?
+",0.5139,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5138849919372135
+2025-08-29T20:33:12.791304,Mini Car Racing 02,"Dạ cô Khánh,
+
+""Mini Car Racing 02"" là tên của một đoàn, do ông Võ Thanh Thiện Trụ, Trợ lý Ban Giám hiệu, làm Trưởng đoàn ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5723,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5722708002726238
+2025-08-29T20:36:21.253381,thành viên Mini Car Racing 02,"Dạ cô Khánh,
+
+Em hiểu là cô Khánh muốn biết thông tin về thành viên của đội Mini Car Racing 02 đúng không ạ? Hiện tại, em chưa có danh sách thành viên cụ thể của đội này. Tuy nhiên, em biết Trưởng đoàn là thầy Võ Thanh Thiện Trụ, Trợ lý Ban Giám hiệu.
+
+Cô Khánh có muốn em tìm hiểu thêm thông tin về đội Mini Car Racing 02 hoặc liên hệ với thầy Trụ để hỏi không ạ?
+",0.5235,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.5235035781065622
+2025-08-29T20:40:24.525154,5 ông thầy,"Dạ giảng viên, theo phương pháp ""Cộng học"" tại Đại học Bình Dương, ""5 ông thầy"" bao gồm:
+
+1.  Thầy là ""Cha Mẹ""
+2.  Thầy là ""Thầy/Cô; Bạn bè""
+3.  Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+4.  Thầy là ""Dr. Google""
+5.  Thầy là ""Chính bản thân mình""
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T20:40:27.180615,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T20:48:15.523260,thầy Tuấn là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:17.980779,vậy thầy Tuấn làm gì,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:19.039030,hiệu trưởng là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:20.841111,phó hiệu trưởng là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:22.739143,giám đốc trung tâm CDS là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:24.404281,học phí bao nhiêu,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:26.208762,thủ tục tốt nghiệp,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:28.097918,vậy hiệu trưởng tên gì,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:30.041903,còn phó hiệu trưởng thì sao,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:31.611316,thầy Tuấn ở đâu,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:33.553530,5 ông thầy,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:35.298902,thầy Tuấn là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:36.864657,giám đốc trung tâm CDS là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:38.307379,hiệu trưởng là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:39.785380,cao việt hiếu là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:41.343684,phó hiệu trưởng là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:43.388193,giám đốc CDS,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:45.597633,ai là giám đốc trung tâm CDS,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:47.353221,Lê Văn Cường là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:48.997223,Đỗ Đoan Trang là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:50.808327,vậy Lê Văn Cường là ai,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:52.442861,Cao Việt Hiếu là ai?,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:54.220765,học phí,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:55.861787,học phí chính quy,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:57.531257,còn thầy Tuấn thì sao,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:48:59.258372,bà Trang làm gì ở trường,"Dạ giảng viên, em gặp khó khăn kỹ thuật. Giảng Viên có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:52:10.103970,hiểu trưởng là ai,"Dạ cô Khánh, em gặp khó khăn kỹ thuật. Cô Khánh có thể liên hệ bộ phận IT qua email it@bdu.edu.vn để được hỗ trợ ạ. 🎯",0.0,error_fallback,cache_rejected_confidence_too_low_0.0
+2025-08-29T20:53:42.902941,cao việt hiếu là ai,"Dạ cô Khánh, hiệu trưởng Trường Đại học Bình Dương là GS.TS. Cao Việt Hiếu ạ. Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T20:56:41.992619,5 ông thầy,"Dạ giảng viên, theo phương pháp ""Cộng học"" tại trường Đại học Bình Dương, ""5 ông thầy"" bao gồm:
+
+1.  Thầy là ""Cha Mẹ""
+2.  Thầy là ""Thầy/Cô; Bạn bè""
+3.  Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+4.  Thầy là ""Dr. Google""
+5.  Thầy là ""Chính bản thân mình""
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T20:56:44.513088,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này trong cơ sở dữ liệu của trường. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5976,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5975878603893778
+2025-08-29T20:57:02.191102,bà Trang làm gì ở trường,"Dạ giảng viên, bà Vũ Mai Trang hiện là Phó viện trưởng Viện Đào tạo liên tục, Phục vụ cộng đồng của trường Đại học Bình Dương ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5863,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5863340449944521
+2025-08-29T21:03:48.506656,cao việt hiếu là ai,"Dạ cô Khánh,
+
+GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-29T21:04:11.460563,ai là giám đốc trung tâm CDS,"Dạ cô Khánh,
+
+Ý cô Khánh là ai đang làm Giám đốc Trung tâm CDS đúng không ạ? Hiện tại là thầy Tuấn ạ, thầy còn là giảng viên của trường mình nữa cô Khánh.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5974,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5974363415083404
+2025-08-29T21:04:18.231338,cao việt hiếu là ai,"Dạ cô Khánh,
+
+Em chưa có thông tin về người này ạ. Cô Khánh có muốn em tìm kiếm thông tin liên hệ của phòng ban nào để hỏi không ạ?
+",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-29T21:04:39.503918,Lê Văn Cường là ai,"Dạ cô Khánh,
+
+Em tìm thấy thông tin về ông Hoàng Ngọc Cường, trước đây ở Phòng Quản lý khoa học và Quan hệ đối ngoại, giờ đã chuyển sang Khoa Công nghệ thực phẩm ạ. Có phải cô Khánh muốn biết thông tin về người này không ạ?
+",0.4584,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4583930000552424
+2025-08-29T21:07:45.442037,giám đốc trung tâm CDS là ai,"Dạ giảng viên, em chưa có thông tin về Giám đốc Trung tâm CDS ạ. Giảng viên có thể liên hệ trực tiếp Phòng Tổ chức Hành chính để được hỗ trợ thông tin này ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5772,use_db_direct_smart_entity_fallback,cache_rejected_confidence_too_low_0.577190980230059
+2025-08-29T21:07:56.643295,5 ông thầy,"Dạ giảng viên, ""05 người Thầy"" trong phương pháp ""Cộng học"" tại Trường Đại học Bình Dương bao gồm:
+
+*   Thầy là ""Cha Mẹ""
+*   Thầy là ""Thầy/Cô; Bạn bè""
+*   Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+*   Thầy là ""Dr. Google""
+*   Thầy là ""Chính bản thân mình""
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T21:07:58.355611,giám đốc trung tâm CDS là ai,"Dạ giảng viên, thầy Dương Anh Tuấn hiện là Giám đốc Trung tâm CDS của trường Đại học Bình Dương ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5772,use_db_direct_smart_entity_fallback,cache_rejected_confidence_too_low_0.577190980230059
+2025-08-29T21:08:00.303885,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-29T21:08:03.512059,ai là giám đốc trung tâm CDS,"Dạ giảng viên, em chưa có thông tin về người này ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5974,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5974363415083404
+2025-08-29T21:08:05.501133,Lê Văn Cường là ai,"Dạ giảng viên, em xin cung cấp thông tin về ông Hoàng Ngọc Cường ạ. Ông Cường đã được điều động từ Phòng Quản lý khoa học và Quan hệ đối ngoại sang Khoa Công nghệ thực phẩm. Còn về ông Lê Văn Cường, em chưa có thông tin về người này trong dữ liệu hiện tại của trường ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.4584,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4583930000552424
+2025-08-29T21:08:10.580414,Cao Việt Hiếu là ai?,"Dạ giảng viên, em chưa có thông tin về người này ạ. Tuy nhiên, em có thông tin về một sinh viên khác tên Nguyễn Văn Hiếu, người này nhận được mức ưu đãi học phí là 10% học phí/toàn khóa học. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.4976,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.49762926363945004
+2025-08-29T21:08:16.342530,bà Trang làm gì ở trường,"Dạ giảng viên, bà Vũ Mai Trang hiện là Phó viện trưởng Viện Đào tạo liên tục, Phục vụ cộng đồng của trường Đại học Bình Dương ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5863,use_db_direct_normal,cache_rejected_confidence_too_low_0.5863340449944521
+2025-08-29T21:17:47.646321,5 ông thầy,"Dạ giảng viên, theo phương pháp ""Cộng học"" tại Đại học Bình Dương, ""5 ông thầy"" bao gồm:
+
+1.  Thầy là ""Cha Mẹ""
+2.  Thầy là ""Thầy/Cô; Bạn bè""
+3.  Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học""
+4.  Thầy là ""Dr. Google""
+5.  Thầy là ""Chính bản thân mình""
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T21:17:50.028987,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-29T21:17:55.391541,Lê Văn Cường là ai,"Dạ giảng viên, em chưa có thông tin về ""Lê Văn Cường"". Tuy nhiên, em biết ông Hoàng Ngọc Cường đã được điều động từ Phòng Quản lý khoa học và Quan hệ đối ngoại sang Khoa Công nghệ thực phẩm. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.4584,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4583930000552424
+2025-08-29T21:18:00.114409,Cao Việt Hiếu là ai?,"Dạ giảng viên, em chưa có thông tin về ""Cao Việt Hiếu"". Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.4976,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.49762926363945004
+2025-08-29T21:18:07.358734,bà Trang làm gì ở trường,"Dạ giảng viên, bà Vũ Mai Trang hiện là Phó viện trưởng Viện Đào tạo liên tục, Phục vụ cộng đồng của trường Đại học Bình Dương ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5863,use_db_direct_normal,cache_rejected_confidence_too_low_0.5863340449944521
+2025-08-29T21:31:23.474253,5 ông thầy,"Dạ giảng viên, theo phương pháp ""Cộng học"" tại Đại học Bình Dương, ""5 ông thầy"" bao gồm: Thầy là ""Cha Mẹ"", Thầy là ""Thầy/Cô; Bạn bè"", Thầy là ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học"", Thầy là ""Dr. Google"", và Thầy là ""Chính bản thân mình"". Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5685,unified_use_db_direct_normal,cache_rejected_confidence_too_low_0.5685422445312749
+2025-08-29T21:31:26.157840,cao việt hiếu là ai,"Dạ giảng viên, em chưa có thông tin về người này trong dữ liệu của trường. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.5736,unified_use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-08-29T21:31:31.854973,Lê Văn Cường là ai,"Dạ giảng viên,
+
+Hiện tại em không có thông tin về người tên ""Lê Văn Cường"" trong dữ liệu của trường. Tuy nhiên, em có thông tin về ông Hoàng Ngọc Cường, người đã được điều động từ Phòng Quản lý khoa học và Quan hệ đối ngoại sang Khoa Công nghệ thực phẩm. Giảng viên có muốn biết thêm thông tin về ông Hoàng Ngọc Cường không ạ?
+
+Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.4584,unified_enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4583930000552424
+2025-08-29T21:31:39.630415,Cao Việt Hiếu là ai?,"Dạ giảng viên, hiện tại hệ thống đang quá tải, tất cả các kết nối đều đang bận. Vui lòng thử lại sau khoảng 1 phút nữa ạ. 😥",0.4976,unified_enhance_db_answer_normal,cache_rejected_confidence_too_low_0.49762926363945004
+2025-08-29T21:32:01.328817,bà Trang làm gì ở trường,"Dạ giảng viên, hiện tại hệ thống đang quá tải, tất cả các kết nối đều đang bận. Vui lòng thử lại sau khoảng 1 phút nữa ạ. 😥",0.5863,unified_use_db_direct_normal,cache_rejected_confidence_too_low_0.5863340449944521
+2025-08-29T21:50:07.311400,Lê Văn Cường là ai,"Dạ giảng viên, em chưa có thông tin về Lê Văn Cường ạ. Giảng Viên có cần em hỗ trợ thêm gì không ạ?
+",0.4878,enhance_db_answer_context,cache_rejected_confidence_too_low_0.4877520669168896
+2025-08-29T21:50:20.960861,học phí chính quy,"Dạ giảng viên, hiện tại hệ thống đang quá tải. Vui lòng thử lại sau khoảng 1 phút nữa ạ.",0.5572,use_db_direct_context,cache_rejected_confidence_too_low_0.5571979811986287
+2025-08-29T21:52:15.087319,giám đốc trung tâm CDS là ai,"Dạ cô Khánh,
+
+Giám đốc Trung tâm CDS đại diện và điều hành Trung tâm, xây dựng chiến lược, đề xuất tuyển dụng, quản lý nhân sự, phối hợp đào tạo, và đảm bảo tuân thủ quy định của Trường ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5814,use_db_direct_context,cache_rejected_confidence_too_low_0.581396794962966
+2025-08-29T22:03:25.735515,5 ông thầy,"Dạ cô Khánh, ""5 ông thầy"" trong phương pháp Cộng học của trường mình bao gồm: Thầy là Cha Mẹ, Thầy là Thầy/Cô; Bạn bè, Thầy là Sách; Tài liệu; Giáo trình; Hội thảo khoa học, Thầy là Dr. Google, và Thầy là Chính bản thân mình ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.5955,use_db_direct_normal,cache_rejected_confidence_too_low_0.5955486077797122
+2025-08-29T22:03:53.804246,cao việt hiếu là ai,"Dạ cô Khánh, GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.579,use_db_direct_normal,cache_rejected_confidence_too_low_0.5789842726267301
+2025-08-29T22:04:50.761872,Lê Văn Cường là ai,"Dạ cô Khánh, em chưa có thông tin về Lê Văn Cường ngoài việc thầy là Phó Hiệu trưởng của trường Đại học Bình Dương ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.4675,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.46750788278049893
+2025-08-29T22:10:50.281376,doi nexunit doi y tuong tphcm duoc nhan tien thuong may,"Dạ cô Khánh, em chưa có thông tin về tiền thưởng của đội Nexunit.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.392,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.3919982230663299
+2025-08-29T22:11:00.239630,doi nexunit va doi y tuong sang tao tre tphcm duoc thuong tien mat bao nhieu,"Dạ cô Khánh, mỗi đội (Nexunit và Ý Tưởng Sáng Tạo Trẻ TP.HCM) được thưởng 1.500.000 đồng, tổng cộng là 3.000.000 đồng cho cả hai đội ạ.
+
+Cô Khánh có cần em hỗ trợ thêm gì không ạ?
+",0.592,use_db_direct_normal,cache_rejected_confidence_too_low_0.5920403089523315

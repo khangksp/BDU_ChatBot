@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 from .settings import *
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -32,6 +33,7 @@ ALLOWED_HOSTS = [
     # 'your-domain.com',  # 🔥 DEPLOY: Nếu có tên miền thì bỏ # và sửa
     '*.ngrok.io',  # Allow all ngrok subdomains
     '*.ngrok-free.app',
+    'cds.bdu.edu.vn',
 ]
 
 # =============================================================================
@@ -126,17 +128,21 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # =============================================================================
 # CẤU HÌNH DATABASE
 # =============================================================================
-
-# Mặc định: SQLite cho development (dễ setup)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {
-            'timeout': 20,
+if 'DATABASE_URL' in os.environ:
+    DATABASES = {
+        'default': dj_database_url.config(conn_max_age=600, ssl_require=False)
+    }
+else:
+    # Mặc đinh dùng SQLite cho development nếu không có DATABASE_URL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 20,
+            }
         }
     }
-}
 
 # =============================================================================
 # KIỂM TRA MẬT KHẨU
@@ -176,7 +182,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-FORCE_SCRIPT_NAME = '/bdu_chatbot'
+# FORCE_SCRIPT_NAME = '/bdu_chatbot'
 
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
