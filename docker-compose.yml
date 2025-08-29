@@ -50,44 +50,44 @@ services:
       timeout: 10s
       retries: 3
 
-  # Frontend React Service
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: bdu_chatbot_frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
-      - CHOKIDAR_USEPOLLING=true
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - chatbot_network
+  # # Frontend React Service
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: bdu_chatbot_frontend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - REACT_APP_API_URL=http://localhost:8000
+  #     - CHOKIDAR_USEPOLLING=true
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped
+  #   networks:
+  #     - chatbot_network
 
-  # Nginx Reverse Proxy (Optional)
-  nginx:
-    image: nginx:alpine
-    container_name: bdu_chatbot_nginx
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - static_volume:/var/www/static
-      - media_volume:/var/www/media
-    ports:
-      - "9000:80"
-    depends_on:
-      - backend
-      - frontend
-    restart: unless-stopped
-    networks:
-      - chatbot_network
-    profiles:
-      - with-nginx
+  # # Nginx Reverse Proxy (Optional)
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: bdu_chatbot_nginx
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf
+  #     - static_volume:/var/www/static
+  #     - media_volume:/var/www/media
+  #   ports:
+  #     - "9000:80"
+  #   depends_on:
+  #     - backend
+  #     - frontend
+  #   restart: unless-stopped
+  #   networks:
+  #     - chatbot_network
+  #   profiles:
+  #     - with-nginx
 
 volumes:
   postgres_data:

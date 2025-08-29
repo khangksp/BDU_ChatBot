@@ -621,3 +621,29 @@ Nếu giảng viên cần thêm thông tin về các hoạt động cụ thể c
 
 Giảng Viên có cần em hỗ trợ thêm gì không ạ?
 ",0.488,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.48802997471945625
+2025-08-29T11:56:10.910870,thay Tuan la ai,"Dạ cô Sơn, thầy Dương Anh Tuấn là cán bộ giảng viên của Đại học Bình Dương và hiện đang giữ chức Giám đốc Trung tâm CDS từ năm 2025 ạ.
+
+Cô Sơn có cần em hỗ trợ thêm gì không ạ?
+",0.5995,use_db_direct_normal,cache_rejected_confidence_too_low_0.5995069847106934
+2025-08-29T11:56:38.005846,thay Tuan la ai,"Dạ cô Sơn, thầy Dương Anh Tuấn là cán bộ giảng viên của Đại học Bình Dương và hiện đang giữ chức Giám đốc Trung tâm CDS từ năm 2025 ạ.
+
+Cô Sơn có cần em hỗ trợ thêm gì không ạ?
+",0.5995,use_db_direct_normal,cache_rejected_confidence_too_low_0.5995069847106934
+2025-08-29T11:59:34.530131,hieu truong la ai,"Dạ thầy Quyền, Hiệu trưởng Trường Đại học Bình Dương là GS.TS. Cao Việt Hiếu ạ. Thầy Quyền có cần em hỗ trợ thêm gì không ạ?
+",0.5873,use_db_direct_normal,cache_rejected_confidence_too_low_0.5872791111673628
+2025-08-29T11:59:51.572151,ai la giam doc trung tam CDS?,"Dạ thầy Quyền, thầy Dương Anh Tuấn là cán bộ giảng viên thuộc trường Đại học Bình Dương và nhận chức Giám đốc TT CDS vào năm 2025 ạ. Thầy Quyền có cần em hỗ trợ thêm gì không ạ?
+",0.4438,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4437670077596392
+2025-08-29T12:01:39.577344,Le Van Cuong la ai?,"Dạ thầy Quyền, thầy Lê Văn Cường hiện là một trong hai Phó Hiệu trưởng của trường Đại học Bình Dương ạ. Thầy Quyền có cần em hỗ trợ thêm gì không ạ?
+",0.4004,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.40042486371416036
+2025-08-29T12:02:18.179148,Cao Viet Hieu la ai?,"Dạ thầy Quyền, em chưa có thông tin về Cao Việt Hiếu trong cơ sở dữ liệu hiện tại. Tuy nhiên, em có thông tin về Nguyễn Văn Hiếu, người đang nhận được mức ưu đãi học phí 10% toàn khóa học tại trường. Thầy Quyền có cần em hỗ trợ thêm gì không ạ?
+",0.3816,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.3816292636394501
+2025-08-29T12:02:46.952551,vay ai la giam doc trung tam CDS?,"Dạ thầy Quyền, em chưa có thông tin về Giám đốc Trung tâm CDS trong cơ sở dữ liệu hiện tại. Tuy nhiên, theo em được biết, để trở thành Giám đốc Trung tâm, cần đáp ứng các tiêu chí sau:
+
+*   Có trình độ cử nhân trở lên.
+*   Có kinh nghiệm và năng lực quản lý.
+*   Sử dụng thành thạo ngoại ngữ và tin học văn phòng.
+
+Thầy Quyền có thể liên hệ Phòng Tổ chức - Hành chính của trường để có thông tin chính xác nhất về vị trí này ạ. Thầy Quyền có cần em hỗ trợ thêm gì không ạ?
+",0.4492,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.449194815158844
+2025-08-29T12:03:01.597089,hoc phi,"Dạ thầy Quyền, số tài khoản để nộp học phí là 8603931959 ạ. Thầy Quyền có cần em hỗ trợ thêm gì không ạ?
+",0.438,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.43796428585052494
