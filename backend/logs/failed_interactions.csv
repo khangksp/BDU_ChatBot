@@ -919,3 +919,32 @@ Cô Khánh có cần em hỗ trợ thêm gì không ạ?
 
 Cô Khánh có cần em hỗ trợ thêm gì không ạ?
 ",0.592,use_db_direct_normal,cache_rejected_confidence_too_low_0.5920403089523315
+2025-08-29T23:10:21.014807,giám đốc trung tâm CDS là ai,"Dạ cô Khánh, Có trình độ cử nhân trở lên, có kinh nghiệm, năng lực quản lý, sử dụng ngoại ngữ và tin học văn phòng. Cô Khánh cần em làm rõ thêm gì không ạ? 🎯",0.5772,use_db_direct_smart_entity_fallback,cache_rejected_confidence_too_low_0.577190980230059
+2025-08-29T23:10:37.685793,cao việt hiếu là ai,"Dạ cô Khánh, Lệ phí nhận bằng tốt nghiệp trình độ đào tạo trung cấp, cao đẳng, đại học, thạc sĩ, tiến sĩ là 1.000.000 đồng/sinh viên. Cô Khánh cần em làm rõ thêm gì không ạ? 🎯",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-09-05T16:14:53.129532,vậy sv Khang này làm cái gì,"Dạ cô Khánh, để em hỗ trợ chính xác nhất, cô Khánh có thể nói rõ hơn về vấn đề cần hỗ trợ không ạ? 🎓",0.3259,ask_clarification_normal,cache_rejected_confidence_too_low_0.3258606517314911
+2025-09-05T16:18:54.073153,sinh duy khang là ai,"Dạ thầy Admin, em chưa có thông tin về người này. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.5839,use_db_direct_fallback,cache_rejected_confidence_too_low_0.5838786977132162
+2025-09-05T16:24:18.815304,thành viên mini car fighting 02 gồm những ai,"Dạ thầy Admin, thành viên đội Mini Car Fighting 02 gồm: Võ Chí Linh, Nguyễn Xuân Long, Trần Đăng Trị, Nguyễn Quốc Duy Khang. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.4594,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45936153213183084
+2025-09-05T16:24:49.899363,Duy Khang là ai,"Dạ thầy Admin, Nguyễn Quốc Duy Khang là thành viên đội Mini Car Fighting 02. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.5947,use_db_direct_normal,cache_rejected_confidence_too_low_0.5947180539766947
+2025-09-05T16:25:08.104493,vậy sinh viên Duy Khang là ai?,"Dạ thầy Admin, Nguyễn Quốc Duy Khang là thành viên đội Mini Car Fighting 02 và là sinh viên lớp 25TH01, người đã tạo ra chatbot này ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.4786,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.47856271283967156
+2025-09-05T16:38:07.461642,5 ông thầy,"Dạ thầy Admin, ""5 ông thầy"" trong phương pháp ""Cộng học"" tại Đại học Bình Dương bao gồm: ""Cha Mẹ"", ""Thầy/Cô; Bạn bè"", ""Sách; Tài liệu; Giáo trình; Hội thảo khoa học"", ""Dr. Google"", và ""Chính bản thân mình"" ạ.
+
+Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.5685,use_db_direct_normal,cache_rejected_confidence_too_low_0.5685421730057011
+2025-09-05T16:38:18.995051,giám đốc trung tâm CDS là ai,"Dạ thầy Admin, thầy Tuấn là cán bộ giảng viên thuộc trường Đại học Bình Dương và nhận chức Giám đốc TT CDS vào năm 2025 ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.5772,use_db_direct_smart_entity_fallback,cache_rejected_confidence_too_low_0.577190980230059
+2025-09-05T16:38:32.026672,cao việt hiếu là ai,"Dạ thầy Admin, GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.5736,use_db_direct_normal,cache_rejected_confidence_too_low_0.5736348710426917
+2025-09-05T16:39:23.407895,Lê Văn Cường là ai,"Dạ thầy Admin, thầy Lê Văn Cường là Phó Hiệu trưởng Trường Đại học Bình Dương ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.4584,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.4583928927668819
+2025-09-05T16:40:45.644981,Cao Việt Hiếu là ai?,"Dạ thầy Admin, GS.TS. Cao Việt Hiếu là Hiệu trưởng Trường Đại học Bình Dương ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.4976,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.49762926363945004
+2025-09-05T16:49:59.097394,thành viên mini car fighting 02 gồm những ai,"Dạ thầy Admin, thành viên mini car fighting 02 gồm Võ Chí Linh, Nguyễn Xuân Long, Trần Đăng Trị, Nguyễn Quốc Duy Khang ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.4594,enhance_db_answer_normal,cache_rejected_confidence_too_low_0.45936153213183084
+2025-09-05T16:50:10.316505,Duy Khang là ai,"Dạ thầy Admin, Nguyễn Quốc Duy Khang là thành viên của mini car fighting 02 ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.5947,use_db_direct_normal,cache_rejected_confidence_too_low_0.5947180539766947
+2025-09-05T16:53:56.237413,vậy thầy Hiếu là ai,"Dạ thầy Admin, Nguyễn Văn Hiếu là sinh viên lớp 241100MB005, ngành Quản trị kinh doanh ạ. Thầy Admin có cần em hỗ trợ thêm gì không ạ?
+",0.5496,enhance_db_answer_fallback,cache_rejected_confidence_too_low_0.549602486371994

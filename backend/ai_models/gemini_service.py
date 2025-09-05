@@ -478,7 +478,7 @@ class ConversationMemory:
         active_entities = self._get_active_entities(session_id)
         
         return {
-            'history': conv['history'][-5:],  # Last 5 interactions
+            'history': conv['history'][-25:],  # Last 25 interactions
             'context_summary': conv['context_summary'],
             'user_interests': list(conv['user_interests']),
             'conversation_type': conv['conversation_type'],
@@ -828,8 +828,8 @@ class ConversationMemory:
         if len(history) < 2:
             return ""
         
-        # Lấy 2-3 tương tác gần nhất
-        recent_interactions = history[-3:] if len(history) >= 3 else history[-2:]
+        # Lấy tương tác gần nhất
+        recent_interactions = history[-20:]
         
         summary_parts = []
         for interaction in recent_interactions:

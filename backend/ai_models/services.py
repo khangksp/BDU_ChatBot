@@ -8,6 +8,7 @@ from knowledge.models import KnowledgeBase
 import logging
 from .gemini_service import GeminiResponseGenerator, SimpleVietnameseRestorer
 import pandas as pd
+import io
 
 from .external_api_service import external_api_service
 from qa_management.services import drive_service
@@ -1837,17 +1838,28 @@ class ChatbotAI:
 
     def load_link_mapping(self):
         try:
-            link_csv_path = os.path.join(settings.BASE_DIR, 'data', 'link.csv')
-            if os.path.exists(link_csv_path):
-                df_links = pd.read_csv(link_csv_path, encoding='utf-8')
-                for index, row in df_links.iterrows():
-                    stt = str(row['STT']).strip()
-                    link = str(row['Link']).strip()
-                    if stt and link and stt != 'nan' and link != 'nan':
-                        self.link_mapping[stt] = link
-                logger.info(f"✅ Loaded {len(self.link_mapping)} reference links")
+            # Gọi service để lấy nội dung file link.csv từ Drive
+            link_csv_content = drive_service.get_specific_csv_content('link.csv')
+            
+            if not link_csv_content:
+                logger.error("❌ Could not load link.csv from Google Drive. Link mapping will be empty.")
+                self.link_mapping = {}
+                return
+
+            # Dùng pandas để đọc nội dung CSV từ string
+            df_links = pd.read_csv(io.StringIO(link_csv_content), encoding='utf-8')
+            
+            for index, row in df_links.iterrows():
+                # Dùng .get() để tránh lỗi nếu cột không tồn tại
+                stt = str(row.get('STT', '')).strip()
+                link = str(row.get('Link', '')).strip()
+                if stt and link and stt != 'nan' and link != 'nan':
+                    self.link_mapping[stt] = link
+            
+            logger.info(f"✅ Loaded {len(self.link_mapping)} reference links FROM GOOGLE DRIVE")
+
         except Exception as e:
-            logger.error(f"❌ Error loading link mapping: {str(e)}")
+            logger.error(f"❌ Error loading link mapping FROM GOOGLE DRIVE: {str(e)}")
             self.link_mapping = {}
 
     def get_reference_links(self, qa_item):

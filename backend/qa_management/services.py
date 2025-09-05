@@ -55,21 +55,23 @@ class GoogleDriveService:
             self.service = None
             return False
 
-    def _find_csv_file(self):
-        """Tìm file CSV, hỗ trợ cả Shared Drive."""
+    def _find_csv_file(self, filename=None): # ✅ NÂNG CẤP: Thêm tham số filename
+        """Tìm file CSV, hỗ trợ cả Shared Drive. Giờ sẽ tìm file được chỉ định."""
         if not self.service:
             return None
+        
+        # Dùng filename được truyền vào, nếu không thì mặc định là QA.csv
+        target_filename = filename if filename else self.csv_filename
+        
         try:
-            query = f"name='{self.csv_filename}' and parents in '{self.folder_id}' and trashed=false"
+            query = f"name='{target_filename}' and parents in '{self.folder_id}' and trashed=false"
             
-            # ✅ PROPER SHARED DRIVE SUPPORT
             list_params = {
                 'q': query,
                 'fields': "files(id, name, modifiedTime, size)",
-                'supportsAllDrives': True,          # Bắt buộc cho Shared Drive
-                'includeItemsFromAllDrives': True,  # Bắt buộc cho Shared Drive
+                'supportsAllDrives': True,
+                'includeItemsFromAllDrives': True,
             }
-            # Nếu có drive_id, thêm vào để tăng tốc độ tìm kiếm
             if self.drive_id:
                 list_params['driveId'] = self.drive_id
                 list_params['corpora'] = 'drive'
@@ -81,12 +83,27 @@ class GoogleDriveService:
                 logger.info(f"📁 Found file: {files[0]['name']} (ID: {files[0]['id']})")
                 return files[0]
             else:
-                logger.warning(f"⚠️ File '{self.csv_filename}' not found in folder '{self.folder_id}'")
+                logger.warning(f"⚠️ File '{target_filename}' not found in folder '{self.folder_id}'")
                 return None
         except Exception as e:
-            logger.error(f"❌ Error finding CSV file: {str(e)}")
+            logger.error(f"❌ Error finding file '{target_filename}': {str(e)}")
             return None
 
+    def get_specific_csv_content(self, filename: str) -> str | None:
+        """
+        Tải và trả về nội dung text của một file CSV cụ thể từ Drive.
+        """
+        try:
+            logger.info(f"🔄 Attempting to get content for '{filename}' from Drive...")
+            file_info = self._find_csv_file(filename=filename)
+            if not file_info:
+                return None
+            
+            return self._download_csv_content(file_info['id'])
+        except Exception as e:
+            logger.error(f"❌ Critical error in get_specific_csv_content for '{filename}': {str(e)}")
+            return None
+    
     def _download_csv_content(self, file_id):
         """Tải nội dung CSV từ Google Drive."""
         try:
@@ -294,14 +311,25 @@ class GoogleDriveService:
         Đây là hàm chính để các service khác gọi vào lấy dữ liệu.
         """
         try:
-            logger.info("🔄 Attempting to get CSV data from Drive...")
-            parsed_data = self._download_and_parse()
+            logger.info("🔄 Attempting to get QA.csv data from Drive...")
+            # Sửa lại để đảm bảo hàm này chỉ gọi file QA.csv mặc định
+            file_info = self._find_csv_file() # Không truyền filename để dùng mặc định
+            if not file_info:
+                 logger.warning("⚠️ QA.csv not found on Drive, trying fallback...")
+                 return self._load_fallback_csv()
+
+            csv_content = self._download_csv_content(file_info['id'])
+            if not csv_content:
+                logger.warning("⚠️ Failed to download QA.csv, trying fallback...")
+                return self._load_fallback_csv()
+                
+            parsed_data = self._csv_to_database_format(csv_content)
             
             if parsed_data:
-                logger.info(f"✅ Successfully loaded {len(parsed_data)} records from Drive")
+                logger.info(f"✅ Successfully loaded {len(parsed_data)} records from QA.csv on Drive")
                 return parsed_data
             else:
-                logger.warning("⚠️ No data from Drive, trying fallback...")
+                logger.warning("⚠️ No data from QA.csv on Drive, trying fallback...")
                 return self._load_fallback_csv()
                 
         except Exception as e:

@@ -244,7 +244,8 @@ CORS_ALLOWED_ORIGINS = [
     # "http://192.168.1.100:3000",  # 🔥 DEPLOY: Bỏ # và thay IP thật
     # "http://192.168.1.100:80",    # 🔥 DEPLOY: Nếu frontend chạy port 80
     # "https://your-domain.com",    # 🔥 DEPLOY: Nếu có HTTPS domain
-    "https://ec1bd752cf14.ngrok-free.app"
+    "https://ec1bd752cf14.ngrok-free.app",
+    "https://cds.bdu.edu.vn"
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -293,6 +294,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.ngrok.io",
     "https://*.ngrok-free.app",
     "https://ec1bd752cf14.ngrok-free.app",
+    "https://cds.bdu.edu.vn"
 ]
 
 # =============================================================================
@@ -377,9 +379,6 @@ os.makedirs(BASE_DIR / 'media', exist_ok=True)
 # =============================================================================
 # 🤖 CẤU HÌNH AI MODELS
 # =============================================================================
-
-# Cấu hình Gemini API
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # Cấu hình Speech-to-text
 SPEECH_RECOGNITION_ENABLED = os.getenv('SPEECH_RECOGNITION_ENABLED', 'True').lower() in ['true', '1', 'yes']
