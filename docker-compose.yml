@@ -1,0 +1,138 @@
+services:
+  # =================================================================
+  # 1. AI ENGINE (OLLAMA) - Chạy trực tiếp trong Docker
+  # =================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bdu_chatbot_ollama
+    volumes:
+      - ollama_data:/root/.ollama # 💾 Lưu model vĩnh viễn
+    ports:
+      - "11434:11434" # Mở port để debug hoặc pull model thủ công
+    networks:
+      - chatbot_network
+    restart: always
+
+  # =================================================================
+  # 2. HỆ THỐNG GIẢNG VIÊN (GV) - Port 8019
+  # =================================================================
+  db_gv:
+    image: postgres:15
+    container_name: chatbot_db_gv
+    volumes:
+      - postgres_data_gv:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=bdu_chatbot_gv
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+    ports:
+      - "5432:5432"
+    restart: always
+    networks:
+      - chatbot_network
+
+  chatbot_gv:
+    build:
+      context: ./chatbotGV/backend
+      dockerfile: Dockerfile
+    container_name: chatbot_be_gv
+    volumes:
+      - ./chatbotGV/backend:/app
+      - media_volume_gv:/app/media
+      - static_volume_gv:/app/staticfiles
+      - hf_cache:/app/ai_models_cache
+    ports:
+      - "8019:3019"
+    env_file:
+      - ./chatbotGV/backend/.env
+    environment:
+      - DB_HOST=db_gv
+      - DATABASE_URL=postgresql://postgres:postgres123@db_gv:5432/bdu_chatbot_gv
+      - DJANGO_SETTINGS_MODULE=backend.settings
+      # 👇 Kết nối với container 'ollama' qua mạng nội bộ
+      - OLLAMA_API_URL=http://ollama:11434
+      # Cấu hình OCR cho Linux
+      - TESSERACT_PATH_RELATIVE=/usr/bin/tesseract
+      - POPPLER_PATH_RELATIVE=/usr/bin
+      - ALLOWED_HOSTS=*
+      - CSRF_TRUSTED_ORIGINS=https://cds.bdu.edu.vn
+    depends_on:
+      - db_gv
+      - ollama
+    restart: always
+    networks:
+      - chatbot_network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3019/api/health/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =================================================================
+  # 3. HỆ THỐNG SINH VIÊN (STUDENT) - Port 8020
+  # =================================================================
+  db_student:
+    image: postgres:15
+    container_name: chatbot_db_student
+    volumes:
+      - postgres_data_student:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=bdu_chatbot_student
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+    ports:
+      - "5433:5432" # Port 5433 để tránh trùng
+    restart: always
+    networks:
+      - chatbot_network
+
+  chatbot_student:
+    build:
+      context: ./ChatBotStudent/backend
+      dockerfile: Dockerfile
+    container_name: chatbot_be_student
+    volumes:
+      - ./ChatBotStudent/backend:/app
+      - media_volume_student:/app/media
+      - static_volume_student:/app/staticfiles
+      - hf_cache:/app/ai_models_cache
+    ports:
+      - "8020:3019"
+    env_file:
+      - ./ChatBotStudent/backend/.env
+    environment:
+      - DB_HOST=db_student
+      - DATABASE_URL=postgresql://postgres:postgres123@db_student:5432/bdu_chatbot_student
+      - DJANGO_SETTINGS_MODULE=backend.settings
+      # 👇 Kết nối với container 'ollama' qua mạng nội bộ
+      - OLLAMA_API_URL=http://ollama:11434
+      - TESSERACT_PATH_RELATIVE=/usr/bin/tesseract
+      - POPPLER_PATH_RELATIVE=/usr/bin
+      - ALLOWED_HOSTS=*
+      - CSRF_TRUSTED_ORIGINS=https://cds.bdu.edu.vn
+    depends_on:
+      - db_student
+      - ollama
+    restart: always
+    networks:
+      - chatbot_network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3019/api/health/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  ollama_data: # 💾 Lưu Ollama models
+  postgres_data_gv:
+  static_volume_gv:
+  media_volume_gv:
+  postgres_data_student:
+  static_volume_student:
+  media_volume_student:
+  hf_cache:
+    # 💾 Shared HuggingFace cache
+
+networks:
+  chatbot_network:
+    driver: bridge
