@@ -1,7 +1,32 @@
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.base_user import BaseUserManager
 from django.db import models
 from django.utils import timezone
 import uuid
+
+class FacultyManager(BaseUserManager):
+    def create_user(self, faculty_code, email, password=None, **extra_fields):
+        if not faculty_code:
+            raise ValueError('Phải có mã giảng viên (faculty_code)')
+        email = self.normalize_email(email)
+        # Vì kế thừa AbstractUser nên vẫn cần field username, ta gán nó bằng faculty_code
+        user = self.model(faculty_code=faculty_code, email=email, username=faculty_code, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, faculty_code, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('is_active_faculty', True) # Set luôn cái này cho superuser
+
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+
+        return self.create_user(faculty_code, email, password, **extra_fields)
 
 class Faculty(AbstractUser):
     """
@@ -113,6 +138,8 @@ class Faculty(AbstractUser):
     
     USERNAME_FIELD = 'faculty_code'
     REQUIRED_FIELDS = ['email', 'full_name']
+    
+    objects = FacultyManager()
     
     class Meta:
         db_table = 'faculty'
@@ -238,9 +265,9 @@ class Faculty(AbstractUser):
 {user_memory}
 
 🤖 QUY TẮC GIAO TIẾP:
-- LUÔN xưng hô: "{personal_address}"
-- Bắt đầu: "Dạ {personal_address},"
-- Kết thúc: "{personal_address.title()} có cần hỗ trợ thêm gì không ạ?"
+- LUÔN xưng hô: "{personal_address}" (chỉ khi biết giới tính, ngược lại bỏ qua)
+- Bắt đầu: "Dạ {personal_address}," nếu biết, hoặc "Dạ," nếu không rõ
+- Kết thúc: "Cần em hỗ trợ thêm gì không ạ?" (KHÔNG kèm chức danh nếu không rõ)
 - KHÔNG CHẾ TẠO thông tin không có
 
 {self.get_style_specific_instructions(response_style)}"""
@@ -356,24 +383,26 @@ class Faculty(AbstractUser):
         return self.chatbot_preferences
 
     def get_salutation(self):
-        """Xác định cách xưng hô dựa trên giới tính, không fallback."""
+        """Xác định cách xưng hô dựa trên giới tính. Trả '' nếu không rõ."""
         if self.gender == 'male':
             return 'thầy'
         elif self.gender == 'female':
             return 'cô'
         else:
-            return 'giảng viên'  # Dùng từ trung tính, không dùng "thầy/cô"
+            return ''  # Không rõ giới tính → không xưng hô "giảng viên"
 
     def get_personal_address(self):
-        """Lấy cách xưng hô kèm tên, xử lý trường hợp trung tính."""
+        """Lấy cách xưng hô kèm tên. Trả '' nếu không rõ giới tính."""
         salutation = self.get_salutation()
         if self.full_name:
             name_suffix = self.full_name.split()[-1]
-            # Nếu là thầy/cô thì đi kèm tên, nếu là "giảng viên" thì không cần
+            # Nếu là thầy/cô thì đi kèm tên
             if salutation in ['thầy', 'cô']:
                 return f"{salutation} {name_suffix}"
-            return f"{salutation} {self.full_name}"  # Trả về "giảng viên" + tên đầy đủ
-        return salutation
+        # salutation rỗng (không rõ giới tính) → trả '' để chatbot bắt đầu bằng "Dạ,"
+        if salutation:
+            return salutation
+        return ''
     
 # Existing models remain unchanged
 class PasswordResetToken(models.Model):

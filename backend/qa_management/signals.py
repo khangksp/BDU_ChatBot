@@ -9,42 +9,36 @@ logger = logging.getLogger(__name__)
 
 def get_chatbot_retriever():
     """
-    ✅ FIXED: Safe retriever access with multiple fallback paths
-    Returns the chatbot retriever object or None if not available
+    ✅ FIXED: Truy cập Chatbot Retriever an toàn bằng Import Tuyệt Đối.
+    Dựa trên cấu trúc: ai_models/chatbot_logic/chatbot_service.py
     """
     try:
+        # 1. IMPORT TUYỆT ĐỐI (Không dùng dấu ..)
+        # Django chạy từ manage.py nên 'ai_models' là package cấp cao nhất
         from ai_models.services import chatbot_ai
         
-        # Try multiple possible paths to find the retriever
-        possible_paths = [
-            'sbert_retriever',                    # Direct access
-            'hybrid_retriever.sbert_retriever',   # Through hybrid retriever
-            'retriever.sbert_retriever',          # Through main retriever
-            'retriever',                          # Just the retriever itself
-            'hybrid_retriever',                   # Just the hybrid retriever
-        ]
-        
-        for path in possible_paths:
-            try:
-                retriever = chatbot_ai
-                for attr in path.split('.'):
-                    if hasattr(retriever, attr):
-                        retriever = getattr(retriever, attr)
-                    else:
-                        retriever = None
-                        break
-                
-                if retriever and hasattr(retriever, 'load_knowledge_base'):
-                    logger.info(f"✅ Found chatbot retriever at: chatbot_ai.{path}")
-                    return retriever
-            except (AttributeError, TypeError):
-                continue
-        
-        logger.warning("⚠️ No valid chatbot retriever found with load_knowledge_base method")
+        # 2. Kiểm tra xem biến chatbot_ai có tồn tại và đã khởi tạo chưa
+        if chatbot_ai is None:
+            return None
+
+        # 3. Tìm Retriever bên trong instance chatbot_ai
+        # Ưu tiên 1: Thuộc tính .retriever chuẩn
+        if hasattr(chatbot_ai, 'retriever'):
+            return chatbot_ai.retriever
+            
+        # Ưu tiên 2: Thuộc tính .hybrid_retriever
+        if hasattr(chatbot_ai, 'hybrid_retriever'):
+            return chatbot_ai.hybrid_retriever
+
+        # Ưu tiên 3: Thuộc tính .sbert_retriever
+        if hasattr(chatbot_ai, 'sbert_retriever'):
+            return chatbot_ai.sbert_retriever
+            
+        logger.warning("⚠️ Found chatbot_ai but no retriever attribute (retriever/hybrid_retriever)")
         return None
         
-    except ImportError as e:
-        logger.warning(f"⚠️ Could not import chatbot service: {str(e)}")
+    except ImportError:
+        # Trường hợp chưa load được module (thường xảy ra khi server đang khởi động)
         return None
     except Exception as e:
         logger.error(f"❌ Error accessing chatbot retriever: {str(e)}")
@@ -57,11 +51,18 @@ def reload_chatbot_knowledge():
     def _reload():
         try:
             retriever = get_chatbot_retriever()
-            if retriever:
+            if retriever and hasattr(retriever, 'load_knowledge_base'):
+                # Gọi hàm load lại dữ liệu
                 retriever.load_knowledge_base()
-                logger.info("✅ Chatbot knowledge base reloaded successfully")
+                
+                # Nếu cần build lại index FAISS (quan trọng cho tìm kiếm vector)
+                if hasattr(retriever, 'build_faiss_index'):
+                    retriever.build_faiss_index()
+                    
+                logger.info("✅ Chatbot knowledge base reloaded successfully (Background)")
             else:
-                logger.warning("⚠️ Chatbot retriever not available - skipping reload")
+                # Không log warning spam nếu retriever chưa sẵn sàng
+                pass
         except Exception as e:
             logger.error(f"❌ Failed to reload chatbot knowledge base: {str(e)}")
     
@@ -167,11 +168,6 @@ def qa_entry_post_save_handler(sender, instance, created, **kwargs):
         audit_enabled = qa_settings.get('AUDIT_LOG_ENABLED', True)
         if audit_enabled:
             logger.info(f"📋 AUDIT: {action.upper()} QA Entry {instance.stt} - '{instance.question[:30]}...'")
-        
-        # 7. Notifications (future feature placeholder)
-        notifications_enabled = chatbot_integration.get('NOTIFICATION_ENABLED', False)
-        if notifications_enabled:
-            logger.info(f"📢 QA Entry {action}: {instance.stt} - notifications would be sent here")
             
     except Exception as e:
         logger.error(f"❌ QA Entry post-save signal error: {str(e)}")
@@ -219,38 +215,28 @@ def qa_entry_pre_delete_handler(sender, instance, **kwargs):
 @receiver(post_save, sender='qa_management.QASyncLog')
 def sync_log_created(sender, instance, created, **kwargs):
     """
-    Handle sync log creation - could trigger notifications or dashboards
+    Handle sync log creation
     """
     if created:
         try:
             logger.info(f"📊 Sync operation logged: {instance.operation} - {instance.status}")
-            
-            # Future: Send notifications for failed syncs
             if instance.status == 'failed':
                 logger.warning(f"⚠️ Sync operation failed: {instance.operation}")
-                
         except Exception as e:
             logger.error(f"❌ Sync log signal error: {str(e)}")
 
 def trigger_chatbot_reload():
-    """
-    Public function to trigger chatbot reload from external code
-    """
+    """Public function to trigger chatbot reload from external code"""
     reload_chatbot_knowledge()
 
 def trigger_cache_clear():
-    """
-    Public function to clear cache from external code
-    """
+    """Public function to clear cache from external code"""
     clear_chatbot_cache()
 
 def get_signal_status():
-    """
-    Get status of signal integrations for debugging
-    """
+    """Get status of signal integrations for debugging"""
     try:
         retriever = get_chatbot_retriever()
-        
         from .services import drive_service
         drive_connected = drive_service.service is not None
         

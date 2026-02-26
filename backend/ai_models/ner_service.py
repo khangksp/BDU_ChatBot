@@ -12,17 +12,19 @@ class SimpleEntityExtractor:
         self.entity_patterns = {
             'person_name': [
                 # 🔧 IMPROVED: Tên riêng người Việt (2-4 từ, viết hoa đầu từ) - CHẶT CHẼ HỚN
-                r'\b([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+)\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+)(?:\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+))?(?:\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+))?\b',
+                r'\b([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+)\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+)(?:\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+))?(?:\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỰỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+))?\b',
                 # Pattern với tiến sĩ, giáo sư
-                r'(?:GS\.TS\.|TS\.|GS\.|tiến sĩ|giáo sư)\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+(?:\s+[A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+){1,2})'
+                r'(?:GS\.TS\.|TS\.|GS\.|tiến sĩ|giáo sư)\s+([A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỤỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+(?:\s+[A-ZÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊẾỀỂỄỆÌÍỊỈĨÒÓỌỎÕÔỐỒỔỖỘƠỜỚỞỠỢÙÚỰỦŨƯỪỨỬỮỰỲÝỴỶỸĐ][a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêếềểễệìíịỉĩòóọỏõôốồổỗộơờớởỡợùúụủũưừứửữựỳýỵỷỹđ]+){1,2})'
             ],
             'position': [
-                r'\b(hiệu trưởng|phó hiệu trưởng|trưởng phòng|phó trưởng phòng|trưởng khoa|phó trưởng khoa|giáo sư|phó giáo sư|tiến sĩ|thạc sĩ)\b',
-                r'\b(chủ tịch|phó chủ tịch|ủy viên|thành viên|trưởng ban|phó ban)\b'
+                # 🔧 IMPROVED: Mở rộng danh sách chức danh phổ biến, đặc biệt trong đại học
+                r'\b(hiệu trưởng|phó hiệu trưởng|trưởng phòng|phó trưởng phòng|trưởng khoa|phó trưởng khoa|giáo sư|phó giáo sư|tiến sĩ|thạc sĩ|giảng viên|trợ giảng|chủ nhiệm bộ môn|phó chủ nhiệm bộ môn|chủ tịch hội đồng|phó chủ tịch hội đồng)\b',
+                r'\b(chủ tịch|phó chủ tịch|ủy viên|thành viên|trưởng ban|phó ban|giám đốc|phó giám đốc|trưởng nhóm|phó nhóm|chuyên viên|cố vấn|trợ lý)\b'
             ],
             'department': [
-                r'(khoa [^.!?]*|phòng [^.!?]*|ban [^.!?]*|bộ môn [^.!?]*)',
-                r'(đại học bình dương|bdu|trường đại học)'
+                # 🔧 IMPROVED: Mở rộng patterns cho phòng ban, tập trung vào đại học Bình Dương
+                r'(khoa [^.!?]*|phòng [^.!?]*|ban [^.!?]*|bộ môn [^.!?]*|viện [^.!?]*|trung tâm [^.!?]*|thư viện [^.!?]*|phòng thí nghiệm [^.!?]*)',
+                r'(đại học bình dương|bdu|trường đại học bình dương|khoa công nghệ thông tin|khoa kinh tế|khoa luật|khoa kỹ thuật|khoa ngoại ngữ|khoa sư phạm|khoa y dược|phòng đào tạo|phòng tài chính|phòng hành chính|phòng khoa học công nghệ|phòng quan hệ quốc tế|ban quản lý ký túc xá|ban an ninh)'
             ],
             'numbers': [
                 r'(\d+(?:[.,]\d+)*(?:\s*(?:triệu|nghìn|tỷ|đồng|vnđ|usd|phần trăm|%))?)',
@@ -32,6 +34,16 @@ class SimpleEntityExtractor:
                 r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
                 r'(ngày \d{1,2}|tháng \d{1,2}|năm \d{4})',
                 r'(học kỳ \d+|năm học \d{4}-\d{4})'
+            ],
+            # 🆕 THÊM MỚI: Thêm loại thực thể mới cho email, số điện thoại, địa chỉ
+            'email': [
+                r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            ],
+            'phone_number': [
+                r'(?:\+84|0)\d{9,10}'
+            ],
+            'address': [
+                r'\b(số \d+|đường [^,!?]*|phường [^,!?]*|quận [^,!?]*|thành phố [^,!?]*|tỉnh bình dương)\b'
             ]
         }
         
@@ -51,7 +63,10 @@ class SimpleEntityExtractor:
             # Thêm các từ khóa BDU thường gặp
             'binh duong', 'bdu', 'truong dai hoc', 'phong ban', 'khoa hoc',
             'nghien cuu', 'dao tao', 'quan ly', 'hanh chinh', 'ky thuat',
-            'cong nghe', 'kinh te', 'ngoai ngu', 'su pham', 'y khoa'
+            'cong nghe', 'kinh te', 'ngoai ngu', 'su pham', 'y khoa',
+            # 🆕 THÊM: Mở rộng blacklist với các cụm từ phổ biến khác
+            'hoc bong', 'hoc phi', 'chi nhanh', 'chi nhanh binh duong', 'quy trinh dang ky',
+            'duc day du', 'nam thanh cong', 'hay lam', 'la tot', 'co the lam'
         }
         
         # 🆕 THÊM MỚI: Common Vietnamese words that are not names
@@ -60,7 +75,10 @@ class SimpleEntityExtractor:
             'la mot', 'la cach', 'la gi', 'la ai', 'la khi', 'la lieu',
             'duoc su', 'duoc cap', 'duoc phep', 'duoc biet', 'duoc tang',
             'hay la', 'hay khong', 'hay nhat', 'hay gi', 'hay co',
-            'neu co', 'neu khong', 'neu la', 'neu can', 'neu muon'
+            'neu co', 'neu khong', 'neu la', 'neu can', 'neu muon',
+            # 🆕 THÊM: Mở rộng với các cụm từ phổ biến hơn
+            'the nao', 'lam the nao', 'tai sao', 'vi sao', 'nhu the nao',
+            'dang ky', 'dang nhap', 'hoc tap', 'nghien cuu', 'cong viec'
         }
         
         logger.info("✅ IMPROVED SimpleEntityExtractor initialized with enhanced patterns and blacklists")
@@ -177,12 +195,24 @@ class SimpleEntityExtractor:
             if any(word in ['cô', 'thầy', 'anh', 'chị', 'em', 'dạ', 'được', 'phải', 'theo', 'như', 'từ'] for word in words):
                 logger.debug(f"🚫 Rejected by particle words: '{entity_value}'")
                 return False
-                
+        
         elif entity_type == 'position':
-            # Must be exactly one of the position words
-            valid_positions = ['hiệu trưởng', 'phó hiệu trưởng', 'trưởng phòng', 'phó trưởng phòng', 'trưởng khoa', 'phó trưởng khoa', 'giáo sư', 'phó giáo sư', 'tiến sĩ', 'thạc sĩ', 'chủ tịch', 'phó chủ tịch']
+            # 🆕 IMPROVED: Update valid positions to match expanded patterns
+            valid_positions = [
+                'hiệu trưởng', 'phó hiệu trưởng', 'trưởng phòng', 'phó trưởng phòng', 'trưởng khoa', 'phó trưởng khoa',
+                'giáo sư', 'phó giáo sư', 'tiến sĩ', 'thạc sĩ', 'giảng viên', 'trợ giảng', 'chủ nhiệm bộ môn',
+                'phó chủ nhiệm bộ môn', 'chủ tịch hội đồng', 'phó chủ tịch hội đồng', 'chủ tịch', 'phó chủ tịch',
+                'ủy viên', 'thành viên', 'trưởng ban', 'phó ban', 'giám đốc', 'phó giám đốc', 'trưởng nhóm',
+                'phó nhóm', 'chuyên viên', 'cố vấn', 'trợ lý'
+            ]
             if entity_lower not in valid_positions:
                 logger.debug(f"🚫 Rejected invalid position: '{entity_value}'")
+                return False
+        
+        elif entity_type == 'department':
+            # 🆕 NEW: Validate department with length and no numbers
+            if len(entity_lower) < 5 or re.search(r'\d', entity_lower):
+                logger.debug(f"🚫 Rejected invalid department: '{entity_value}'")
                 return False
         
         logger.debug(f"✅ Valid entity: '{entity_value}' (type: {entity_type})")
@@ -198,7 +228,9 @@ class SimpleEntityExtractor:
             'nguyễn', 'trần', 'lê', 'phạm', 'hoàng', 'huỳnh', 'phan', 'vũ', 'võ', 'đặng', 
             'bùi', 'đỗ', 'hồ', 'ngô', 'dương', 'lý', 'cao', 'đậu', 'lưu', 'tô',
             'nguyen', 'tran', 'le', 'pham', 'hoang', 'huynh', 'phan', 'vu', 'vo', 'dang',
-            'bui', 'do', 'ho', 'ngo', 'duong', 'ly', 'cao', 'dau', 'luu', 'to'
+            'bui', 'do', 'ho', 'ngo', 'duong', 'ly', 'cao', 'dau', 'luu', 'to',
+            # 🆕 THÊM: Mở rộng với họ phổ biến hơn
+            'trương', 'đào', 'đinh', 'lâm', 'mai', 'tạ', 'hà', 'vương', 'triệu', 'khổng'
         }
         
         # Check if first word (surname) is common Vietnamese surname
@@ -223,6 +255,8 @@ class SimpleEntityExtractor:
             r'quy|qúy',      # Avoid regulation-related terms
             r'học|hoc',      # Avoid study-related terms
             r'chí|chi',      # Avoid will/credit-related terms
+            # 🆕 THÊM: Mở rộng false positives
+            r'bình|bình dương', 'duong', 'bdu', 'trường', 'đại học', 'khoa', 'phòng', 'ban'
         ]
         
         for pattern in false_positive_patterns:
@@ -237,24 +271,31 @@ class SimpleEntityExtractor:
         return True
     
     def build_entity_relationships(self, query, answer, entities):
-        """Xây dựng mối quan hệ giữa entities dựa vào ngữ cảnh Q&A"""
+        """🔧 IMPROVED: Xây dựng mối quan hệ giữa entities dựa vào ngữ cảnh Q&A, thêm confidence dựa trên proximity"""
         relationships = []
         
         query_lower = query.lower()
         answer_lower = answer.lower()
+        full_context = query_lower + " " + answer_lower
         
         # Tìm mối quan hệ person - position
         if 'person_name' in entities and 'position' in entities:
             for person in entities['person_name']:
                 for position in entities['position']:
-                    # Kiểm tra trong query
-                    if any(keyword in query_lower for keyword in ['là ai', 'ai là', 'chức vụ']):
+                    # Kiểm tra trong query hoặc answer
+                    if any(keyword in query_lower for keyword in ['là ai', 'ai là', 'chức vụ', 'là gì']):
+                        confidence = 0.8
+                        # 🆕 NEW: Increase confidence if entities are close in text
+                        person_pos = full_context.find(person.lower())
+                        position_pos = full_context.find(position)
+                        if abs(person_pos - position_pos) < 50:  # Within 50 chars
+                            confidence += 0.1
                         relationships.append({
                             'type': 'person_position',
                             'entity1': person,
                             'entity2': position,
                             'relation': 'has_position',
-                            'confidence': 0.8,
+                            'confidence': min(confidence, 1.0),
                             'source': 'query_answer_pair'
                         })
         
@@ -262,12 +303,36 @@ class SimpleEntityExtractor:
         if 'person_name' in entities and 'department' in entities:
             for person in entities['person_name']:
                 for dept in entities['department']:
+                    confidence = 0.7
+                    # 🆕 NEW: Increase confidence if entities are close
+                    person_pos = full_context.find(person.lower())
+                    dept_pos = full_context.find(dept)
+                    if abs(person_pos - dept_pos) < 50:
+                        confidence += 0.1
                     relationships.append({
                         'type': 'person_department', 
                         'entity1': person,
                         'entity2': dept,
                         'relation': 'works_at',
-                        'confidence': 0.7,
+                        'confidence': min(confidence, 1.0),
+                        'source': 'context'
+                    })
+        
+        # 🆕 NEW: Thêm mối quan hệ position - department
+        if 'position' in entities and 'department' in entities:
+            for position in entities['position']:
+                for dept in entities['department']:
+                    confidence = 0.6
+                    position_pos = full_context.find(position)
+                    dept_pos = full_context.find(dept)
+                    if abs(position_pos - dept_pos) < 50:
+                        confidence += 0.15
+                    relationships.append({
+                        'type': 'position_department',
+                        'entity1': position,
+                        'entity2': dept,
+                        'relation': 'in_department',
+                        'confidence': min(confidence, 1.0),
                         'source': 'context'
                     })
         
@@ -293,7 +358,11 @@ class SimpleEntityExtractor:
                 context_keywords.append(entity)
                 
         if 'position' in entities:
-            for entity in entities['position'][:1]:  # Max 1 position
+            for entity in entities['position'][:2]:  # 🆕 IMPROVED: Max 2 positions
+                context_keywords.append(entity)
+        
+        if 'department' in entities:
+            for entity in entities['department'][:2]:  # 🆕 NEW: Add departments
                 context_keywords.append(entity)
         
         # From relationships
@@ -305,4 +374,4 @@ class SimpleEntityExtractor:
         context_keywords = list(set(context_keywords))
         context_keywords = [kw for kw in context_keywords if len(kw.strip()) > 2]
         
-        return context_keywords[:3]
+        return context_keywords[:5]  # 🆕 IMPROVED: Increase limit to 5 for better coverage

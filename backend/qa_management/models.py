@@ -6,10 +6,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 class QAEntry(models.Model):
-    """
-    Model for Q&A entries that sync with Google Drive CSV
-    FIXED VERSION - Allows duplicate STT
-    """
     stt = models.CharField(
         max_length=50, 
         unique=False,  # ✅ FIXED: Allow duplicate STT

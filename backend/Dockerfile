@@ -1,65 +1,76 @@
 FROM python:3.10-slim
 
-# Set work directory
+# -------------------------------------------------------
+# Environment variables
+# -------------------------------------------------------
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    KMP_DUPLICATE_LIB_OK=TRUE \
+    TRANSFORMERS_CACHE=/app/ai_models_cache \
+    HF_HOME=/app/ai_models_cache \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /app
 
-# Install system dependencies, INCLUDING OCR TOOLS
+# -------------------------------------------------------
+# 1. System dependencies
+# -------------------------------------------------------
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        postgresql-client \
-        build-essential \
-        libpq-dev \
-        git \
-        curl \
-        tesseract-ocr \
-        tesseract-ocr-vie \
-        poppler-utils \
+    postgresql-client \
+    build-essential \
+    libpq-dev \
+    git \
+    curl \
+    ffmpeg \
+    libsndfile1 \
+    tesseract-ocr \
+    tesseract-ocr-vie \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# SỬA Ở ĐÂY: COPY requirements.txt từ gốc của context
+# -------------------------------------------------------
+# 2. Python dependencies - tách thành các layer riêng
+#    để Docker cache tái sử dụng tốt hơn khi chỉ đổi code
+# -------------------------------------------------------
 COPY requirements.txt .
 
-# Install Python dependencies in a stable order
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-RUN pip install --no-cache-dir torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir sentence-transformers==2.7.0
-RUN pip install --no-cache-dir -r requirements.txt
+# Cài uv - pip resolver thế hệ mới: nhanh hơn pip 10-100x,
+# xử lý tốt dependency graph phức tạp (langchain, etc.)
+RUN pip install uv
 
-# SỬA Ở ĐÂY: COPY tất cả file từ context (thư mục backend) vào WORKDIR
+# Layer B: Các gói nặng nhất - ít thay đổi → cache lâu dài
+RUN uv pip install --system "numpy<2.0.0"
+RUN uv pip install --system torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+RUN uv pip install --system sentence-transformers==2.7.0
+
+# Layer C: Toàn bộ requirements còn lại
+RUN uv pip install --system -r requirements.txt
+
+# -------------------------------------------------------
+# 3. Copy code (sau khi install deps để tận dụng cache)
+# -------------------------------------------------------
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p logs media staticfiles
+# -------------------------------------------------------
+# 4. Tạo thư mục cần thiết
+# -------------------------------------------------------
+RUN mkdir -p logs media staticfiles ai_models_cache \
+    && chmod 777 ai_models_cache
 
-# Expose port 8000
-EXPOSE 3019
-
-# Create the entrypoint script
-# Script này đã rất tốt, không cần sửa
-RUN echo '#!/bin/bash\n\
-set -e\n\
-echo "=== BDU ChatBot Docker Setup (Final Version) ==="\n\
-echo "⏳ Waiting for PostgreSQL..."\n\
-while ! pg_isready -h postgres -p 5432 -U postgres; do sleep 1; done\n\
-echo "✅ PostgreSQL is ready"\n\
-echo "📊 Running database migrations..."\n\
-python manage.py migrate --noinput\n\
-echo "📦 Collecting static files..."\n\
-python manage.py collectstatic --noinput\n\
-echo "👤 Setting up admin user..."\n\
-python manage.py shell -c "\n\
-from django.contrib.auth import get_user_model; User = get_user_model();\n\
-if not User.objects.filter(username='\''admin'\'').exists():\n\
-    User.objects.create_superuser('\''admin'\'', '\''admin@bdu.edu.vn'\'', '\''admin123456'\'', faculty_code='\''ADMIN001'\'', full_name='\''Administrator'\'');\n\
-    print('\''✅ Admin user created'\'');\n\
-else:\n\
-    print('\''ℹ️ Admin user already exists'\'');\n\
-" 2>/dev/null || echo "⚠️ Admin user creation skipped"\n\
-echo "🚀 Starting Django server..."\n\
-python manage.py runserver 0.0.0.0:3019\n' > /entrypoint.sh
-
-# Make the entrypoint script executable
+# -------------------------------------------------------
+# 5. Copy entrypoint và cấp quyền thực thi
+# -------------------------------------------------------
+COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Set the default command
+# -------------------------------------------------------
+# 6. Expose port
+# -------------------------------------------------------
+EXPOSE 3019
+
+# -------------------------------------------------------
+# 7. Entrypoint
+# -------------------------------------------------------
 CMD ["/entrypoint.sh"]

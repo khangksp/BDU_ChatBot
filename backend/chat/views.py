@@ -4,12 +4,19 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.http import JsonResponse
 from knowledge.models import ChatHistory, UserFeedback
+import traceback
 
 # ✅ SAFE IMPORTS - with fallbacks
 try:
     from ai_models.services import chatbot_ai
-except ImportError:
+    if chatbot_ai is None:
+        print("⚠️ WARNING: ai_models.services imported but chatbot_ai is None")
+except Exception as e:
     chatbot_ai = None
+    print("\n" + "!"*50)
+    print("❌ CRITICAL ERROR IMPORTING CHATBOT_AI:")
+    traceback.print_exc() # 👈 Dòng này sẽ in chi tiết lỗi ra màn hình console
+    print("!"*50 + "\n")
 
 try:
     # Import Class thay vì instance
@@ -49,8 +56,22 @@ import threading
 from datetime import datetime
 
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAdminUser
+from django.http import StreamingHttpResponse
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import queue
 
 logger = logging.getLogger(__name__)
+
+# ─── Thread Pool cho xử lý chatbot song song ───────────────────────────────
+# Dùng stdlib ThreadPoolExecutor - không cần cài thêm thư viện
+# I/O-bound workload (chờ Ollama HTTP) → GIL được giải phóng → thực sự song song
+_CHATBOT_POOL_SIZE = int(os.environ.get('CHATBOT_THREAD_POOL_SIZE', 8))
+_CHATBOT_THREAD_POOL = ThreadPoolExecutor(
+    max_workers=_CHATBOT_POOL_SIZE,
+    thread_name_prefix="chatbot_worker",
+)
+logger.info(f"🚀 ChatBot ThreadPool initialized: {_CHATBOT_POOL_SIZE} workers")
 
 # 🚀 NEW: Global variable to track training status
 TRAINING_STATUS = {
@@ -293,6 +314,67 @@ def get_safe_tts_status():
         'available': False,
         'error': 'TTS service not available'
     }
+    
+class HotReloadView(APIView):
+    """
+    🔥 API Hot Reload: Cập nhật dữ liệu từ Drive và Nạp lại RAM ngay lập tức
+    Yêu cầu quyền Admin/Staff để tránh người lạ nghịch.
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser] # Chỉ cho phép Admin
+
+    def post(self, request):
+        start_time = time.time()
+        logger.info("🔥 Hot Reload triggered by Admin...")
+
+        try:
+            # BƯỚC 1: Import dữ liệu từ Google Drive (Sync Disk)
+            # Import dynamic để tránh lỗi vòng lặp nếu chưa khởi tạo
+            from qa_management.services import drive_service
+            
+            import_result = drive_service.import_from_drive()
+            
+            if not import_result.get('success'):
+                return Response({
+                    'success': False,
+                    'step': 'import_drive',
+                    'error': import_result.get('error'),
+                    'message': '❌ Lỗi khi tải dữ liệu từ Google Drive'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            drive_stats = f"{import_result.get('imported')} mới, {import_result.get('updated')} cập nhật"
+            logger.info(f"✅ Drive Sync OK: {drive_stats}")
+
+            # BƯỚC 2: Nạp lại kiến thức vào RAM (Reload Memory)
+            ai_stats = {}
+            if chatbot_ai:
+                # Kiểm tra xem chatbot có hàm reload không (đã thêm ở bước trước)
+                if hasattr(chatbot_ai, 'reload_knowledge'):
+                    ai_stats = chatbot_ai.reload_knowledge()
+                    logger.info("✅ Chatbot RAM Reload OK")
+                elif hasattr(chatbot_ai, 'reload_after_qa_update'):
+                    # Hỗ trợ tên hàm cũ nếu bạn dùng tên này
+                    chatbot_ai.reload_after_qa_update()
+                    logger.info("✅ Chatbot RAM Reload OK (Legacy method)")
+            
+            total_time = time.time() - start_time
+
+            return Response({
+                'success': True,
+                'message': '🔥 Hệ thống đã cập nhật dữ liệu nóng thành công!',
+                'details': {
+                    'drive_sync': drive_stats,
+                    'ai_knowledge': ai_stats,
+                    'duration': f"{total_time:.2f}s"
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"❌ Hot Reload Failed: {str(e)}")
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class APIRootView(APIView):
     """API Root - Hiển thị danh sách endpoints"""
     permission_classes = [AllowAny]
@@ -371,7 +453,8 @@ class APIRootView(APIView):
                 'speech_status': '/api/speech-status/',
                 'personalized_context': '/api/personalized-context/',
                 'personalized_status': '/api/personalized-status/',
-                'train_retriever': '/api/train-retriever/',  # 🚀 NEW
+                'train_retriever': '/api/train-retriever/',
+                'hot_reload': '/api/hot-reload/',
             },
             'features': [
                 'Natural Language Generation',
@@ -665,9 +748,15 @@ class ChatView(APIView):
             ai_response = None
             if chatbot_ai:
                 try:
-                    # 🚀 ALWAYS call process_query with JWT token for auto-detection
-                    ai_response = chatbot_ai.process_query(user_message, session_id, jwt_token, document_text=document_text)
-                    
+                    # 🔀 PARALLEL: Chạy trong thread pool để không block Django worker
+                    future = _CHATBOT_THREAD_POOL.submit(
+                        chatbot_ai.process_query,
+                        user_message, session_id, jwt_token, document_text
+                    )
+                    ai_response = future.result(timeout=90)  # 90s timeout tránh treo
+                except FutureTimeoutError:
+                    logger.error("❌ ChatBot process_query timed out after 90s")
+                    ai_response = None
                 except Exception as e:
                     logger.error(f"Error processing with AI service: {e}")
             
@@ -780,6 +869,7 @@ class ChatView(APIView):
                 'status': 'success',
                 'encoding': 'utf-8',
                 'reference_links': ai_response.get('reference_links', []),  # ✅ PRESERVED
+                'qa_source': ai_response.get('qa_source', None),  # 🆕 QA source info (KB only)
                 
                 # TTS fields
                 'audio_content': audio_content_base64,
@@ -1733,3 +1823,153 @@ def google_drive_status(request):
             'available': False,
             'error': str(e)
         })
+
+
+# ─── Streaming Chat View (SSE) ────────────────────────────────────────────────
+
+class ChatStreamView(APIView):
+    """
+    🌊 Streaming Chat API - Server-Sent Events (SSE)
+    POST /api/chat/stream/
+
+    Response format (chunked):
+      data: {"delta": "...", "done": false}\n\n
+      data: {"delta": "", "done": true, "reference_links": [...], "qa_source": {...}, "intent": "..."}\n\n
+
+    Frontend đọc EventSource hoặc fetch với ReadableStream để hiển thị text ngay khi nhận.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        user_message = request.data.get('message', '').strip()
+        session_id = request.data.get('session_id', str(uuid.uuid4()))
+
+        if not user_message:
+            return Response({'error': 'Tin nhắn không được để trống'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(user_message) > 1000:
+            return Response({'error': 'Tin nhắn quá dài (tối đa 1000 ký tự)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Chuẩn hóa encoding
+        try:
+            user_message = user_message.encode('utf-8').decode('utf-8')
+        except UnicodeError:
+            user_message = user_message.encode('utf-8', errors='ignore').decode('utf-8')
+
+        # Extract JWT token
+        jwt_token = extract_jwt_token(request)
+        if jwt_token:
+            is_valid_format, _ = validate_jwt_token_format(jwt_token)
+            if is_valid_format:
+                auto_setup_user_context_from_jwt(session_id, jwt_token)
+
+        # Document (OCR)
+        document_text = None
+        document_file = request.FILES.get('document')
+        if document_file and ocr_service:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(document_file.name)[1]) as tmp_file:
+                for chunk in document_file.chunks():
+                    tmp_file.write(chunk)
+                tmp_file_path = tmp_file.name
+            try:
+                pages_data = ocr_service.read_document(tmp_file_path)
+                if pages_data:
+                    document_text = "\n\n".join([p['text'] for p in pages_data if p['text'].strip()])
+            finally:
+                os.unlink(tmp_file_path)
+
+        if document_text and not user_message:
+            user_message = f"Dựa vào nội dung tài liệu này ({document_file.name}), hãy tóm tắt ý chính."
+
+        # Lấy addr để greeting đúng
+        addr = ""
+        try:
+            if chatbot_ai and hasattr(chatbot_ai, '_get_addr'):
+                addr = chatbot_ai._get_addr(session_id)
+            if not addr and jwt_token:
+                from ai_models.external_api_service import external_api_service as _ext
+                info = _ext.get_lecturer_info_from_token(jwt_token)
+                if info and chatbot_ai:
+                    addr = chatbot_ai._build_addr(info)
+        except Exception:
+            pass
+
+        # Kiểm tra chatbot available
+        if not chatbot_ai or not getattr(chatbot_ai, '_agent_available', False) or not chatbot_ai.langchain_agent:
+            def _fallback_gen():
+                msg = '{"delta": "Dạ, hệ thống đang khởi động. Vui lòng thử lại sau ạ. 🎓", "done": false}'
+                yield f"data: {msg}\n\n"
+                yield 'data: {"delta": "", "done": true, "reference_links": [], "qa_source": null, "intent": "error"}\n\n'
+            resp = StreamingHttpResponse(_fallback_gen(), content_type='text/event-stream')
+            resp['Cache-Control'] = 'no-cache'
+            resp['X-Accel-Buffering'] = 'no'
+            return resp
+
+        logger.info(f"🌊 [ChatStreamView] '{user_message[:60]}' | session={session_id}")
+
+        def _stream_generator():
+            """Generator chạy trong HTTP response context."""
+            # Dùng queue để đưa kết quả từ thread pool về main thread
+            result_queue = queue.Queue()
+
+            def _worker():
+                try:
+                    gen = chatbot_ai.langchain_agent.run_stream(
+                        query=user_message,
+                        session_id=session_id,
+                        jwt_token=jwt_token,
+                        document_text=document_text,
+                        addr=addr,
+                    )
+                    for item in gen:
+                        result_queue.put(item)
+                except Exception as exc:
+                    result_queue.put({'_error': str(exc)})
+                finally:
+                    result_queue.put(None)  # sentinel
+
+            future = _CHATBOT_THREAD_POOL.submit(_worker)
+
+            while True:
+                try:
+                    item = result_queue.get(timeout=95)  # > Ollama timeout
+                except queue.Empty:
+                    # Timeout toàn cục
+                    err_json = json.dumps({"delta": " [Timeout]", "done": True,
+                                           "reference_links": [], "qa_source": None, "intent": "error"},
+                                          ensure_ascii=False)
+                    yield f"data: {err_json}\n\n"
+                    break
+
+                if item is None:  # sentinel
+                    break
+
+                if isinstance(item, dict):
+                    if '_error' in item:
+                        err_json = json.dumps({"delta": "Dạ, em gặp sự cố kỹ thuật. Vui lòng thử lại ạ. 🎓",
+                                               "done": True, "reference_links": [], "qa_source": None,
+                                               "intent": "error"}, ensure_ascii=False)
+                        yield f"data: {err_json}\n\n"
+                        break
+                    # Chunk cuối: done metadata
+                    done_chunk = {
+                        "delta": "",
+                        "done": True,
+                        "reference_links": item.get("reference_links", []),
+                        "qa_source": item.get("qa_source"),
+                        "intent": item.get("intent", ""),
+                    }
+                    yield f"data: {json.dumps(done_chunk, ensure_ascii=False)}\n\n"
+                    break
+                else:
+                    # str chunk - text token
+                    text_chunk = {"delta": item, "done": False}
+                    yield f"data: {json.dumps(text_chunk, ensure_ascii=False)}\n\n"
+
+        streaming_response = StreamingHttpResponse(
+            _stream_generator(),
+            content_type='text/event-stream; charset=utf-8',
+        )
+        streaming_response['Cache-Control'] = 'no-cache'
+        streaming_response['X-Accel-Buffering'] = 'no'  # Tắt nginx buffering
+        streaming_response['Access-Control-Allow-Origin'] = '*'
+        return streaming_response

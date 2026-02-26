@@ -9,7 +9,9 @@ urlpatterns = [
     
     # ✅ CORE CHAT ENDPOINTS
     path('chat/', views.ChatView.as_view(), name='chat'),
+    path('chat/stream/', views.ChatStreamView.as_view(), name='chat-stream'),  # 🌊 Streaming SSE
     path('health/', views.HealthCheckView.as_view(), name='health-check'),
+
     
     # ✅ CHAT HISTORY AND SESSIONS
     path('history/', views.ChatHistoryView.as_view(), name='chat-history'),
@@ -33,4 +35,6 @@ urlpatterns = [
     
     # # ✅ RETRIEVER TRAINING ENDPOINTS
     # path('train-retriever/', views.TrainRetrieverView.as_view(), name='train-retriever'),
+
+    path('api/hot-reload/', views.HotReloadView.as_view(), name='api_hot_reload'),
 ]

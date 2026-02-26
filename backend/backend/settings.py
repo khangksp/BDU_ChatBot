@@ -91,6 +91,7 @@ AUTH_USER_MODEL = 'authentication.Faculty'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -99,6 +100,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'backend.middleware.CSRFExemptMiddleware',
+]
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -180,9 +185,12 @@ USE_TZ = True
 # FILE STATIC VÀ MEDIA
 # =============================================================================
 
-STATIC_URL = '/static/'
+# STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-# FORCE_SCRIPT_NAME = '/bdu_chatbot'
+FORCE_SCRIPT_NAME = '/bdu_chatbot'
+
+STATIC_URL = '/bdu_chatbot/static/'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
@@ -663,6 +671,8 @@ FEATURE_FLAGS = {
     'JWT_AUTHENTICATION_ENABLED': True,
     'PERSONAL_SCHEDULE_ACCESS_ENABLED': True,
 }
+
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000
 
 # Tạo thư mục logs nếu chưa có
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)

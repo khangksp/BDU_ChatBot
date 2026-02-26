@@ -19,6 +19,7 @@ class ExternalAPIService:
         # API endpoints - có thể config trong settings
         self.base_url = getattr(settings, 'SCHOOL_API_BASE_URL', 'https://cds.bdu.edu.vn')
         self.schedule_endpoint = f"{self.base_url}/app_cbgv/odp/vien_chuc/thoi_khoa_bieu"
+        self.schedule_week_endpoint = f"{self.base_url}/app_cbgv/odp/vien_chuc/thoi_khoa_bieu_tuan"
         
         # JWT settings
         self.jwt_secret = getattr(settings, 'JWT_SECRET_KEY', None)
@@ -71,9 +72,14 @@ class ExternalAPIService:
         try:
             vien_chuc = payload.get('vien_chuc', {})
             
-            # ✅ NEW: Chuyển đổi giới tính theo logic MỚI
+            # ✅ FIXED: Chuyển đổi giới tính đúng — None/unknown → 'other'
             gioi_tinh = vien_chuc.get('gioi_tinh')
-            gender_str = 'male' if gioi_tinh == 0 else 'female'
+            if gioi_tinh == 0:
+                gender_str = 'male'
+            elif gioi_tinh == 1:
+                gender_str = 'female'
+            else:
+                gender_str = 'other'  # None hoặc giá trị lạ → không rõ giới tính
             
             lecturer_info = {
                 'ma_giang_vien': vien_chuc.get('ma_vien_chuc', ''),
@@ -94,6 +100,151 @@ class ExternalAPIService:
             logger.error(f"❌ Error extracting lecturer info: {str(e)}")
             return None
     
+    def get_lecturer_schedule_by_week(self, token: str, query_context: str = '') -> Dict[str, Any]:
+        """
+        Lấy lịch giảng dạy theo tuần qua API mới.
+        Truyền ngày thư 2 (Monday) đầu tuần định dạng dd-mm-yyyy.
+        API chỉ trả về dữ liệu của tuần đó, không có tình trạng 210 records.
+        """
+        try:
+            lecturer_info = self.get_lecturer_info_from_token(token)
+            if not lecturer_info:
+                return {'success': False, 'error': 'Không xác thực được token', 'error_type': 'token_decode_failed'}
+
+            # Xác định ngày thư 2 cần lấy dựa vào câu hỏi
+            monday = self._get_target_monday(query_context)
+            ngay_thu_2 = monday.strftime('%d-%m-%Y')
+
+            logger.info(f"📅 Weekly schedule API: ngay_thu_2={ngay_thu_2} (query='{query_context}')")
+
+            # Kiểm tra cache
+            cache_key = f"week_{lecturer_info['ma_giang_vien']}_{ngay_thu_2}"
+            if cache_key in self.cache:
+                cached = self.cache[cache_key]
+                if datetime.now() - cached['timestamp'] < timedelta(seconds=self.cache_duration):
+                    logger.info(f"🎯 Using cached weekly schedule for {ngay_thu_2}")
+                    return cached['data']
+
+            headers = {
+                'Authorization': f'Bearer {token.replace("Bearer ", "")}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+            resp = requests.get(
+                self.schedule_week_endpoint,
+                headers=headers,
+                params={'ngay_thu_2': ngay_thu_2},
+                timeout=15,
+            )
+
+            logger.info(f"📡 Weekly API Response: {resp.status_code}")
+
+            if resp.status_code == 200:
+                raw = resp.json()
+                schedule_data = raw.get('data', [])
+                logger.info(f"📅 Weekly schedule: {len(schedule_data)} entries for week {ngay_thu_2}")
+
+                # Log field names từ entry đầu tiên để biết tên field thật
+                if schedule_data:
+                    logger.info(f"🔑 Weekly API field names: {list(schedule_data[0].keys())}")
+                    logger.info(f"🔍 First entry sample: {schedule_data[0]}")
+
+                # Group theo ngày, giữ TOÀN BỘ fields (không filter trước khi biết tên field thật)
+                grouped: Dict[str, list] = {}
+                for entry in schedule_data:
+                    # Thử cả 2 tên field phổ biến cho ngày học
+                    day = entry.get('ngay_hoc', '') or entry.get('ngayHoc', '') or entry.get('date', '')
+                    if day:
+                        grouped.setdefault(day, []).append(entry)
+
+                result = {
+                    'success': True,
+                    'lecturer_info': lecturer_info,
+                    'week_start': ngay_thu_2,
+                    'daily_schedule': grouped,
+                    'total_entries': len(schedule_data),
+                    'query_context': query_context,
+                }
+                self.cache[cache_key] = {'timestamp': datetime.now(), 'data': result}
+                return result
+
+            elif resp.status_code == 401:
+                return {'success': False, 'error': 'Token hết hạn hoặc không hợp lệ.', 'error_type': 'authentication_failed'}
+            else:
+                logger.error(f"❌ Weekly API error {resp.status_code}: {resp.text[:200]}")
+                return {'success': False, 'error': 'Lỗi API từ server trường.', 'error_type': 'api_call_failed'}
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ Weekly API network error: {e}")
+            return {'success': False, 'error': 'Lỗi kết nối mạng.', 'error_type': 'network_error'}
+        except Exception as e:
+            logger.error(f"❌ Weekly API unexpected error: {e}")
+            return {'success': False, 'error': str(e), 'error_type': 'unexpected_error'}
+
+    def _get_target_monday(self, query_context: str) -> datetime:
+        """
+        Xác định ngày thư 2 (Monday) cần lấy dựa vào câu hỏi.
+        Mặc định: tuần hiện tại.
+        """
+        today = datetime.now()
+        # Ngày thư 2 của tuần hiện tại
+        current_monday = today - timedelta(days=today.weekday())  # weekday(): 0=Mon
+
+        if not query_context:
+            return current_monday
+
+        q = query_context.lower()
+
+        # Ngày cụ thể dd/mm
+        date_match = re.search(r'(\d{1,2})[/\-](\d{1,2})', q)
+        if date_match:
+            d, m = int(date_match.group(1)), int(date_match.group(2))
+            try:
+                specific = datetime(today.year, m, d)
+                # Lấy thư 2 của tuần chứa ngày đó
+                return specific - timedelta(days=specific.weekday())
+            except ValueError:
+                pass
+
+        # Hôm nay
+        if any(k in q for k in ['hôm nay', 'hom nay', 'today', 'ngày hôm nay']):
+            return today - timedelta(days=today.weekday())
+
+        # Ngày mai
+        if any(k in q for k in ['ngày mai', 'ngay mai', 'tomorrow']):
+            tomorrow = today + timedelta(days=1)
+            return tomorrow - timedelta(days=tomorrow.weekday())
+
+        # Tuần trước
+        if any(k in q for k in ['tuần trước', 'tuan truoc', 'last week']):
+            return current_monday - timedelta(weeks=1)
+
+        # Tuần sau / tuần tới
+        if any(k in q for k in ['tuần sau nua', 'tuan sau nua', '2 tuần', '2 tuan']):
+            return current_monday + timedelta(weeks=2)
+        if any(k in q for k in ['tuần sau', 'tuan sau', 'tuần tới', 'tuan toi', 'next week']):
+            return current_monday + timedelta(weeks=1)
+
+        # Thứ trong tuần (sẽ lấy tuần chứa thứ đó gần nhất)
+        weekday_map = {
+            'thứ 2': 0, 'thu 2': 0, 'thứ hai': 0,
+            'thứ 3': 1, 'thu 3': 1, 'thứ ba': 1,
+            'thứ 4': 2, 'thu 4': 2, 'thứ tư': 2,
+            'thứ 5': 3, 'thu 5': 3, 'thứ năm': 3,
+            'thứ 6': 4, 'thu 6': 4, 'thứ sáu': 4,
+            'thứ 7': 5, 'thu 7': 5, 'thứ bảy': 5,
+            'chủ nhật': 6, 'chu nhat': 6,
+        }
+        for name, wd in weekday_map.items():
+            if name in q:
+                target = current_monday + timedelta(days=wd)
+                if target < today:
+                    target += timedelta(weeks=1)
+                return target - timedelta(days=target.weekday())
+
+        # Mặc định: tuần hiện tại
+        return current_monday
+
     def get_lecturer_schedule(self, token: str, query_context: str = '') -> Dict[str, Any]:
         """
         Get lecturer schedule from external API
@@ -205,26 +356,26 @@ class ExternalAPIService:
             logger.info(f"📊 Found {len(lecturer_schedule)} schedule entries for {ma_giang_vien}")
             
             # Group by date and sort
-            daily_schedule = {}
+            daily_schedule_raw = {}
             for entry in lecturer_schedule:
                 date_str = entry.get('ngay_hoc', '')
                 if date_str:
-                    if date_str not in daily_schedule:
-                        daily_schedule[date_str] = []
-                    daily_schedule[date_str].append(entry)
+                    if date_str not in daily_schedule_raw:
+                        daily_schedule_raw[date_str] = []
+                    daily_schedule_raw[date_str].append(entry)
             
             # Sort dates and entries within each date
-            sorted_schedule = {}
-            for date_str in sorted(daily_schedule.keys()):
+            sorted_schedule_raw = {}
+            for date_str in sorted(daily_schedule_raw.keys()):
                 # Sort by tiet_bat_dau (starting period)
                 sorted_entries = sorted(
-                    daily_schedule[date_str], 
+                    daily_schedule_raw[date_str], 
                     key=lambda x: x.get('tiet_bat_dau', 0)
                 )
-                sorted_schedule[date_str] = sorted_entries
+                sorted_schedule_raw[date_str] = sorted_entries
             
             # Analyze query context for specific time filtering
-            filtered_schedule = self._filter_schedule_by_query(sorted_schedule, query_context)
+            filtered_schedule = self._filter_schedule_by_query(sorted_schedule_raw, query_context)
             
             # Format for Gemini
             formatted_result = {
@@ -233,8 +384,8 @@ class ExternalAPIService:
                 'schedule_summary': {
                     'total_classes': len(lecturer_schedule),
                     'date_range': {
-                        'start': min(daily_schedule.keys()) if daily_schedule else None,
-                        'end': max(daily_schedule.keys()) if daily_schedule else None
+                        'start': min(daily_schedule_raw.keys()) if daily_schedule_raw else None,
+                        'end': max(daily_schedule_raw.keys()) if daily_schedule_raw else None
                     },
                     'unique_subjects': len(set([entry.get('ma_mon_hoc', '') for entry in lecturer_schedule])),
                     'total_periods': sum([entry.get('so_tiet', 0) for entry in lecturer_schedule])
@@ -377,6 +528,23 @@ class ExternalAPIService:
             except ValueError:
                 logger.warning(f"⚠️ Invalid date: {day}/{month}")
         
+        # Nếu không có pattern nào khớp và câu hỏi có liên quan đến lịch/TKB
+        # → Trả về tuần hiện tại theo mặc định (KHÔNG trả về toàn bộ)
+        schedule_keywords = [
+            'lịch', 'thai khoa bieu', 'thời khóa biểu', 'tkb',
+            'giảng dạy', 'dạy', 'giảng',
+        ]
+        if any(kw in query_lower for kw in schedule_keywords):
+            default_dates = self._get_week_dates(today, weeks_ahead=0)
+            logger.info(f"ℹ️ DEFAULT TO CURRENT WEEK (no time pattern): {default_dates[0]} – {default_dates[-1]}")
+            result = {k: v for k, v in schedule.items() if k in default_dates}
+            if result:
+                return result
+            # Nếu tuần này không có lịch, trả về tuần sau
+            next_week_dates = self._get_week_dates(today, weeks_ahead=1)
+            logger.info(f"ℹ️ Current week empty, falling back to next week: {next_week_dates[0]}")
+            return {k: v for k, v in schedule.items() if k in next_week_dates}
+
         logger.info(f"✅ NO PATTERN MATCHED -> returning full schedule")
         return schedule
 
